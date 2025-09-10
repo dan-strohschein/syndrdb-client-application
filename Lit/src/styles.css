@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Database-specific component styles */
+@layer components {
+  .db-panel {
+    @apply bg-db-panel border border-db-border;
+  }
+  
+  .db-sidebar {
+    @apply bg-db-sidebar border-r border-db-border;
+  }
+  
+  .db-table {
+    @apply w-full border-collapse;
+  }
+  
+  .db-table th {
+    @apply bg-db-panel text-left px-3 py-2 border-b border-db-border font-medium;
+  }
+  
+  .db-table td {
+    @apply px-3 py-2 border-b border-db-border;
+  }
+  
+  .db-table tr:hover {
+    @apply bg-db-hover;
+  }
+  
+  .db-button {
+    @apply px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm;
+  }
+  
+  .db-input {
+    @apply bg-db-panel border border-db-border rounded px-3 py-2 text-white;
+  }
+  
+  .db-tree-item {
+    @apply px-3 py-1 hover:bg-db-hover cursor-pointer select-none;
+  }
+  
+  .db-tree-item.selected {
+    @apply bg-db-selected;
+  }
+}

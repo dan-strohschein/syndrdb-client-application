@@ -1,0 +1,53 @@
+{
+  "name": "syndrdb-client",
+  "version": "1.0.0",
+  "description": "Database management tool for SyndrDB",
+  "main": "dist/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:main && vite build",
+    "build:main": "npx tsc main.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/main.js dist/main.cjs && npx tsc src/electron/preload.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/preload.js dist/electron/preload.cjs && npx tsc src/electron/syndrdb-main-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/syndrdb-main-service.js dist/electron/syndrdb-main-service.cjs && npx tsc src/electron/connection-storage-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/connection-storage-service.js dist/electron/connection-storage-service.cjs",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"npm run build:main && wait-on http://localhost:5173 && electron .\"",
+    "dist": "npm run build && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "daisyui": "^5.1.9",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "lit": "^3.0.0"
+  },
+  "build": {
+    "appId": "com.syndrdb.client",
+    "productName": "SyndrDB Client",
+    "directories": {
+      "output": "electron-dist"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
