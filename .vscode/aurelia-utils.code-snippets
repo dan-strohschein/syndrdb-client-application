@@ -1,0 +1,29 @@
+{
+  "Aurelia Utility Styles": {
+    "prefix": "au-utils",
+    "body": [
+      "<style>",
+      "/* Layout */",
+      ".flex { display: flex !important; }",
+      ".w-30 { width: 30% !important; }",
+      ".w-70 { width: 70% !important; }",
+      ".h-screen { height: 100vh !important; }",
+      "",
+      "/* Colors - Dark Theme */",
+      ".bg-gray-800 { background-color: #1f2937 !important; }",
+      ".bg-gray-600 { background-color: #4b5563 !important; }",
+      ".text-white { color: #ffffff !important; }",
+      "",
+      "/* Typography */",
+      ".text-xl { font-size: 1.25rem !important; }",
+      ".text-2xl { font-size: 1.5rem !important; }",
+      ".font-bold { font-weight: 700 !important; }",
+      "",
+      "/* Spacing */",
+      ".p-4 { padding: 1rem !important; }",
+      "</style>",
+      ""
+    ],
+    "description": "Insert utility CSS styles for Aurelia components"
+  }
+}
