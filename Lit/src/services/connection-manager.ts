@@ -1,4 +1,26 @@
 import { SyndrDBDriver, ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
+import { connectionPool, PooledConnection } from './connection-pool';
+
+export interface BundleDetails {
+  name: string;
+  documentStructure?: DocumentStructure;
+  relationships?: any[];
+  indexes?: any[];
+  rawData?: any; // Store the full SHOW BUNDLE result
+}
+
+export interface DocumentStructure {
+  FieldDefinitions: FieldDefinition[];
+}
+
+export interface FieldDefinition  {
+	Name:         string      ;
+	Type :        string      ;
+	IsRequired:   boolean      ; // Indicates if the field can be null
+	IsUnique:     boolean      ;
+	DefaultValue: any         ; // Optional default value for the field
+}
+
 
 export interface Connection {
   id: string;
@@ -9,6 +31,8 @@ export interface Connection {
   lastError?: string;
   databases?: string[];
   users?: string[];
+  bundles?: string[];
+  bundleDetails?: Map<string, BundleDetails>; // Map of bundle name to its details
 }
 
 export class ConnectionManager {
@@ -78,19 +102,40 @@ export class ConnectionManager {
         connection.lastError = undefined;
         this.activeConnectionId = connectionId;
         
-        // Immediately fetch databases after successful connection
+        // Add connection to global pool
+        const pooledConnection: PooledConnection = {
+          id: connectionId,
+          connectionId: connection.driver.getConnectionId() || connectionId,
+          driver: connection.driver,
+          name: connection.name,
+          hostname: connection.config.hostname,
+          port: connection.config.port,
+          database: connection.config.database,
+          username: connection.config.username,
+          lastUsed: new Date(),
+          isActive: true
+        };
+        connectionPool.addConnection(pooledConnection);
+        
+        // Emit the status change first
+        this.emit('connectionStatusChanged', connection);
+        
+        // Automatically fetch databases after successful connection
+        console.log('🔄 Automatically fetching databases after connection success...');
         try {
           await this.refreshConnectionMetadata(connectionId);
-        } catch (metadataError) {
-          console.warn('Failed to fetch metadata after connection:', metadataError);
-          // Don't fail the connection if metadata fetch fails
+          console.log('✅ Databases fetched automatically after connection');
+        } catch (error) {
+          console.warn('⚠️ Failed to fetch databases automatically:', error);
         }
+        
+        console.log('✅ Connection established with databases loaded');
       } else {
         connection.status = 'error';
         connection.lastError = 'Connection failed';
+        this.emit('connectionStatusChanged', connection);
       }
       
-      this.emit('connectionStatusChanged', connection);
       return success;
       
     } catch (error) {
@@ -112,28 +157,48 @@ export class ConnectionManager {
 
     try {
       // Fetch databases
-      const databasesResult = await connection.driver.executeQuery('SHOW DATABASES');
+      const databasesResult = await connection.driver.executeQuery('SHOW DATABASES;');
+      console.log('📊 SHOW DATABASES result:', databasesResult);
+      
       if (databasesResult.success && databasesResult.data) {
-        // Extract database names from the result
-        // Assuming the result format is an array of objects with database names
-        connection.databases = databasesResult.data.map((row: any) => {
-          // Handle different possible formats of the database result
-          if (typeof row === 'string') {
-            return row;
-          } else if (row.database) {
-            return row.database;
-          } else if (row.Database) {
-            return row.Database;
-          } else if (row.name) {
-            return row.name;
-          } else {
-            // If it's an object, take the first property value
-            const values = Object.values(row);
-            return values.length > 0 ? String(values[0]) : 'Unknown';
-          }
-        });
+        // SyndrDB returns Result: ["database1", "database2", ...]
+        // The data field now contains the Result array directly
+        if (Array.isArray(databasesResult.data)) {
+          connection.databases = databasesResult.data.map((dbName: any) => {
+            // Database names should be strings directly
+            return typeof dbName === 'string' ? dbName : String(dbName);
+          });
+        } else {
+          connection.databases = [];
+        }
+        
+        console.log('✅ Parsed databases:', connection.databases);
       } else {
+        console.log('❌ No database data received');
         connection.databases = [];
+      }
+
+      // Fetch bundles
+      try {
+        const bundlesResult = await connection.driver.executeQuery('SHOW BUNDLES;');
+        console.log('📦 SHOW BUNDLES result:', bundlesResult);
+        
+        if (bundlesResult.success && bundlesResult.data) {
+          if (Array.isArray(bundlesResult.data)) {
+            connection.bundles = bundlesResult.data.map((bundle: any) => {
+              return bundle.Name || String(bundle);
+            });
+          } else {
+            connection.bundles = [];
+          }
+          console.log('✅ Parsed bundles:', connection.bundles);
+        } else {
+          console.log('❌ No bundle data received');
+          connection.bundles = [];
+        }
+      } catch (bundleError) {
+        console.warn('Failed to fetch bundles:', bundleError);
+        connection.bundles = [];
       }
 
       // TODO: Fetch users when that command is available
@@ -208,9 +273,21 @@ export class ConnectionManager {
       throw new Error('Active connection is not available');
     }
 
-    // For development, use mock implementation
-    // In production, this would use: return await connection.driver.executeQuery(query);
-    return await connection.driver.executeQueryMock(query);
+    // Execute the query using the driver
+    return await connection.driver.executeQuery(query);
+  }
+
+  /**
+   * Execute a query on a specific connection by ID
+   */
+  async executeQueryOnConnectionId(connectionId: string, query: string): Promise<QueryResult> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.status !== 'connected') {
+      throw new Error('Connection is not available');
+    }
+
+    // Execute the query using the driver
+    return await connection.driver.executeQuery(query);
   }
 
   /**
@@ -231,6 +308,63 @@ export class ConnectionManager {
    */
   getConnections(): Connection[] {
     return Array.from(this.connections.values());
+  }
+
+  /**
+   * Get bundle details for a specific bundle
+   */
+  async getBundleDetails(connectionId: string, bundleName: string): Promise<BundleDetails | null> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.status !== 'connected') {
+      throw new Error('Connection not found or not connected');
+    }
+
+    // Initialize bundleDetails map if it doesn't exist
+    if (!connection.bundleDetails) {
+      connection.bundleDetails = new Map<string, BundleDetails>();
+    }
+
+    // Check if we already have the bundle details cached
+    const existingDetails = connection.bundleDetails.get(bundleName);
+    if (existingDetails) {
+      return existingDetails;
+    }
+
+    try {
+      console.log(`🔍 Fetching details for bundle: ${bundleName}`);
+      
+      // Execute SHOW BUNDLE query
+      const result = await connection.driver.executeQuery(`SHOW BUNDLE "${bundleName}";`);
+      console.log('📦 Bundle details result:', result);
+      
+      if (result.success && result.data) {
+        const bundleDetails: BundleDetails = {
+          name: bundleName,
+          documentStructure: undefined,
+          relationships: [],
+          indexes: [],
+          rawData: result.data
+        };
+
+        // Parse fields from DocumentStructure
+        const data = result.data as any;
+        if (data.DocumentStructure) {
+          bundleDetails.documentStructure = data.DocumentStructure
+        }
+
+        // Store the bundle details
+        connection.bundleDetails.set(bundleName, bundleDetails);
+        
+        console.log('✅ Parsed bundle details:', bundleDetails);
+        return bundleDetails;
+      } else {
+        console.log('❌ No bundle details received');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching bundle details:', error);
+      return null;
+    }
   }
 
   /**

@@ -233,21 +233,30 @@ app.on('web-contents-created', (event, contents) => {
  * Setup SyndrDB service and IPC handlers
  */
 function setupSyndrDBService(): void {
+  console.log('🔧 Setting up SyndrDB service...');
+  
   // Dynamically require the services to avoid ES module conflicts
   const { SyndrDBMainService } = require('./electron/syndrdb-main-service.cjs');
   const { ConnectionStorageService } = require('./electron/connection-storage-service.cjs');
   
   syndrdbService = new SyndrDBMainService();
   connectionStorage = new ConnectionStorageService();
+  
+  console.log('✅ SyndrDB service initialized:', !!syndrdbService);
+  console.log('✅ Connection storage initialized:', !!connectionStorage);
 
   // Listen for connection status changes and forward to renderer
   syndrdbService.on('connection-status', (data: any) => {
+    console.log('🔄 Main process received connection status event:', data);
     if (mainWindow && !mainWindow.isDestroyed()) {
+      console.log('📤 Forwarding to renderer via IPC');
       mainWindow.webContents.send('syndrdb:connection-status', data);
+    } else {
+      console.log('❌ Cannot forward to renderer - mainWindow not available');
     }
   });
 
-  // IPC Handlers for SyndrDB operations
+  console.log('🔌 Setting up IPC handlers...');
   ipcMain.handle('syndrdb:connect', async (event, config) => {
     try {
       return await syndrdbService.connect(config);
@@ -283,8 +292,18 @@ function setupSyndrDBService(): void {
   });
 
   ipcMain.handle('syndrdb:execute-query', async (event, connectionId, query) => {
+    console.log('🚨 MAIN PROCESS: execute-query IPC handler called!');
+    console.log('🚨 MAIN PROCESS: Arguments received:', { 
+      connectionId, 
+      query, 
+      eventType: typeof event,
+      argumentCount: arguments.length 
+    });
     try {
-      return await syndrdbService.executeQuery(connectionId, query);
+      console.log('🔥 Main process received execute-query IPC:', { connectionId, query });
+      const result = await syndrdbService.executeQuery(connectionId, query);
+      console.log('🔥 Main process execute-query result:', result);
+      return result;
     } catch (error) {
       console.error('IPC syndrdb:execute-query error:', error);
       return {
@@ -294,6 +313,8 @@ function setupSyndrDBService(): void {
       };
     }
   });
+
+  console.log('✅ execute-query IPC handler registered');
 
   // Connection Storage IPC Handlers
   ipcMain.handle('connection-storage:load', async () => {
