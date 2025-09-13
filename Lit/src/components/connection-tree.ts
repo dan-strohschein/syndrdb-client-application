@@ -1,9 +1,23 @@
 import { html, css, LitElement } from 'lit';
+import { provide } from '@lit/context'
 import { customElement, property, state } from 'lit/decorators.js';
 import { Connection, BundleDetails } from '../services/connection-manager';
+import { ConnectionContext, connectionContext } from '../context/connectionContext';
 
 @customElement('connection-tree')
 export class ConnectionTree extends LitElement {
+
+  @provide({ context: connectionContext })
+  get connectionContextProvider(): ConnectionContext {
+    return {
+      selectedConnectionId: this._selectedConnectionId,
+      setSelectedConnectionId: (id) => {
+        this._selectedConnectionId = id;
+        this.requestUpdate();
+      },
+    };
+  }
+
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
     return this;
@@ -14,6 +28,12 @@ export class ConnectionTree extends LitElement {
 
   @state()
   private expandedNodes: Set<string> = new Set();
+
+  @state()
+  private _selectedConnectionId: string | null = null;
+
+  @state()
+  private contextMenu: { visible: boolean; x: number; y: number; nodeId: string; nodeName: string; nodeType: string } | null = null;
 
   private toggleNode(nodeId: string) {
     if (this.expandedNodes.has(nodeId)) {
@@ -28,7 +48,55 @@ export class ConnectionTree extends LitElement {
     return this.expandedNodes.has(nodeId);
   }
 
+  private handleContextMenu(event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    this.contextMenu = {
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId,
+      nodeName,
+      nodeType
+    };
+    this.requestUpdate();
+  }
+
+  private hideContextMenu() {
+    this.contextMenu = null;
+    this.requestUpdate();
+  }
+
+  private handleContextMenuAction(action: string) {
+    if (!this.contextMenu) return;
+    
+    console.log(`Context menu action: ${action} for ${this.contextMenu.nodeType} "${this.contextMenu.nodeName}"`);
+    
+    // Handle the action based on type
+    switch (action) {
+      case 'test':
+        alert(`Test - ${this.contextMenu.nodeName}`);
+        break;
+      // Add more actions as needed
+    }
+    
+    this.hideContextMenu();
+  }
+
+  private setActiveConnection(connectionId: string) {
+  this._selectedConnectionId = connectionId;
+  console.log(`🔗 Active connection set to: ${connectionId}`);
+  this.requestUpdate();
+  this.connectionContextProvider.setSelectedConnectionId(connectionId);
+  
+}
+
   private async handleDatabaseClick(connection: Connection, database: string, bundlesNodeId: string) {
+    // Set this connection as the active one
+  this.setActiveConnection(connection.id);
+  
+
     // Toggle the bundles node for this specific database
     this.toggleNode(bundlesNodeId);
     
@@ -68,9 +136,7 @@ export class ConnectionTree extends LitElement {
   }
 
   private async handleConnectionClick(connection: Connection) {
-    // Connection click just toggles visibility - databases are loaded automatically after connection
-    // No need to execute SHOW DATABASES here since it's done automatically in connection manager
-    console.log(`� Connection clicked: ${connection.name}, databases already loaded: ${connection.databases?.length || 0} databases`);
+    this.setActiveConnection(connection.id);
   }
 
   private renderConnection(connection: Connection) {
@@ -88,7 +154,8 @@ export class ConnectionTree extends LitElement {
       <div class="mb-2">
         <!-- Connection Header -->
         <div class="flex items-center justify-between p-2 rounded hover:bg-base-300 cursor-pointer"
-             @click=${() => this.handleConnectionClick(connection)}>
+             @click=${() => this.handleConnectionClick(connection)}
+             @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, connection.id, connection.name, 'connection')}>
           <div class="flex items-center">
             <div class="badge ${statusColor} badge-xs mr-3"></div>
             <span class="font-medium text-base-content">${connection.name}</span>
@@ -150,7 +217,8 @@ export class ConnectionTree extends LitElement {
                     <!-- Database Node -->
                     <div class="space-y-1">
                       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                           @click=${() => this.toggleNode(dbNodeId)}>
+                           @click=${() => this.toggleNode(dbNodeId)}
+                           @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, dbNodeId, dbName, 'database')}>
                         <span class="mr-2 w-4 text-center">
                           ${this.isExpanded(dbNodeId) ? '▼' : '▶'}
                         </span>
@@ -189,7 +257,8 @@ export class ConnectionTree extends LitElement {
                                   <!-- Bundle Node (clickable) -->
                                   <div class="space-y-1">
                                     <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                        @click=${() => this.handleBundleClick(connection, bundleName, bundleNodeId)}>
+                                        @click=${() => this.handleBundleClick(connection, bundleName, bundleNodeId)}
+                                        @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, bundleNodeId, bundleName, 'bundle')}>
                                       <span class="mr-2 w-4 text-center">
                                         ${this.isExpanded(bundleNodeId) ? '▼' : '▶'}
                                       </span>
@@ -202,7 +271,8 @@ export class ConnectionTree extends LitElement {
                                       <div class="ml-6 space-y-1">
                                         <!-- Fields Node -->
                                         <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                            @click=${() => this.handleFieldsClick(connection, bundleName, fieldsNodeId)}>
+                                            @click=${() => this.handleFieldsClick(connection, bundleName, fieldsNodeId)}
+                                            @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, fieldsNodeId, 'Fields', 'fields')}>
                                           <span class="mr-2 w-4 text-center">
                                             ${this.isExpanded(fieldsNodeId) ? '▼' : '▶'}
                                           </span>
@@ -218,21 +288,22 @@ export class ConnectionTree extends LitElement {
                                           <div class="ml-8 space-y-1">
                                            
                                             ${(() => {
-  console.log('FieldDefinitions:', bundleDetails.documentStructure.FieldDefinitions);
-  console.log('FieldDefinitions type:', typeof bundleDetails.documentStructure.FieldDefinitions);
-  console.log('Is array:', Array.isArray(bundleDetails.documentStructure.FieldDefinitions));
-  
-  const fieldDefs = bundleDetails.documentStructure.FieldDefinitions;
-  const fieldsArray = Array.isArray(fieldDefs) ? fieldDefs : Object.values(fieldDefs);
-  
-  return fieldsArray.map((field: any) => html`
-    <div class="flex items-center p-1 rounded hover:bg-base-300 text-sm">
-      <span class="mr-2 w-4"></span>
-      <span class="mr-2"><i class="fa-solid fa-tags"></i></span>
-      <span>${field.Name || field.name || field}</span>
-    </div>
-  `);
-})()}
+                                              console.log('FieldDefinitions:', bundleDetails.documentStructure.FieldDefinitions);
+                                              console.log('FieldDefinitions type:', typeof bundleDetails.documentStructure.FieldDefinitions);
+                                              console.log('Is array:', Array.isArray(bundleDetails.documentStructure.FieldDefinitions));
+                                              
+                                              const fieldDefs = bundleDetails.documentStructure.FieldDefinitions;
+                                              const fieldsArray = Array.isArray(fieldDefs) ? fieldDefs : Object.values(fieldDefs);
+                                              
+                                              return fieldsArray.map((field: any) => html`
+                                                <div class="flex items-center p-1 rounded hover:bg-base-300 text-sm cursor-pointer"
+                                                     @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, `${fieldsNodeId}-${field.Name || field.name || field}`, field.Name || field.name || field, 'field')}>
+                                                  <span class="mr-2 w-4"></span>
+                                                  <span class="mr-2"><i class="fa-solid fa-tags"></i></span>
+                                                  <span>${field.Name || field.name || field}</span>
+                                                </div>
+                                              `);
+                                            })()}
                                             ${bundleDetails.documentStructure.FieldDefinitions.length === 0 ? html`
                                               <div class="ml-4 text-xs text-gray-500 italic">No fields found</div>
                                             ` : ''}
@@ -241,7 +312,8 @@ export class ConnectionTree extends LitElement {
                                         
                                         <!-- Relationships Node -->
                                         <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                            @click=${() => this.toggleNode(relationshipsNodeId)}>
+                                            @click=${() => this.toggleNode(relationshipsNodeId)}
+                                            @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, relationshipsNodeId, 'Relationships', 'relationships')}>
                                           <span class="mr-2 w-4 text-center">
                                             ${this.isExpanded(relationshipsNodeId) ? '▼' : '▶'}
                                           </span>
@@ -251,7 +323,8 @@ export class ConnectionTree extends LitElement {
                                         
                                         <!-- Indexes Node -->
                                         <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                            @click=${() => this.toggleNode(indexesNodeId)}>
+                                            @click=${() => this.toggleNode(indexesNodeId)}
+                                            @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, indexesNodeId, 'Indexes', 'indexes')}>
                                           <span class="mr-2 w-4 text-center">
                                             ${this.isExpanded(indexesNodeId) ? '▼' : '▶'}
                                           </span>
@@ -312,7 +385,7 @@ export class ConnectionTree extends LitElement {
 
   render() {
     return html`
-      <div>
+      <div @click=${this.hideContextMenu}>
         ${this.connections.map(connection => this.renderConnection(connection))}
         
         ${this.connections.length === 0 ? html`
@@ -322,11 +395,27 @@ export class ConnectionTree extends LitElement {
             <div class="text-sm">Click "New Connection" to get started</div>
           </div>
         ` : ''}
+        
+        <!-- Context Menu -->
+        ${this.contextMenu?.visible ? html`
+          <context-menu style="position: fixed; top: ${this.contextMenu.y}px; left: ${this.contextMenu.x}px; z-index: 1000;">
+            <ul class="menu bg-base-200 w-56 rounded-box shadow-lg">
+              <li>
+                <a @click=${() => this.handleContextMenuAction('test')}>
+                  Test - ${this.contextMenu.nodeName}
+                </a>
+              </li>
+            </ul>
+          </context-menu>
+        ` : ''}
       </div>
     `;
   }
 
   private async handleBundleClick(connection: Connection, bundleName: string, bundleNodeId: string) {
+   // Set this connection as the active one
+  this.setActiveConnection(connection.id);
+  
     // Toggle the bundle node
     this.toggleNode(bundleNodeId);
     
@@ -352,6 +441,9 @@ export class ConnectionTree extends LitElement {
   }
 
   private async handleFieldsClick(connection: Connection, bundleName: string, fieldsNodeId: string) {
+    // Set this connection as the active one
+  this.setActiveConnection(connection.id);
+  
     // Toggle the fields node
     this.toggleNode(fieldsNodeId);
     console.log('Fields clicked for bundle:', bundleName);

@@ -4,6 +4,14 @@ import './components/sidebar-panel';
 import './components/main-panel';
 import './components/connection-tree';
 import './components/connection-modal';
+import './components/query-editor/query-editor';
+import './components/query-editor/graphql-query-editor';
+import './components/query-editor/syndrql-query-editor';
+import './components/json-tree/json-tree';
+import './components/json-tree/json-tree-node';
+import './components/navigation-bar';
+import './components/query-editor/query-editor-container';
+
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -14,13 +22,23 @@ export class AppRoot extends LitElement {
 
   render() {
     return html`
-      <div class="flex h-screen bg-base-100 text-base-content">
-        <!-- Sidebar (30%) -->
-        <sidebar-panel class="w-[30%] bg-base-200"></sidebar-panel>
+      <div class="h-screen bg-base-100 text-base-content flex flex-col">
         
-        <!-- Main Content (70%) -->
-        <main-panel class="w-[70%] bg-base-100"></main-panel>
-      </div>
+          <!-- Navigation Bar --> 
+          <div class="w-full p-4 bg-base-200 flex-shrink-0">
+            <navigation-bar></navigation-bar>
+          </div>
+       
+          
+        
+        <div class="flex-1 flex">
+          <!-- Sidebar (30%) -->
+          <sidebar-panel class="w-[30%] bg-base-200"></sidebar-panel>
+          
+          <!-- Main Content (70%) -->
+          <main-panel class="w-[70%] bg-base-100"></main-panel>
+        </div>
+    </div>    
     `;
   }
 }

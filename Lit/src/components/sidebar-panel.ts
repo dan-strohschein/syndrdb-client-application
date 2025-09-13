@@ -102,7 +102,7 @@ export class SidebarPanel extends LitElement {
       <div class="h-full flex flex-col bg-base-200">
         <!-- Header -->
         <div class="p-4 border-b border-base-300">
-          <h2 class="text-lg font-semibold text-base-content">Database Connections</h2>
+          <h2 class="text-x1 font-semibold text-base-content">Database Connections</h2>
           <button class="btn btn-primary btn-sm mt-2 w-full" @click=${this.openConnectionModal}>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
