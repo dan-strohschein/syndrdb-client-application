@@ -20,6 +20,31 @@ export class AppRoot extends LitElement {
     return this;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // Listen for add-query-editor events and forward them to main-panel
+    this.addEventListener('add-query-editor', (event: Event) => {
+      this.handleAddQueryEditor(event as CustomEvent);
+    });
+  }
+
+  private handleAddQueryEditor(event: CustomEvent) {
+    console.log('🎯 App root received add-query-editor event, forwarding to main-panel');
+    console.log('Event detail:', event.detail);
+    
+    // Find the main-panel element and dispatch the event to it
+    const mainPanel = this.querySelector('main-panel');
+    if (mainPanel) {
+      console.log('📤 Dispatching event to main-panel');
+      mainPanel.dispatchEvent(new CustomEvent('add-query-editor', {
+        detail: event.detail,
+        bubbles: false // Don't need to bubble further
+      }));
+    } else {
+      console.error('❌ Could not find main-panel element');
+    }
+  }
+
   render() {
     return html`
       <div class="h-screen bg-base-100 text-base-content flex flex-col">

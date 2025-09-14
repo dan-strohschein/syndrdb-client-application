@@ -78,7 +78,15 @@ export class ConnectionTree extends LitElement {
       case 'test':
         alert(`Test - ${this.contextMenu.nodeName}`);
         break;
-      // Add more actions as needed
+      case 'query':
+        console.log('🚀 Dispatching add-query-editor event from connection tree');
+        this.dispatchEvent(new CustomEvent('add-query-editor', {
+          detail: { query: `-- Query for ${this.contextMenu.nodeType} "${this.contextMenu.nodeName}"` },
+          bubbles: true
+        }));
+        console.log('✅ Event dispatched successfully');
+        break;
+    
     }
     
     this.hideContextMenu();
@@ -401,7 +409,14 @@ export class ConnectionTree extends LitElement {
           <context-menu style="position: fixed; top: ${this.contextMenu.y}px; left: ${this.contextMenu.x}px; z-index: 1000;">
             <ul class="menu bg-base-200 w-56 rounded-box shadow-lg">
               <li>
+                <a @click=${() => this.handleContextMenuAction('query')}>
+                  <i class="fa-solid fa-plus mr-2"></i>
+                  New Query Editor
+                </a>
+              </li>
+              <li>
                 <a @click=${() => this.handleContextMenuAction('test')}>
+                  <i class="fa-solid fa-flask mr-2"></i>
                   Test - ${this.contextMenu.nodeName}
                 </a>
               </li>
