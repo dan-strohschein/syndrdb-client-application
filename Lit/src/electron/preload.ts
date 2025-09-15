@@ -30,5 +30,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     save: (connection: ConnectionConfig) => ipcRenderer.invoke('connection-storage:save', connection),
     overwrite: (connection: ConnectionConfig) => ipcRenderer.invoke('connection-storage:overwrite', connection),
     delete: (name: string) => ipcRenderer.invoke('connection-storage:delete', name)
+  },
+
+  fileDialog: {
+    showOpenDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => 
+      ipcRenderer.invoke('file-dialog:show-open', options),
+    showSaveDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => 
+      ipcRenderer.invoke('file-dialog:show-save', options)
   }
 } as ElectronAPI);

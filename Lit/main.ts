@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, screen, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, screen, nativeImage, dialog } from 'electron';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
@@ -350,6 +350,44 @@ function setupSyndrDBService(): void {
     } catch (error) {
       console.error('IPC connection-storage:delete error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // File Dialog IPC Handlers
+  ipcMain.handle('file-dialog:show-open', async (_, options) => {
+    try {
+      const result = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow()!, {
+        title: options?.title || 'Open File',
+        filters: options?.filters || [
+          { name: 'SQL Files', extensions: ['sql'] },
+          { name: 'Text Files', extensions: ['txt'] },
+          { name: 'All Files', extensions: ['*'] }
+        ],
+        properties: ['openFile']
+      });
+      return result;
+    } catch (error) {
+      console.error('IPC file-dialog:show-open error:', error);
+      return { canceled: true, filePaths: [] };
+    }
+  });
+
+  ipcMain.handle('file-dialog:show-save', async (_, options) => {
+    try {
+      const result = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow()!, {
+        title: options?.title || 'Save File',
+        filters: options?.filters || [
+          { name: 'SQL Files', extensions: ['sql'] },
+          { name: 'Text Files', extensions: ['txt'] },
+          { name: 'CSV Files', extensions: ['csv'] },
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      return result;
+    } catch (error) {
+      console.error('IPC file-dialog:show-save error:', error);
+      return { canceled: true, filePath: '' };
     }
   });
 

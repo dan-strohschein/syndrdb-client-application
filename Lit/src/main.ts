@@ -11,6 +11,7 @@ import './components/json-tree/json-tree';
 import './components/json-tree/json-tree-node';
 import './components/navigation-bar';
 import './components/query-editor/query-editor-container';
+import './components/about-modal';
 
 
 @customElement('app-root')
@@ -25,6 +26,11 @@ export class AppRoot extends LitElement {
     // Listen for add-query-editor events and forward them to main-panel
     this.addEventListener('add-query-editor', (event: Event) => {
       this.handleAddQueryEditor(event as CustomEvent);
+    });
+    
+    // Listen for about modal requests
+    this.addEventListener('about-modal-requested', (event: Event) => {
+      this.handleAboutModalRequest(event as CustomEvent);
     });
   }
 
@@ -42,6 +48,19 @@ export class AppRoot extends LitElement {
       }));
     } else {
       console.error('❌ Could not find main-panel element');
+    }
+  }
+
+  private handleAboutModalRequest(event: CustomEvent) {
+    console.log('🎯 App root received about-modal-requested event');
+    
+    // Find the about-modal element and open it
+    const aboutModal = this.querySelector('about-modal');
+    if (aboutModal) {
+      console.log('📤 Opening about modal');
+      (aboutModal as any).open();
+    } else {
+      console.error('❌ Could not find about-modal element');
     }
   }
 
@@ -63,6 +82,9 @@ export class AppRoot extends LitElement {
           <!-- Main Content (70%) -->
           <main-panel class="w-[70%] bg-base-100"></main-panel>
         </div>
+        
+        <!-- About Modal -->
+        <about-modal></about-modal>
     </div>    
     `;
   }

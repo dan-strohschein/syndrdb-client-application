@@ -21,7 +21,20 @@ export interface ConnectionStorageAPI {
   delete: (name: string) => Promise<{ success: boolean; error?: string }>;
 }
 
+export interface FileDialogAPI {
+  showOpenDialog: (options?: {
+    title?: string;
+    filters?: { name: string; extensions: string[] }[];
+  }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+  
+  showSaveDialog: (options?: {
+    title?: string;
+    filters?: { name: string; extensions: string[] }[];
+  }) => Promise<{ canceled: boolean; filePath?: string }>;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
+  fileDialog: FileDialogAPI;
 }

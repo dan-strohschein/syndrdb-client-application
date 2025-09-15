@@ -1,11 +1,180 @@
 import { html, css, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { ElectronAPI } from '../types/electron-api';
 
 @customElement('navigation-bar')
 export class NavigationBar extends LitElement {
+    @state()
+    private openMenu: string | null = null;
+
+    @state()
+    private lastSelectedPanel: 'query-editor' | 'query-results' = 'query-editor';
+
     // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
         return this;
+    }
+
+    private handleMenuToggle(menuName: string, event: Event) {
+        event.preventDefault();
+        
+        // If clicking the same menu that's already open, close it
+        if (this.openMenu === menuName) {
+            this.openMenu = null;
+        } else {
+            // Close any open menu and open the new one
+            this.openMenu = menuName;
+        }
+        
+        this.requestUpdate();
+    }
+
+    private handleMenuClose() {
+        this.openMenu = null;
+        this.requestUpdate();
+    }
+
+    // Close menus when clicking outside
+    connectedCallback() {
+        super.connectedCallback();
+        document.addEventListener('click', this.handleDocumentClick.bind(this));
+        
+        // Listen for panel selection changes
+        document.addEventListener('panel-selected', (event: Event) => {
+            this.handlePanelSelected(event as CustomEvent);
+        });
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        document.removeEventListener('click', this.handleDocumentClick.bind(this));
+        document.removeEventListener('panel-selected', (event: Event) => {
+            this.handlePanelSelected(event as CustomEvent);
+        });
+    }
+
+    private handleDocumentClick(event: Event) {
+        const target = event.target as Element;
+        if (!this.contains(target)) {
+            this.handleMenuClose();
+        }
+    }
+
+    private handlePanelSelected(event: CustomEvent) {
+        this.lastSelectedPanel = event.detail.panel;
+    }
+
+    private async handleFileOpen() {
+        const panelType = this.lastSelectedPanel;
+        const title = panelType === 'query-results' ? 'Open Results' : 'Open Query';
+        
+        try {
+            // Check if electronAPI is available
+            const electronAPI = window.electronAPI as ElectronAPI;
+            if (!electronAPI?.fileDialog) {
+                console.warn('File dialog API not available');
+                return;
+            }
+
+            const filters = panelType === 'query-results'
+                ? [
+                    { name: 'CSV Files', extensions: ['csv'] },
+                    { name: 'JSON Files', extensions: ['json'] },
+                    { name: 'Text Files', extensions: ['txt'] },
+                    { name: 'All Files', extensions: ['*'] }
+                  ]
+                : [
+                    { name: 'SQL Files', extensions: ['sql'] },
+                    { name: 'Text Files', extensions: ['txt'] },
+                    { name: 'All Files', extensions: ['*'] }
+                  ];
+
+            const result = await electronAPI.fileDialog.showOpenDialog({
+                title: title,
+                filters: filters
+            });
+
+            if (!result.canceled && result.filePaths.length > 0) {
+                const filePath = result.filePaths[0];
+                console.log('File selected for opening:', filePath);
+                
+                // Emit event with the selected file path
+                this.dispatchEvent(new CustomEvent('file-open-requested', {
+                    detail: { 
+                        panelType: panelType,
+                        title: title,
+                        filePath: filePath
+                    },
+                    bubbles: true,
+                    composed: true
+                }));
+            }
+        } catch (error) {
+            console.error('Error opening file dialog:', error);
+        }
+        
+        this.handleMenuClose();
+    }
+
+    private async handleAboutOpen() {
+        console.log('Navigation bar: handleAboutOpen called');
+        this.dispatchEvent(new CustomEvent('about-modal-requested', {
+            bubbles: true,
+            composed: true
+        }));
+        console.log('Navigation bar: about-modal-requested event dispatched');
+        this.handleMenuClose();
+    }
+
+    private async handleFileSave() {
+        const panelType = this.lastSelectedPanel;
+        const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
+        
+        try {
+            // Check if electronAPI is available
+            const electronAPI = window.electronAPI as ElectronAPI;
+            if (!electronAPI?.fileDialog) {
+                console.warn('File dialog API not available');
+                return;
+            }
+
+            const filters = panelType === 'query-results'
+                ? [
+                    { name: 'CSV Files', extensions: ['csv'] },
+                    { name: 'JSON Files', extensions: ['json'] },
+                    { name: 'Text Files', extensions: ['txt'] },
+                    { name: 'All Files', extensions: ['*'] }
+                  ]
+                : [
+                    { name: 'SQL Files', extensions: ['sql'] },
+                    { name: 'Text Files', extensions: ['txt'] },
+                    { name: 'All Files', extensions: ['*'] }
+                  ];
+
+            const result = await electronAPI.fileDialog.showSaveDialog({
+                title: title,
+                filters: filters
+            });
+
+            if (!result.canceled && result.filePath) {
+                console.log('File selected for saving:', result.filePath);
+                
+                // Emit event with the selected file path
+                this.dispatchEvent(new CustomEvent('file-save-requested', {
+                    detail: { 
+                        panelType: panelType,
+                        title: title,
+                        filePath: result.filePath
+                    },
+                    bubbles: true,
+                    composed: true
+                }));
+            }
+        } catch (error) {
+            console.error('Error opening save dialog:', error);
+        }
+        
+        this.handleMenuClose();
     }
 
     render() {
@@ -50,7 +219,20 @@ export class NavigationBar extends LitElement {
                     margin: 0 !important;
                     height: auto;
                     line-height: 1.2;
-                    font-size: 0.875rem; /* Slightly smaller text */
+                    font-size: 0.95rem; /* Increased from 0.875rem for better readability */
+                }
+
+                /* Style for our custom menu buttons */
+                navigation-bar .menu-horizontal > li > button {
+                    padding: 0.4rem 0.8rem !important;
+                    margin: 0 !important;
+                    height: auto;
+                    line-height: 1.2;
+                    font-size: 0.95rem; /* Same size as other menu items */
+                    font-weight: 500;
+                    border: none;
+                    background: transparent;
+                    cursor: pointer;
                 }
                 
                 /* Compact buttons */
@@ -73,7 +255,13 @@ export class NavigationBar extends LitElement {
                 
                 navigation-bar .menu-horizontal > li > details > ul > li > a {
                     padding: 0.3rem 0.6rem !important;
-                    font-size: 0.875rem;
+                    font-size: 0.95rem; /* Increased from 0.875rem */
+                }
+
+                /* Style for dropdown menu items in our custom implementation */
+                navigation-bar ul.absolute a {
+                    font-size: 0.95rem !important;
+                    padding: 0.4rem 0.6rem !important;
                 }
                 
                 /* Logo styling to fit compact navbar */
@@ -103,51 +291,85 @@ export class NavigationBar extends LitElement {
                     
 
 
-                    <ul class="menu menu-horizontal menu-xs bg-base-200 [&_li>*]:rounded-none p-0 " style="padding-top: 10px !important;">
-                        <li>
-                            
-                             <details>
-                               <summary><i class="fa-solid fa-file"></i> File</summary>
-                                <ul class="bg-base-100 rounded-t-none p-2 w-full">
-                                    <li><a>Open</a></li>
-                                    <li><a>Save</a></li>
+                    <ul class="menu menu-horizontal bg-base-200 [&_li>*]:rounded-none p-0 " style="padding-top: 10px !important;">
+                        <li class="relative">
+                            <button 
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                @click=${(e: Event) => this.handleMenuToggle('file', e)}
+                            >
+                                <i class="fa-solid fa-file"></i>
+                                <span>File</span>
+                            </button>
+                            ${this.openMenu === 'file' ? html`
+                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleFileOpen}>Open</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleFileSave}>Save</a></li>
                                 </ul>
-                            </details>
+                            ` : ''}
                         </li>
-                        <li>
-                         
-                           <details>
-                               <summary><i class="fa-solid fa-database"></i> Database</summary>
-                                <ul class="bg-base-100 rounded-t-none p-2 w-full">
-                                    <li><a>Backup</a></li>
-                                    <li><a>Restore</a></li>
+                         <li class="relative">
+                            <button 
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                @click=${(e: Event) => this.handleMenuToggle('servers', e)}
+                            >
+                                <i class="fa-solid fa-server"></i>
+                                <span>Servers</span>
+                            </button>
+                            ${this.openMenu === 'servers' ? html`
+                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">New Connection</a></li>
                                 </ul>
-                            </details>
+                            ` : ''}
                         </li>
-                        <li>
-                            <details>
-                               <summary><i class="fa-solid fa-screwdriver-wrench"></i> Tools</summary>
-                                <ul class="bg-base-100 rounded-t-none p-2" style="width: 145px;">
-                                    <li><a>Query Editor</a></li>
-                                    <li><a>Profiler</a></li>
-                                    <li><a>Importer</a></li>
-                                    <li><a>Exporter</a></li>
-                                    <li><a>Session Manager</a></li>
-                                    
+                        
+                        <li class="relative">
+                            <button 
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                @click=${(e: Event) => this.handleMenuToggle('database', e)}
+                            >
+                                <i class="fa-solid fa-database"></i>
+                                <span>Database</span>
+                            </button>
+                            ${this.openMenu === 'database' ? html`
+                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Backup</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Restore</a></li>
                                 </ul>
-                            </details>
-                           
+                            ` : ''}
                         </li>
-                        <li>
-                         <details>
-                               <summary><i class="fa-solid fa-gear"></i> Settings</summary>
-                                <ul class="bg-base-100 rounded-t-none p-2 w-fit">
-                                    <li><a>Updates</a></li>
-                                    <li><a>Settings</a></li>
-                                    <li><a>Version</a></li>
+                        <li class="relative">
+                            <button 
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                @click=${(e: Event) => this.handleMenuToggle('tools', e)}
+                            >
+                                <i class="fa-solid fa-screwdriver-wrench"></i>
+                                <span>Tools</span>
+                            </button>
+                            ${this.openMenu === 'tools' ? html`
+                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-40 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Query Editor</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Profiler</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Importer</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Exporter</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Session Manager</a></li>
                                 </ul>
-                            </details>
-                           <a></a>
+                            ` : ''}
+                        </li>
+                        <li class="relative">
+                            <button 
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                @click=${(e: Event) => this.handleMenuToggle('settings', e)}
+                            >
+                                <i class="fa-solid fa-gear"></i>
+                                <span>Settings</span>
+                            </button>
+                            ${this.openMenu === 'settings' ? html`
+                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Updates</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Settings</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleAboutOpen}>Version</a></li>
+                                </ul>
+                            ` : ''}
                         </li>
                     </ul>
                     

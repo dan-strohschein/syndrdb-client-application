@@ -6,6 +6,7 @@ import { QueryResult } from '../../drivers/syndrdb-driver';
 import { connectionManager } from '../../services/connection-manager';
 import { ConnectionContext, connectionContext } from '../../context/connectionContext';
 import { Connect } from 'vite';
+import { ElectronAPI } from '../../types/electron-api';
 
 @customElement('query-editor-container')
 export class QueryEditorContainer extends LitElement {
@@ -100,9 +101,37 @@ public initialQuery: string = '';
         this.executing = false;
         }
 
-        private saveQuery() {
+        private async saveQuery() {
         // TODO: Implement query saving functionality
-        console.log('Saving query:', this.query);
+            console.log('Saving query:', this.query);
+
+
+            const electronAPI = window.electronAPI as ElectronAPI;
+            if (!electronAPI?.fileDialog) {
+                console.warn('File dialog API not available');
+                return;
+            }
+
+            const result = await electronAPI.fileDialog.showSaveDialog({
+                title: "Save Results",
+                filters: [
+                    { name: 'JSON Files', extensions: ['json'] },
+                    { name: 'All Files', extensions: ['*'] }
+                ]
+            });
+    
+
+if (!result.canceled && result.filePath) {
+            this.dispatchEvent(new CustomEvent('file-save-requested', {
+                detail: { 
+                    panelType: 'query-editor',
+                    title: "Save Query",
+                    filePath: "./saved_query.sql"
+                },
+                bubbles: true,
+                composed: true
+        }));
+        }
     }
 
     private handleQueryChange(event: CustomEvent) {
@@ -117,6 +146,44 @@ public initialQuery: string = '';
         }));
     }
 
+    private async handleSaveResults() {
+        
+        try {
+            // Check if electronAPI is available
+            const electronAPI = window.electronAPI as ElectronAPI;
+            if (!electronAPI?.fileDialog) {
+                console.warn('File dialog API not available');
+                return;
+            }
+
+            const result = await electronAPI.fileDialog.showSaveDialog({
+                title: "Save Results",
+                filters: [
+                    { name: 'JSON Files', extensions: ['json'] },
+                    { name: 'All Files', extensions: ['*'] }
+                ]
+            });
+    
+            if (!result.canceled && result.filePath) {
+                console.log('File selected for saving:', result.filePath);
+                
+                // Emit event with the selected file path
+                this.dispatchEvent(new CustomEvent('file-save-requested', {
+                    detail: { 
+                        panelType: "save-results",
+                        title: "Save Results",
+                        filePath: "./saved_results.json"
+                    },
+                    bubbles: true,
+                    composed: true
+                }));
+            }
+        } catch (error) {
+            console.error('Error opening save dialog:', error);
+        }
+        
+        
+    }
   
 // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -136,7 +203,7 @@ public initialQuery: string = '';
               <div class="flex items-center space-x-2">
                 <!-- Execute Query Button (Play Icon) -->
                 <button 
-                  class="btn btn-primary btn-sm ${this.executing ? 'loading' : ''}" 
+                  class="btn btn-soft btn-primary btn-sm ${this.executing ? 'loading' : ''}" 
                   title="Execute Query"
                   @click=${this.executeQuery}
                   ?disabled=${this.executing}
@@ -149,13 +216,12 @@ public initialQuery: string = '';
                 </button>
                 <!-- Save Button (Disk Icon) -->
                 <button 
-                  class="btn btn-secondary btn-sm" 
+                  class="btn btn-soft btn-secondary btn-sm" 
                   title="Save Query"
                   @click=${this.saveQuery}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 0V4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M8 7h8" />
-                  </svg>
+                  <span class="cursor-pointer"><i class="fa-solid fa-floppy-disk"></i> </span>
+              
                 </button>
               </div>
             </div>
@@ -169,7 +235,14 @@ public initialQuery: string = '';
         <div class="flex-1 overflow-auto min-h-0 h-1/2">
           <div class="p-4 h-full flex flex-col">
             <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold text-base-content">Query Results</h3>
+              <h3 class="text-sm font-semibold text-base-content">
+                Query Results
+                <button class="btn btn-soft btn-secondary btn-sm" 
+                @click=${this.handleSaveResults}
+                title="Save Results To File">
+                  <i class="fa-solid fa-floppy-disk"></i> 
+                </button>
+              </h3>
               <div class="flex items-center space-x-2">
                 ${this.queryResult ? html`
                   <span class="badge ${this.queryResult.success ? 'badge-success' : 'badge-error'} badge-sm">

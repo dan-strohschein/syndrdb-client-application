@@ -287,7 +287,7 @@ export class ConnectionTree extends LitElement {
                                           <span class="mr-2"><i class="fa-solid fa-tag"></i></span>
                                           <span>Fields</span>
                                           ${bundleDetails.documentStructure?.FieldDefinitions ? html`
-                                            <span class="ml-2 badge badge-outline badge-xs">${bundleDetails.documentStructure.FieldDefinitions.length}</span>
+                                            <span class="ml-2 badge badge-outline badge-xs">${bundleDetails.documentStructure?.FieldDefinitions?.length}</span>
                                           ` : ''}
                                         </div>
                                         
@@ -296,9 +296,9 @@ export class ConnectionTree extends LitElement {
                                           <div class="ml-8 space-y-1">
                                            
                                             ${(() => {
-                                              console.log('FieldDefinitions:', bundleDetails.documentStructure.FieldDefinitions);
-                                              console.log('FieldDefinitions type:', typeof bundleDetails.documentStructure.FieldDefinitions);
-                                              console.log('Is array:', Array.isArray(bundleDetails.documentStructure.FieldDefinitions));
+                                              //console.log('FieldDefinitions:', bundleDetails.documentStructure.FieldDefinitions);
+                                              //console.log('FieldDefinitions type:', typeof bundleDetails.documentStructure.FieldDefinitions);
+                                              //console.log('Is array:', Array.isArray(bundleDetails.documentStructure.FieldDefinitions));
                                               
                                               const fieldDefs = bundleDetails.documentStructure.FieldDefinitions;
                                               const fieldsArray = Array.isArray(fieldDefs) ? fieldDefs : Object.values(fieldDefs);
@@ -320,18 +320,81 @@ export class ConnectionTree extends LitElement {
                                         
                                         <!-- Relationships Node -->
                                         <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                            @click=${() => this.toggleNode(relationshipsNodeId)}
+                                            @click=${() => this.handleRelationshipsClick(connection, bundleName, relationshipsNodeId)}
                                             @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, relationshipsNodeId, 'Relationships', 'relationships')}>
                                           <span class="mr-2 w-4 text-center">
                                             ${this.isExpanded(relationshipsNodeId) ? '▼' : '▶'}
                                           </span>
                                           <span class="mr-2"><i class="fa-solid fa-circle-nodes"></i></span>
                                           <span>Relationships</span>
+                                          ${(() => {
+                                            // Get relationships count from bundle details
+                                            let relationshipsCount = 0;
+                                            
+                                            if (bundleDetails?.rawData?.Relationships) {
+                                              const relationships = bundleDetails.rawData.Relationships;
+                                              if (Array.isArray(relationships)) {
+                                                relationshipsCount = relationships.length;
+                                              } else if (typeof relationships === 'object') {
+                                                relationshipsCount = Object.keys(relationships).length;
+                                              }
+                                            }
+                                            
+                                            return relationshipsCount > 0 ? html`
+                                             <span class="ml-2 badge badge-outline badge-xs">${relationshipsCount}</span>  
+                                            ` : '';
+                                          })()}
                                         </div>
+
+                                        <!-- Relationships List (when expanded) -->
+                                        ${this.isExpanded(relationshipsNodeId) && bundleDetails?.rawData?.Relationships ? html`
+                                          <div class="ml-6">
+                                            ${(() => {
+                                              const relationships = bundleDetails.rawData.Relationships;
+                                              let relationshipsList = [];
+                                              
+                                              if (Array.isArray(relationships)) {
+                                                relationshipsList = relationships;
+                                              } else if (typeof relationships === 'object') {
+                                                relationshipsList = Object.values(relationships);
+                                              }
+                                              
+                                              return relationshipsList.length > 0 ? relationshipsList.map((relationship: any, index: number) => {
+                                                const relationshipName = relationship.Name || relationship.RelationshipName || relationship.name || `Relationship ${index + 1}`;
+                                                const relatedBundle = relationship.RelatedBundle || relationship.TargetBundle || relationship.target || 'Unknown';
+                                                const relationshipType = relationship.Type || relationship.RelationshipType || relationship.type || 'Unknown';
+                                                
+                                                return html`
+                                                  <div class="ml-4 p-1 text-xs flex items-center hover:bg-base-300 rounded cursor-pointer"
+                                                       @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, `${relationshipsNodeId}-${relationshipName}`, relationshipName, 'relationship')}>
+                                                    <span class="mr-2">
+                                                      <i class="fa-solid ${relationshipType.toLowerCase().includes('one') && relationshipType.toLowerCase().includes('many') ? 'fa-arrow-right-to-bracket' : 
+                                                                         relationshipType.toLowerCase().includes('many') ? 'fa-arrows-split-up-and-left' : 
+                                                                         relationshipType.toLowerCase().includes('one') ? 'fa-arrow-right' : 
+                                                                         'fa-link'}"></i>
+                                                    </span>
+                                                    <div class="flex-1">
+                                                      <div class="font-medium">${relationshipName}</div>
+                                                      <div class="text-gray-500 text-xs">
+                                                        ${relationshipType} → ${relatedBundle}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                `;
+                                              }) : html`
+                                                <div class="ml-4 text-xs text-gray-500 italic">No relationships found</div>
+                                              `;
+                                            })()}
+                                          </div>
+                                        ` : this.isExpanded(relationshipsNodeId) ? html`
+                                          <div class="ml-6">
+                                            <div class="ml-4 text-xs text-gray-500 italic">No relationships found</div>
+                                          </div>
+                                        ` : ''}
                                         
                                         <!-- Indexes Node -->
                                         <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                                            @click=${() => this.toggleNode(indexesNodeId)}
+                                            @click=${() => this.handleIndexesClick(connection, bundleName, indexesNodeId)}
                                             @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, indexesNodeId, 'Indexes', 'indexes')}>
                                           <span class="mr-2 w-4 text-center">
                                             ${this.isExpanded(indexesNodeId) ? '▼' : '▶'}
@@ -339,6 +402,105 @@ export class ConnectionTree extends LitElement {
                                           <span class="mr-2"><i class="fa-solid fa-folder-tree"></i></span>
                                           <span>Indexes</span>
                                         </div>
+
+                                        <!-- Indexes List (when expanded) -->
+                                        ${this.isExpanded(indexesNodeId) ? (() => {
+                                          const hashNodeId = `${indexesNodeId}-hash`;
+                                          const btreeNodeId = `${indexesNodeId}-btree`;
+                                          
+                                          // Get hash and btree index counts from bundle details
+                                          let hashCount = 0;
+                                          let btreeCount = 0;
+                                          
+                                          if (bundleDetails?.rawData?.Indexes) {
+                                            const indexes = bundleDetails.rawData.Indexes;
+                                            if (Array.isArray(indexes)) {
+                                              hashCount = indexes.filter((idx: any) => idx.Type === 'hash' || idx.IndexType === 'hash').length;
+                                              btreeCount = indexes.filter((idx: any) => idx.Type === 'btree' || idx.IndexType === 'btree').length;
+                                            } else if (typeof indexes === 'object') {
+                                              // Handle case where indexes might be an object
+                                              const indexArray = Object.values(indexes);
+                                              hashCount = indexArray.filter((idx: any) => idx.Type === 'hash' || idx.IndexType === 'hash').length;
+                                              btreeCount = indexArray.filter((idx: any) => idx.Type === 'btree' || idx.IndexType === 'btree').length;
+                                            }
+                                          }
+                                          
+                                          return html`
+                                            <div class="ml-6">
+                                              <!-- Hash Indexes -->
+                                              <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+                                                  @click=${() => this.toggleNode(hashNodeId)}
+                                                  @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, hashNodeId, 'Hash', 'hash-indexes')}>
+                                                <span class="mr-2 w-4 text-center">
+                                                  ${this.isExpanded(hashNodeId) ? '▼' : '▶'}
+                                                </span>
+                                                <span class="mr-2"><i class="fa-solid fa-hashtag"></i></span>
+                                                <span>Hash</span>
+                                                <span class="ml-auto text-xs bg-base-300 px-2 py-0.5 rounded">${hashCount}</span>
+                                              </div>
+
+                                              <!-- Hash Index List (when expanded) -->
+                                              ${this.isExpanded(hashNodeId) && bundleDetails?.rawData?.Indexes ? html`
+                                                <div class="ml-6">
+                                                  ${(() => {
+                                                    const indexes = bundleDetails.rawData.Indexes;
+                                                    const hashIndexes = Array.isArray(indexes) 
+                                                      ? indexes.filter((idx: any) => idx.Type === 'hash' || idx.IndexType === 'hash')
+                                                      : typeof indexes === 'object' 
+                                                        ? Object.values(indexes).filter((idx: any) => idx.Type === 'hash' || idx.IndexType === 'hash')
+                                                        : [];
+                                                    
+                                                    return hashIndexes.length > 0 ? hashIndexes.map((index: any) => html`
+                                                      <div class="ml-4 p-1 text-xs flex items-center hover:bg-base-300 rounded cursor-pointer"
+                                                           @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, `${hashNodeId}-${index.IndexName || index.FieldName || 'unnamed'}`, index.IndexName || index.FieldName || 'unnamed', 'index')}>
+                                                        <span class="mr-2"><i class="fa-solid fa-key"></i></span>
+                                                        <span>${index.IndexName || index.FieldName || 'Unnamed Index'}</span>
+                                                      </div>
+                                                    `) : html`
+                                                      <div class="ml-4 text-xs text-gray-500 italic">No hash indexes found</div>
+                                                    `;
+                                                  })()}
+                                                </div>
+                                              ` : ''}
+
+                                              <!-- B-Tree Indexes -->
+                                              <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+                                                  @click=${() => this.toggleNode(btreeNodeId)}
+                                                  @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, btreeNodeId, 'B-Tree', 'btree-indexes')}>
+                                                <span class="mr-2 w-4 text-center">
+                                                  ${this.isExpanded(btreeNodeId) ? '▼' : '▶'}
+                                                </span>
+                                                <span class="mr-2"><i class="fa-solid fa-sitemap"></i></span>
+                                                <span>B-Tree</span>
+                                                <span class="ml-auto text-xs bg-base-300 px-2 py-0.5 rounded">${btreeCount}</span>
+                                              </div>
+
+                                              <!-- B-Tree Index List (when expanded) -->
+                                              ${this.isExpanded(btreeNodeId) && bundleDetails?.rawData?.Indexes ? html`
+                                                <div class="ml-6">
+                                                  ${(() => {
+                                                    const indexes = bundleDetails.rawData.Indexes;
+                                                    const btreeIndexes = Array.isArray(indexes) 
+                                                      ? indexes.filter((idx: any) => idx.Type === 'btree' || idx.IndexType === 'btree')
+                                                      : typeof indexes === 'object' 
+                                                        ? Object.values(indexes).filter((idx: any) => idx.Type === 'btree' || idx.IndexType === 'btree')
+                                                        : [];
+                                                    
+                                                    return btreeIndexes.length > 0 ? btreeIndexes.map((index: any) => html`
+                                                      <div class="ml-4 p-1 text-xs flex items-center hover:bg-base-300 rounded cursor-pointer"
+                                                           @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, `${btreeNodeId}-${index.Name || index.FieldName || 'unnamed'}`, index.Name || index.FieldName || 'unnamed', 'index')}>
+                                                        <span class="mr-2"><i class="fa-solid fa-key"></i></span>
+                                                        <span>${index.Name || index.FieldName || 'Unnamed Index'}</span>
+                                                      </div>
+                                                    `) : html`
+                                                      <div class="ml-4 text-xs text-gray-500 italic">No B-tree indexes found</div>
+                                                    `;
+                                                  })()}
+                                                </div>
+                                              ` : ''}
+                                            </div>
+                                          `;
+                                        })() : ''}
                                       </div>
                                     ` : ''}
                                   </div>
@@ -462,6 +624,64 @@ export class ConnectionTree extends LitElement {
     // Toggle the fields node
     this.toggleNode(fieldsNodeId);
     console.log('Fields clicked for bundle:', bundleName);
+  }
+
+  private async handleIndexesClick(connection: Connection, bundleName: string, indexesNodeId: string) {
+    // Set this connection as the active one
+    this.setActiveConnection(connection.id);
+    
+    // Toggle the indexes node
+    this.toggleNode(indexesNodeId);
+    console.log('Indexes clicked for bundle:', bundleName);
+    
+    // If expanding and bundle details are not loaded, fetch them
+    if (this.isExpanded(indexesNodeId)) {
+      try {
+        console.log('Fetching details for bundle indexes:', bundleName);
+        
+        // Import the connection manager
+        const { connectionManager } = await import('../services/connection-manager');
+        
+        // Get bundle details (this will fetch if not cached)
+        const bundleDetails = await connectionManager.getBundleDetails(connection.id, bundleName);
+        
+        if (bundleDetails) {
+          console.log('Bundle details loaded for indexes:', bundleDetails);
+          this.requestUpdate();
+        }
+      } catch (error) {
+        console.error('Error fetching bundle details for indexes:', error);
+      }
+    }
+  }
+
+  private async handleRelationshipsClick(connection: Connection, bundleName: string, relationshipsNodeId: string) {
+    // Set this connection as the active one
+    this.setActiveConnection(connection.id);
+    
+    // Toggle the relationships node
+    this.toggleNode(relationshipsNodeId);
+    console.log('Relationships clicked for bundle:', bundleName);
+    
+    // If expanding and bundle details are not loaded, fetch them
+    if (this.isExpanded(relationshipsNodeId)) {
+      try {
+        console.log('Fetching details for bundle relationships:', bundleName);
+        
+        // Import the connection manager
+        const { connectionManager } = await import('../services/connection-manager');
+        
+        // Get bundle details (this will fetch if not cached)
+        const bundleDetails = await connectionManager.getBundleDetails(connection.id, bundleName);
+        
+        if (bundleDetails) {
+          console.log('Bundle details loaded for relationships:', bundleDetails);
+          this.requestUpdate();
+        }
+      } catch (error) {
+        console.error('Error fetching bundle details for relationships:', error);
+      }
+    }
   }
 }
 
