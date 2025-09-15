@@ -157,6 +157,7 @@ export class ConnectionTree extends LitElement {
     
     const statusColor = statusColors[connection.status] || 'badge-error';
     const databasesNodeId = `${connection.id}-databases`;
+    const usersNodeId = `${connection.id}-users`;
     
     return html`
       <div class="mb-2">
@@ -523,6 +524,36 @@ export class ConnectionTree extends LitElement {
                 ` : ''}
               </div>
             ` : ''}
+
+            <!-- Users Node -->
+            <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+                 @click=${() => this.handleUsersClick(connection, usersNodeId)}>
+              <span class="mr-2 w-4 text-center">
+                ${this.isExpanded(usersNodeId) ? '▼' : '▶'}
+              </span>
+              <span class="mr-2"><i class="fa-solid fa-users"></i></span>
+              <span>Users</span>
+              ${connection.users ? html`
+                <span class="ml-2 badge badge-outline badge-xs">${connection.users.length}</span>
+              ` : ''}
+            </div>
+
+            <!-- Users List (when expanded) -->
+            ${this.isExpanded(usersNodeId) && connection.users ? html`
+              <div class="ml-8 space-y-1">
+                ${connection.users.map(userName => html`
+                  <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+                       @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, `${connection.id}-user-${userName}`, userName, 'user')}>
+                    <span class="mr-2 w-4 text-center"></span>
+                    <span class="mr-2"><i class="fa-solid fa-user"></i></span>
+                    <span>${userName}</span>
+                  </div>
+                `)}
+                ${connection.users.length === 0 ? html`
+                  <div class="ml-4 text-xs text-gray-500 italic">No users found</div>
+                ` : ''}
+              </div>
+            ` : ''}
             
           </div>
         ` : ''}
@@ -680,6 +711,33 @@ export class ConnectionTree extends LitElement {
         }
       } catch (error) {
         console.error('Error fetching bundle details for relationships:', error);
+      }
+    }
+  }
+
+  private async handleUsersClick(connection: Connection, usersNodeId: string) {
+    // Set this connection as the active one
+    this.setActiveConnection(connection.id);
+    
+    // Toggle the users node
+    this.toggleNode(usersNodeId);
+    console.log('Users clicked for connection:', connection.name);
+    
+    // If expanding and users are not loaded or empty, refresh metadata
+    if (this.isExpanded(usersNodeId) && (!connection.users || connection.users.length === 0)) {
+      try {
+        console.log('Refreshing metadata to fetch users for connection:', connection.name);
+        
+        // Import the connection manager
+        const { connectionManager } = await import('../services/connection-manager');
+        
+        // Refresh metadata to get users
+        await connectionManager.refreshConnectionMetadata(connection.id);
+        
+        console.log('Users data refreshed:', connection.users);
+        this.requestUpdate();
+      } catch (error) {
+        console.error('Error fetching users:', error);
       }
     }
   }

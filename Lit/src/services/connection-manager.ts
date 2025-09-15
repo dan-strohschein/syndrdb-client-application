@@ -178,6 +178,30 @@ export class ConnectionManager {
         connection.databases = [];
       }
 
+      // Fetch users
+      try {
+        const usersResult = await connection.driver.executeQuery('SHOW USERS;');
+        console.log('👥 SHOW USERS result:', usersResult);
+        
+        if (usersResult.success && usersResult.data) {
+          if (Array.isArray(usersResult.data)) {
+            connection.users = usersResult.data.map((user: any) => {
+              // User data might be objects or strings
+              return user.Name || user.Username || user.name || user.username || String(user);
+            });
+          } else {
+            connection.users = [];
+          }
+          console.log('✅ Parsed users:', connection.users);
+        } else {
+          console.log('❌ No user data received');
+          connection.users = [];
+        }
+      } catch (userError) {
+        console.warn('Failed to fetch users:', userError);
+        connection.users = [];
+      }
+
       // Fetch bundles
       try {
         const bundlesResult = await connection.driver.executeQuery('SHOW BUNDLES;');
@@ -200,10 +224,6 @@ export class ConnectionManager {
         console.warn('Failed to fetch bundles:', bundleError);
         connection.bundles = [];
       }
-
-      // TODO: Fetch users when that command is available
-      // const usersResult = await connection.driver.query('SHOW USERS');
-      connection.users = [];
       
       this.emit('connectionStatusChanged', connection);
       
