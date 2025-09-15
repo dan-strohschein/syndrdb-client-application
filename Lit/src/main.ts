@@ -12,6 +12,7 @@ import './components/json-tree/json-tree-node';
 import './components/navigation-bar';
 import './components/query-editor/query-editor-container';
 import './components/about-modal';
+import './components/user-modal';
 
 
 @customElement('app-root')
@@ -31,6 +32,11 @@ export class AppRoot extends LitElement {
     // Listen for about modal requests
     this.addEventListener('about-modal-requested', (event: Event) => {
       this.handleAboutModalRequest(event as CustomEvent);
+    });
+    
+    // Listen for add-user events
+    this.addEventListener('add-user', (event: Event) => {
+      this.handleAddUserRequest(event as CustomEvent);
     });
   }
 
@@ -64,6 +70,22 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private handleAddUserRequest(event: CustomEvent) {
+    console.log('🎯 App root received add-user event');
+    console.log('Event detail:', event.detail);
+    
+    // Find the user-modal element and open it
+    const userModal = this.querySelector('user-modal');
+    if (userModal) {
+      console.log('📤 Opening user modal');
+      (userModal as any).open = true;
+      (userModal as any).isOpen = true;
+      (userModal as any).requestUpdate();
+    } else {
+      console.error('❌ Could not find user-modal element');
+    }
+  }
+
   render() {
     return html`
       <div class="h-screen bg-base-100 text-base-content flex flex-col">
@@ -85,6 +107,9 @@ export class AppRoot extends LitElement {
         
         <!-- About Modal -->
         <about-modal></about-modal>
+        
+        <!-- User Modal -->
+        <user-modal></user-modal>
     </div>    
     `;
   }

@@ -86,6 +86,18 @@ export class ConnectionTree extends LitElement {
         }));
         console.log('✅ Event dispatched successfully');
         break;
+      case 'add-user':
+        console.log('👤 Dispatching add-user event from connection tree');
+        this.dispatchEvent(new CustomEvent('add-user', {
+          detail: { 
+            nodeType: this.contextMenu.nodeType,
+            nodeName: this.contextMenu.nodeName,
+            nodeId: this.contextMenu.nodeId
+          },
+          bubbles: true
+        }));
+        console.log('✅ Add user event dispatched successfully');
+        break;
     
     }
     
@@ -527,7 +539,8 @@ export class ConnectionTree extends LitElement {
 
             <!-- Users Node -->
             <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                 @click=${() => this.handleUsersClick(connection, usersNodeId)}>
+                 @click=${() => this.handleUsersClick(connection, usersNodeId)}
+                 @contextmenu=${(e: MouseEvent) => this.handleContextMenu(e, usersNodeId, 'Users', 'users')}>
               <span class="mr-2 w-4 text-center">
                 ${this.isExpanded(usersNodeId) ? '▼' : '▶'}
               </span>
@@ -602,9 +615,9 @@ export class ConnectionTree extends LitElement {
           <context-menu style="position: fixed; top: ${this.contextMenu.y}px; left: ${this.contextMenu.x}px; z-index: 1000;">
             <ul class="menu bg-base-200 w-56 rounded-box shadow-lg">
               <li>
-                <a @click=${() => this.handleContextMenuAction('query')}>
-                  <i class="fa-solid fa-plus mr-2"></i>
-                  New Query Editor
+                <a @click=${() => this.handleContextMenuAction(this.contextMenu?.nodeType === 'users' ? 'add-user' : 'query')}>
+                  <i class="fa-solid ${this.contextMenu?.nodeType === 'users' ? 'fa-user-plus' : 'fa-plus'} mr-2"></i>
+                  ${this.contextMenu?.nodeType === 'users' ? 'Add User' : 'New Query Editor'}
                 </a>
               </li>
               <li>
