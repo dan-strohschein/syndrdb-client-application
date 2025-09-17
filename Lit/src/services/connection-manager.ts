@@ -159,8 +159,11 @@ export class ConnectionManager {
       // Fetch databases
       const databasesResult = await connection.driver.executeQuery('SHOW DATABASES;');
       console.log('📊 SHOW DATABASES result:', databasesResult);
+      console.log('📊 SHOW DATABASES data type:', typeof databasesResult.data);
+      console.log('📊 SHOW DATABASES data isArray:', Array.isArray(databasesResult.data));
       
       if (databasesResult.success && databasesResult.data) {
+        console.log('📊 Raw database data:', databasesResult.data);
         // SyndrDB returns Result: ["database1", "database2", ...]
         // The data field now contains the Result array directly
         if (Array.isArray(databasesResult.data)) {
@@ -169,10 +172,11 @@ export class ConnectionManager {
             return typeof dbName === 'string' ? dbName : String(dbName);
           });
         } else {
+          console.log('⚠️ Database data is not an array, trying to convert...');
           connection.databases = [];
         }
         
-        console.log('✅ Parsed databases:', connection.databases);
+        console.log('✅ Final parsed databases:', connection.databases);
       } else {
         console.log('❌ No database data received');
         connection.databases = [];
@@ -368,8 +372,80 @@ export class ConnectionManager {
 
         // Parse fields from DocumentStructure
         const data = result.data as any;
-        if (data.DocumentStructure) {
-          bundleDetails.documentStructure = data.DocumentStructure
+        console.log('🔍 Raw data from SHOW BUNDLE:', JSON.stringify(data, null, 2));
+        console.log('🔍 Available properties in data:', Object.keys(data));
+        
+        if (data.DocumentStructure && data.DocumentStructure.FieldDefinitions) {
+          console.log('📋 FieldDefinitions found:', data.DocumentStructure.FieldDefinitions);
+          console.log('📋 FieldDefinitions type:', typeof data.DocumentStructure.FieldDefinitions);
+          console.log('📋 FieldDefinitions isArray:', Array.isArray(data.DocumentStructure.FieldDefinitions));
+          
+          // Handle FieldDefinitions - it can be either an object with field names as keys, or an array
+          let fieldDefinitionsArray: any[] = [];
+          
+          if (Array.isArray(data.DocumentStructure.FieldDefinitions)) {
+            // Already an array
+            fieldDefinitionsArray = data.DocumentStructure.FieldDefinitions;
+            console.log('✅ Using FieldDefinitions as array');
+          } else if (data.DocumentStructure.FieldDefinitions && typeof data.DocumentStructure.FieldDefinitions === 'object') {
+            // Convert object to array - the object keys are field names
+            fieldDefinitionsArray = Object.values(data.DocumentStructure.FieldDefinitions);
+            console.log('🔄 Converted FieldDefinitions object to array:', fieldDefinitionsArray.length, 'fields');
+          }
+          
+          bundleDetails.documentStructure = {
+            FieldDefinitions: fieldDefinitionsArray
+          };
+          console.log('✅ Final parsed documentStructure with', bundleDetails.documentStructure.FieldDefinitions.length, 'fields');
+        } else {
+          console.log('❌ No DocumentStructure.FieldDefinitions found in data');
+          bundleDetails.documentStructure = {
+            FieldDefinitions: []
+          };
+        }
+
+        // Parse relationships if they exist
+        console.log('🔗 Looking for relationships in data...');
+        console.log('🔗 data.Relationships:', data.Relationships);
+        console.log('🔗 data.Relationships type:', typeof data.Relationships);
+        
+        if (data.Relationships && typeof data.Relationships === 'object' && !Array.isArray(data.Relationships)) {
+          // This is a Go map serialized as JSON object: { "relationshipName": { "RelationshipName": "...", ... } }
+          console.log('🔗 Found Relationships as Go map object, converting to array');
+          const relationshipsArray = Object.entries(data.Relationships).map(([key, relationshipData]: [string, any]) => ({
+            ...relationshipData, // Spread all properties from the relationship object
+            _mapKey: key // Include the original map key for reference
+          }));
+          bundleDetails.relationships = relationshipsArray;
+          console.log('🔗 Converted relationships map to array:', relationshipsArray);
+        } else if (data.Relationships && Array.isArray(data.Relationships)) {
+          console.log('🔗 Found Relationships as array (unexpected but handling):', data.Relationships);
+          bundleDetails.relationships = data.Relationships;
+        } else {
+          console.log('❌ No Relationships found in data');
+        }
+
+        // Parse indexes if they exist
+        console.log('📑 Looking for indexes in data...');
+        console.log('📑 data.Indexes:', data.Indexes);
+        console.log('📑 data.Indexes type:', typeof data.Indexes);
+        
+        if (data.Indexes && typeof data.Indexes === 'object' && !Array.isArray(data.Indexes)) {
+          // This is a Go map serialized as JSON object: { "indexName": { "IndexName": "...", "IndexType": "..." } }
+          console.log('📑 Found Indexes as Go map object, converting to array');
+          const indexesArray = Object.entries(data.Indexes).map(([key, indexData]: [string, any]) => ({
+            IndexName: indexData.IndexName || key, // Use the key as fallback
+            IndexType: indexData.IndexType?.toLowerCase() || 'unknown', // Normalize to lowercase: "hash" or "b-tree"
+            // Include the original key for reference
+            _mapKey: key
+          }));
+          bundleDetails.indexes = indexesArray;
+          console.log('📑 Converted indexes map to array:', indexesArray);
+        } else if (data.Indexes && Array.isArray(data.Indexes)) {
+          console.log('📑 Found Indexes as array (unexpected but handling):', data.Indexes);
+          bundleDetails.indexes = data.Indexes;
+        } else {
+          console.log('❌ No Indexes found in data');
         }
 
         // Store the bundle details

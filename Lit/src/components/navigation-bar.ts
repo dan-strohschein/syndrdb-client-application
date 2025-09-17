@@ -126,6 +126,16 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private async handleNewDatabase() {
+        console.log('Navigation bar: handleNewDatabase called');
+        this.dispatchEvent(new CustomEvent('new-database-requested', {
+            bubbles: true,
+            composed: true
+        }));
+        console.log('Navigation bar: new-database-requested event dispatched');
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -199,11 +209,22 @@ export class NavigationBar extends LitElement {
                     align-items: center;
                 }
                 
+                navigation-bar .navbar-start {
+                    display: inline-flex;
+                    align-items: center;
+                    width: fit-content;
+                    justify-content: flex-start;
+                }
+
                 /* Compact menu items to fit reduced height */
                 navigation-bar .menu-horizontal {
                     padding: 0 !important;
                     margin: 0 !important;
                     height: 100%;
+                }
+
+                navigation-bar .menu-horizontal > ul {
+                    width: fit-content;
                 }
                 
                 navigation-bar .menu-horizontal > li {
@@ -317,7 +338,7 @@ export class NavigationBar extends LitElement {
                             </button>
                             ${this.openMenu === 'servers' ? html`
                                 <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">New Connection</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">New&nbsp;Connection</a></li>
                                 </ul>
                             ` : ''}
                         </li>
@@ -332,6 +353,7 @@ export class NavigationBar extends LitElement {
                             </button>
                             ${this.openMenu === 'database' ? html`
                                 <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleNewDatabase}>New&nbsp;Database</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Backup</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Restore</a></li>
                                 </ul>
@@ -375,11 +397,7 @@ export class NavigationBar extends LitElement {
                     
                 </div>
                 
-                <div class="navbar-end">
-                    <div class="btn btn-ghost btn-circle">
-                       
-                    </div>
-                </div>
+               
             </div>
         `;
     }

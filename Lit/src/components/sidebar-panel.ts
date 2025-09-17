@@ -101,7 +101,7 @@ export class SidebarPanel extends LitElement {
     return html`
       <div class="h-full flex flex-col bg-base-200">
         <!-- Header -->
-        <div class="p-4 border-b border-base-300">
+        <div class="flex-shrink-0 p-4 border-b border-base-300">
           <h2 class="text-x1 font-semibold text-base-content">Database Connections</h2>
           <button class="btn btn-primary btn-sm mt-2 w-full" @click=${this.openConnectionModal}>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,7 +112,7 @@ export class SidebarPanel extends LitElement {
         </div>
         
         <!-- Connection Tree -->
-        <div class="flex-1 overflow-auto p-2">
+        <div class="flex-1 overflow-y-scroll overflow-x-hidden p-2" style="max-height: calc(100vh - 200px);">
           <connection-tree 
             .connections=${this.connections}
             @connect-database=${this.handleConnectDatabase}
@@ -121,7 +121,7 @@ export class SidebarPanel extends LitElement {
         </div>
         
         <!-- Status Bar -->
-        <div class="p-2 border-t border-base-300 text-xs text-base-content/70">
+        <div class="flex-shrink-0 p-2 border-t border-base-300 text-xs text-base-content/70">
           ${this.connections.filter(c => c.status === 'connected').length} of ${this.connections.length} connected
         </div>
         

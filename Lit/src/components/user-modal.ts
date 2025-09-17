@@ -9,7 +9,15 @@ export class UserModal extends LitElement {
   open = false;
 
 @property({ type: Object })
-  user = null;
+  user: {
+    name: string;
+    userId: string;
+    password: string;
+    isActive: boolean;
+    isLockedOut: boolean;
+    failedLoginAttempts: number;
+    lockoutExpiresOn: Date | string | null;
+  } | null = null;
 
   @state() isOpen = false;
 
@@ -35,6 +43,38 @@ export class UserModal extends LitElement {
     // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
         return this;
+    }
+
+    updated(changedProperties: Map<string | number | symbol, unknown>) {
+        super.updated(changedProperties);
+        
+        // If the user property changed and we have user data, populate the form
+        if (changedProperties.has('user') && this.user) {
+            console.log('👤 User property changed, populating form:', this.user);
+            this.formData = {
+                name: this.user.name || '',
+                userId: this.user.userId || '',
+                password: this.user.password || '',
+                isActive: this.user.isActive ?? true,
+                isLockedOut: this.user.isLockedOut ?? false,
+                failedLoginAttempts: this.user.failedLoginAttempts || 0,
+                lockoutExpiresOn: this.user.lockoutExpiresOn ? new Date(this.user.lockoutExpiresOn) : null
+            };
+            this.requestUpdate();
+        } else if (changedProperties.has('user') && !this.user) {
+            // If user is cleared (for new user), reset form
+            console.log('🆕 User cleared, resetting form for new user');
+            this.formData = {
+                name: '',
+                userId: '',
+                password: '',
+                isActive: true,
+                isLockedOut: false,
+                failedLoginAttempts: 0,
+                lockoutExpiresOn: null
+            };
+            this.requestUpdate();
+        }
     }
 
 
@@ -64,10 +104,6 @@ private handleInputChange(field: string, value: string | boolean | number | Date
   }
 
   private handleDateChange(e: any) {
-    console.log('Date changed - event:', e);
-    console.log('Date changed - target:', e.target);
-    console.log('Date changed - value:', e.target.value);
-    console.log('Date changed - detail:', e.detail);
     
     // Convert the string date to a Date object for proper storage and display
     const selectedDate = new Date(e.target.value);
@@ -131,7 +167,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
             <div class="modal-box w-11/12 max-w-2xl">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between mb-6">
-                    <h3 class="font-bold text-lg">User Details</h3>
+                    <h3 class="font-bold text-lg">${this.user ? 'Edit User' : 'Add New User'}</h3>
                     <button class="btn btn-sm btn-circle btn-ghost" @click=${this.handleClose}>
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -145,10 +181,12 @@ private handleInputChange(field: string, value: string | boolean | number | Date
                         <input 
                         id="name"
                         type="text" 
-                        class="input input-bordered w-full" 
+                        required
+                        class="input input-bordered w-full validator" 
                         .value=${this.formData.name}
                         @input=${(e: Event) => this.handleInputChange('name', (e.target as HTMLInputElement).value)}
                         />
+                        <p class="validator-hint">Required</p>
                     </div>
                     <div class="form-control">
                         <label class="label">
@@ -156,11 +194,13 @@ private handleInputChange(field: string, value: string | boolean | number | Date
                         </label>
                         <input 
                         type="password" 
+                        required
                         placeholder="••••••••" 
-                        class="input input-bordered w-full"
+                        class="input input-bordered w-full validator"
                         .value=${this.formData.password}
                         @input=${(e: any) => this.handleInputChange('password', e.target.value)}
                         />
+                        <p class="validator-hint">Required</p>
                     </div>
                     <div class="form-control">
                         <label class="label">
@@ -230,26 +270,34 @@ private handleInputChange(field: string, value: string | boolean | number | Date
                         <input 
                             type="number" 
                             min="0"
-                            class="input input-bordered w-full"
+                            class="input input-bordered w-1/4 "
                             .value=${this.formData.failedLoginAttempts.toString()}
+                            disabled
                             @input=${(e: Event) => this.handleInputChange('failedLoginAttempts', parseInt((e.target as HTMLInputElement).value) || 0)}
                         />
+                        <button class="btn btn-sm btn-outline btn-warning mt-1" @click=${() => this.handleInputChange('failedLoginAttempts', 0)}>
+                            Reset Attempts
+                        </button>
                     </div>
-                </div>    
+                </div>  
+                
+                 <!-- Modal Actions -->
+                <div class="modal-action">
+                    <button class="btn btn-ghost" @click=${this.handleClose}>
+                    Cancel
+                    </button>
+                    <button 
+                    class="btn btn-primary"
+                    @click=${this.handleSave}
+                    ?disabled=${!this.formData.name || !this.formData.password}
+                    >
+                    Save User
+                    </button>
+                </div>
+
+
             </div>
-            <!-- Modal Actions -->
-            <div class="modal-action">
-                <button class="btn btn-ghost" @click=${this.handleClose}>
-                Cancel
-                </button>
-                <button 
-                class="btn btn-primary"
-                @click=${this.handleSave}
-                ?disabled=${!this.formData.name || !this.formData.password}
-                >
-                Save User
-                </button>
-            </div>
+           
 
             <!-- Modal backdrop -->
             <div class="modal-backdrop" @click=${this.handleClose}></div>
