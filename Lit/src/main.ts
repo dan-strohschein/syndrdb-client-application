@@ -14,6 +14,10 @@ import './components/query-editor/query-editor-container';
 import './components/about-modal';
 import './components/user-modal';
 import './components/database-modal';
+import './components/bundle-modal/bundle-modal';
+import './components/bundle-modal/fields-tab';
+import './components/bundle-modal/indexes-tab';
+import './components/bundle-modal/field-definition-editor';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -47,6 +51,16 @@ export class AppRoot extends LitElement {
     // Listen for new-database-requested events
     this.addEventListener('new-database-requested', (event: Event) => {
       this.handleNewDatabaseRequest(event as CustomEvent);
+    });
+
+    // Listen for new-bundle-requested events
+    this.addEventListener('new-bundle-requested', (event: Event) => {
+      this.handleNewBundleRequest(event as CustomEvent);
+    });
+
+    // Listen for database-created events
+    this.addEventListener('database-created', (event: Event) => {
+      this.handleDatabaseCreated(event as CustomEvent);
     });
 
     // Listen for connect-database events
@@ -91,10 +105,44 @@ export class AppRoot extends LitElement {
     if (databaseModal) {
       console.log('📤 Opening database modal');
       (databaseModal as any).open = true;
-      (databaseModal as any).isOpen = true;
+      (databaseModal as any).connectionId = event.detail?.connectionId;
       (databaseModal as any).requestUpdate();
     } else {
       console.error('❌ Could not find database-modal element');
+    }
+  }
+
+private async handleNewBundleRequest(event: CustomEvent) {
+    console.log('🎯 App root received new-bundle-requested event');
+    console.log('Event detail:', event.detail);
+
+    // Find the bundle-modal element and open it
+    const bundleModal = this.querySelector('bundle-modal');
+    if (bundleModal) {
+      console.log('📤 Opening bundle modal');
+      (bundleModal as any).open = true;
+      (bundleModal as any).connectionId = event.detail?.connectionId;
+      (bundleModal as any).requestUpdate();
+    } else {
+      console.error('❌ Could not find bundle-modal element');
+    }
+  }
+
+  private async handleDatabaseCreated(event: CustomEvent) {
+    console.log('🎯 App root received database-created event');
+    console.log('Event detail:', event.detail);
+
+    // Find the sidebar-panel and trigger a tree refresh
+    const sidebarPanel = this.querySelector('sidebar-panel');
+    if (sidebarPanel) {
+      console.log('📤 Refreshing connection tree after database creation');
+      // Dispatch an event to refresh the specific connection node
+      sidebarPanel.dispatchEvent(new CustomEvent('refresh-connection', {
+        detail: { connectionId: event.detail?.connectionId },
+        bubbles: false
+      }));
+    } else {
+      console.error('❌ Could not find sidebar-panel element');
     }
   }
 
@@ -162,15 +210,15 @@ export class AppRoot extends LitElement {
     console.log('🎯 App root received connect-database event');
     console.log('Event detail:', event.detail);
     
-    // In a real application, you would:
-    // 1. Get connection details from your connection store
+    // In a prod application, we would:
+    // 1. Get connection details from the connection store
     // 2. Establish a database connection
     // 3. Update connection status
     // 4. Notify the connection tree of the status change
     
     // For now, we'll just log the connection attempt
     console.log(`🔌 Attempting to connect to database: ${event.detail.connectionId}`);
-    // You would typically dispatch this to your connection service
+    // We typically dispatch this to the connection service
     // connectionService.connect(event.detail.connectionId);
   }
 
@@ -178,7 +226,7 @@ export class AppRoot extends LitElement {
     console.log('🎯 App root received disconnect-database event');
     console.log('Event detail:', event.detail);
     
-    // In a real application, you would:
+    // In a production application, we would:
     // 1. Close the database connection
     // 2. Update connection status
     // 3. Notify the connection tree of the status change
@@ -198,8 +246,8 @@ export class AppRoot extends LitElement {
     
     console.log(`🧪 Testing connection: ${event.detail.connectionName} (ID: ${event.detail.connectionId})`);
     
-    // For demonstration, show an alert with the test result
-    // In a real app, you might show a toast notification or modal
+    // For now, show an alert with the test result
+    // TODO show a toast notification or modal for the connection
     setTimeout(() => {
       alert(`Connection test for "${event.detail.connectionName}": Success! ✅\n\n(This is a mock result - integrate with your actual connection service)`);
     }, 100); // Small delay to let the context menu close first
@@ -232,6 +280,9 @@ export class AppRoot extends LitElement {
 
         <!-- Database Modal -->
         <database-modal></database-modal>
+
+        <!-- Bundle Modal -->
+        <bundle-modal></bundle-modal>
     </div>    
     `;
   }

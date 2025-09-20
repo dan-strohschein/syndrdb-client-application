@@ -31,8 +31,9 @@ export interface Connection {
   lastError?: string;
   databases?: string[];
   users?: string[];
-  bundles?: string[];
+  databaseBundles?: Map<string, string[]>; // Map of database name to its bundles
   bundleDetails?: Map<string, BundleDetails>; // Map of bundle name to its details
+  currentDatabase?: string; // Track the current database context
 }
 
 export class ConnectionManager {
@@ -206,27 +207,9 @@ export class ConnectionManager {
         connection.users = [];
       }
 
-      // Fetch bundles
-      try {
-        const bundlesResult = await connection.driver.executeQuery('SHOW BUNDLES;');
-        console.log('📦 SHOW BUNDLES result:', bundlesResult);
-        
-        if (bundlesResult.success && bundlesResult.data) {
-          if (Array.isArray(bundlesResult.data)) {
-            connection.bundles = bundlesResult.data.map((bundle: any) => {
-              return bundle.Name || String(bundle);
-            });
-          } else {
-            connection.bundles = [];
-          }
-          console.log('✅ Parsed bundles:', connection.bundles);
-        } else {
-          console.log('❌ No bundle data received');
-          connection.bundles = [];
-        }
-      } catch (bundleError) {
-        console.warn('Failed to fetch bundles:', bundleError);
-        connection.bundles = [];
+      // Initialize database bundles map if not exists
+      if (!connection.databaseBundles) {
+        connection.databaseBundles = new Map();
       }
       
       this.emit('connectionStatusChanged', connection);
@@ -274,6 +257,130 @@ export class ConnectionManager {
 
     this.connections.delete(connectionId);
     this.emit('connectionRemoved', connectionId);
+  }
+
+  /**
+   * Load bundles for a specific database
+   */
+  async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<string[]> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.status !== 'connected') {
+      throw new Error('Connection is not available');
+    }
+
+    try {
+      // Set database context first
+      await this.setDatabaseContext(connectionId, databaseName);
+      
+      const bundlesCommand = `SHOW BUNDLES;`; // No need for "FOR database" when context is set
+      console.log('📦 Loading bundles for database:', databaseName, 'with command:', bundlesCommand);
+      
+      const bundlesResult = await connection.driver.executeQuery(bundlesCommand);
+      console.log('📦 SHOW BUNDLES result:', bundlesResult);
+      
+      let bundles: string[] = [];
+      
+      if (bundlesResult.success && bundlesResult.data) {
+
+        if (bundlesResult.ResultCount && bundlesResult.ResultCount > 0 && bundlesResult.data != null) {
+          if (Array.isArray(bundlesResult.data)) {
+            bundles = bundlesResult.data.map((bundle: any) => {
+              return bundle.Name || String(bundle);
+            });
+          }
+        } else {
+          bundles = [];
+        }
+      } else {
+        console.log('❌ No bundle data received for database:', databaseName);
+      }
+      
+      // Store the bundles for this database
+      if (!connection.databaseBundles) {
+        connection.databaseBundles = new Map();
+      }
+      connection.databaseBundles.set(databaseName, bundles);
+      
+      console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
+      
+      this.emit('connectionStatusChanged', connection);
+      return bundles;
+      
+    } catch (error) {
+      console.error('Failed to fetch bundles for database:', databaseName, error);
+      return [];
+    }
+  }
+
+  /**
+   * Set the current database context for a connection
+   */
+  async setDatabaseContext(connectionId: string, databaseName: string): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.status !== 'connected') {
+      throw new Error('Connection is not available');
+    }
+
+    // Only execute USE command if the database context is changing
+    if (connection.currentDatabase !== databaseName) {
+      console.log('🔄 Setting database context:', databaseName);
+      const useCommand = `USE "${databaseName}";`;
+      
+      try {
+        const result = await connection.driver.executeQuery(useCommand);
+        if (result.success) {
+          connection.currentDatabase = databaseName;
+          console.log('✅ Database context set to:', databaseName);
+          this.emit('databaseContextChanged', { connectionId, databaseName });
+        } else {
+          console.error('❌ Failed to set database context:', result);
+          throw new Error(`Failed to set database context: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('❌ Error setting database context:', error);
+        throw error;
+      }
+    } else {
+      console.log('✅ Database context already set to:', databaseName);
+    }
+  }
+
+  /**
+   * Get the current database context for a connection
+   */
+  getCurrentDatabase(connectionId: string): string | undefined {
+    const connection = this.connections.get(connectionId);
+    return connection?.currentDatabase;
+  }
+
+  /**
+   * Execute a query with automatic database context switching
+   */
+  async executeQueryWithContext(connectionId: string, query: string, databaseName?: string): Promise<QueryResult> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.status !== 'connected') {
+      throw new Error('Connection is not available');
+    }
+
+    // Set database context if provided and different from current
+    if (databaseName) {
+      await this.setDatabaseContext(connectionId, databaseName);
+    }
+
+    // Execute the query using the driver
+    return await connection.driver.executeQuery(query);
+  }
+
+  /**
+   * Get bundles for a specific database (from cache)
+   */
+  getBundlesForDatabase(connectionId: string, databaseName: string): string[] {
+    const connection = this.connections.get(connectionId);
+    if (!connection || !connection.databaseBundles) {
+      return [];
+    }
+    
+    return connection.databaseBundles.get(databaseName) || [];
   }
 
   /**

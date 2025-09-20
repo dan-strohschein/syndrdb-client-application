@@ -110,8 +110,15 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Individual Database Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @click=${() => {
+           @click=${async () => {
              onSetActiveConnection(connection.id);
+             // Set database context when clicking on a database
+             try {
+               const { connectionManager } = await import('../../services/connection-manager');
+               await connectionManager.setDatabaseContext(connection.id, databaseName);
+             } catch (error) {
+               console.error('Failed to set database context:', databaseName, error);
+             }
              onToggleNode(databaseNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, databaseNodeId, databaseName, 'database')}>
@@ -161,13 +168,31 @@ export class DatabaseNodeRenderer {
   ): TemplateResult {
     const bundlesNodeId = generateBundlesNodeId(connection.id, databaseName);
     const expanded = isExpanded(bundlesNodeId);
-    const bundleCount = connection.bundles?.length || 0;
+    // Get bundles specific to this database
+    const databaseBundles = connection.databaseBundles?.get(databaseName) || [];
+    const bundleCount = databaseBundles.length;
 
     return html`
       <!-- Bundles Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @click=${() => {
+           @click=${async () => {
              onSetActiveConnection(connection.id);
+             // Set database context when clicking on bundles node
+             try {
+               const { connectionManager } = await import('../../services/connection-manager');
+               await connectionManager.setDatabaseContext(connection.id, databaseName);
+             } catch (error) {
+               console.error('Failed to set database context:', databaseName, error);
+             }
+             // If not expanded, load bundles for this database first
+             if (!expanded) {
+               try {
+                 const { connectionManager } = await import('../../services/connection-manager');
+                 await connectionManager.loadBundlesForDatabase(connection.id, databaseName);
+               } catch (error) {
+                 console.error('Failed to load bundles for database:', databaseName, error);
+               }
+             }
              onToggleNode(bundlesNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles')}>
@@ -186,7 +211,7 @@ export class DatabaseNodeRenderer {
       <!-- Bundles Children (when expanded) -->
       ${expanded ? html`
         <div class="ml-6 space-y-1">
-          ${connection.bundles?.map(bundleName => 
+          ${databaseBundles.map((bundleName: string) => 
             DatabaseNodeRenderer.renderIndividualBundleNode(
               connection, 
               databaseName, 
@@ -226,6 +251,14 @@ export class DatabaseNodeRenderer {
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
            @click=${async () => {
              onSetActiveConnection(connection.id);
+             
+             // Set database context before bundle operations
+             try {
+               const { connectionManager } = await import('../../services/connection-manager');
+               await connectionManager.setDatabaseContext(connection.id, databaseName);
+             } catch (error) {
+               console.error('Failed to set database context:', databaseName, error);
+             }
              
              // Check if we're expanding the node (was collapsed, now will be expanded)
              const wasCollapsed = !isExpanded(bundleNodeId);
@@ -312,8 +345,15 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Fields Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @click=${() => {
+           @click=${async () => {
              onSetActiveConnection(connection.id);
+             // Set database context before field operations
+             try {
+               const { connectionManager } = await import('../../services/connection-manager');
+               await connectionManager.setDatabaseContext(connection.id, databaseName);
+             } catch (error) {
+               console.error('Failed to set database context:', databaseName, error);
+             }
              onToggleNode(fieldsNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, fieldsNodeId, 'Fields', 'fields')}>
@@ -426,8 +466,15 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Indexes Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @click=${() => {
+           @click=${async () => {
              onSetActiveConnection(connection.id);
+             // Set database context before index operations
+             try {
+               const { connectionManager } = await import('../../services/connection-manager');
+               await connectionManager.setDatabaseContext(connection.id, databaseName);
+             } catch (error) {
+               console.error('Failed to set database context:', databaseName, error);
+             }
              onToggleNode(indexesNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, indexesNodeId, 'Indexes', 'indexes')}>

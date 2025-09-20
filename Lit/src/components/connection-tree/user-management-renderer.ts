@@ -24,7 +24,21 @@ export class UserManagementRenderer {
     return html`
       <!-- Users Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @click=${() => onUsersClick(connection, usersNodeId)}
+           @click=${async () => {
+             // Set database context before calling onUsersClick
+             const parts = usersNodeId.split('-');
+             const databaseIndex = parts.indexOf('database');
+             if (databaseIndex !== -1 && databaseIndex + 1 < parts.length) {
+               const databaseName = parts[databaseIndex + 1];
+               try {
+                 const { connectionManager } = await import('../../services/connection-manager');
+                 await connectionManager.setDatabaseContext(connection.id, databaseName);
+               } catch (error) {
+                 console.error('Failed to set database context for users:', databaseName, error);
+               }
+             }
+             onUsersClick(connection, usersNodeId);
+           }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, usersNodeId, 'Users', 'users')}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
@@ -83,6 +97,21 @@ export class UserManagementRenderer {
   ): Promise<void> {
     // Set this connection as the active one
     onSetActiveConnection(connection.id);
+    
+    // Extract database name from users node ID (format: connectionId-database-databaseName-users)
+    const parts = usersNodeId.split('-');
+    const databaseIndex = parts.indexOf('database');
+    if (databaseIndex !== -1 && databaseIndex + 1 < parts.length) {
+      const databaseName = parts[databaseIndex + 1];
+      
+      // Set database context before users operations
+      try {
+        const { connectionManager } = await import('../../services/connection-manager');
+        await connectionManager.setDatabaseContext(connection.id, databaseName);
+      } catch (error) {
+        console.error('Failed to set database context for users:', databaseName, error);
+      }
+    }
     
     // Toggle the users node
     onToggleNode(usersNodeId);

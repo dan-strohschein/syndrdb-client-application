@@ -63,6 +63,19 @@ export class TreeDataService {
   }
 
   /**
+   * Load bundles for a specific database
+   */
+  static async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<string[]> {
+    try {
+      const { connectionManager } = await import('../../services/connection-manager');
+      return await connectionManager.loadBundlesForDatabase(connectionId, databaseName);
+    } catch (error) {
+      console.error('Error loading bundles for database:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get cached bundle details if available
    */
   static async getCachedBundleDetails(connectionId: string, bundleName: string): Promise<BundleDetails | null> {

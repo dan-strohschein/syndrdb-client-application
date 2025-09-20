@@ -65,4 +65,7 @@ export const CONTEXT_MENU_ACTIONS = {
   NEW_DATABASE: 'new-database',
   EDIT_DATABASE: 'edit-database',
   DELETE_DATABASE: 'delete-database',
+  NEW_BUNDLE: 'new-bundle',
+  EDIT_BUNDLE: 'edit-bundle',
+  DELETE_BUNDLE: 'delete-bundle',
 } as const;

@@ -123,6 +123,46 @@ export class TreeContextMenuHandler {
             }));
             console.log('✅ Delete database event dispatched successfully');
         break;
+
+        case CONTEXT_MENU_ACTIONS.NEW_BUNDLE:
+        console.log('🗄️ Dispatching new-bundle-requested event from connection tree');
+        eventDispatcher(new CustomEvent('new-bundle-requested', {
+          detail: { 
+            connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
+            nodeType: contextMenu.nodeType,
+            nodeName: contextMenu.nodeName,
+            nodeId: contextMenu.nodeId
+          },
+          bubbles: true
+        }));
+        console.log('✅ New bundle event dispatched successfully');
+        break;
+        case CONTEXT_MENU_ACTIONS.EDIT_BUNDLE:
+            console.log('🗄️ Dispatching edit-bundle-requested event from connection tree')
+            eventDispatcher(new CustomEvent('edit-bundle-requested', {
+                detail: { 
+                connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
+                nodeType: contextMenu.nodeType,
+                nodeName: contextMenu.nodeName,
+                nodeId: contextMenu.nodeId
+            },
+            bubbles: true
+            }));
+            console.log('✅ Edit bundle event dispatched successfully');
+        break;
+        case CONTEXT_MENU_ACTIONS.DELETE_BUNDLE:
+            console.log('🗄️ Dispatching delete-bundle-requested event from connection tree')
+            eventDispatcher(new CustomEvent('delete-bundle-requested', {
+                detail: { 
+                connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
+                nodeType: contextMenu.nodeType,
+                nodeName: contextMenu.nodeName,
+                nodeId: contextMenu.nodeId
+            },
+            bubbles: true
+            }));
+            console.log('✅ Delete bundle event dispatched successfully');
+        break;
     }
   }
 
@@ -166,6 +206,17 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.EDIT_USER,
         icon: 'fa-user-edit',
         label: 'Edit User'
+      });
+    } else if (nodeType === NODE_TYPES.BUNDLES) {
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.NEW_BUNDLE,
+        icon: 'fa-folder-plus',
+        label: 'New Bundle'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.QUERY,
+        icon: 'fa-plus',
+        label: 'New Query Editor'
       });
     } else {
       actions.push({

@@ -251,30 +251,39 @@ export class SyndrDBMainService extends EventEmitter {
           // Handle SyndrDB response format: { "Result": [...], "ResultCount": n }
           let data;
           let documentCount = 0;
-          
-          if (response.Result) {
+          let resultCount = 0;
+          if (response.Result && response.ResultCount > 0) {
             // SyndrDB format
             data = response.Result;
             documentCount = response.ResultCount || data.length;
+            resultCount = response.ResultCount || data.length;
+          } else if (response.Result == null && response.ResultCount == 0) {
+            data = null;
+            documentCount = 0;
+            resultCount = 0;
           } else if (response.data) {
             // Fallback format
             data = response.data;
             documentCount = data.length;
+            resultCount = data.length;
           } else if (response.results) {
             // Alternative fallback format  
             data = response.results;
             documentCount = data.length;
+            resultCount = data.length;
           } else {
             // Single response format
             data = [response];
             documentCount = 1;
+            resultCount = 1;
           }
           
           resolve({
             success: true,
             data: data,
             executionTime,
-            documentCount
+            documentCount,
+            ResultCount: resultCount,
           });
         } else {
           resolve({

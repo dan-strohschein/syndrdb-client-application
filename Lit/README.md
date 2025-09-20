@@ -58,7 +58,7 @@ A modern database management tool built with Electron, Lit web components, and T
 ### Available Scripts
 
 - `npm run dev` - Start Vite dev server
-- `npm run build` - Build for production
+- `npm run build:main` - Build for production
 - `npm run electron` - Run Electron app (production)
 - `npm run electron:dev` - Run Electron app (development)
 - `npm run dist` - Create distributable packages

@@ -25,6 +25,7 @@ export interface QueryResult {
   error?: string;
   executionTime?: number;
   documentCount?: number;
+  ResultCount?: number;
 }
 
 export class SyndrDBDriver {
