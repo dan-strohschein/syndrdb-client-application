@@ -20,6 +20,12 @@ public tabName: string = 'Query Editor';
 @property({ type: String })
 public initialQuery: string = '';
 
+@property({ type: String })
+public databaseName: string = '';
+
+@property({ type: String })
+public connectionId: string = '';
+
 @consume({ context: connectionContext })
   @state() connectionCtxt?: ConnectionContext;
 
@@ -55,8 +61,14 @@ public initialQuery: string = '';
     firstUpdated() {
         if (this.initialQuery) {
             this.query = this.initialQuery;
-            this.requestUpdate();
         }
+        
+        // Set connection context if connectionId is provided
+        if (this.connectionId) {
+            this._selectedConnectionId = this.connectionId;
+        }
+        
+        this.requestUpdate();
     }
     
     // Handle property changes, especially when tab becomes active
@@ -87,7 +99,22 @@ public initialQuery: string = '';
         this.executing = true;
         
         try {
-            const result = await connectionManager.executeQuery(this.query);
+            let result: QueryResult;
+            
+            // If we have a connectionId and databaseName, use context-aware execution
+            if (this.connectionId && this.databaseName) {
+                // Set database context first if needed
+                await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
+                // Execute with context
+                result = await connectionManager.executeQueryWithContext(this.connectionId, this.query);
+            } else if (this.connectionId) {
+                // Execute on specific connection without database context
+                result = await connectionManager.executeQueryOnConnectionId(this.connectionId, this.query);
+            } else {
+                // Fallback to general execute method
+                result = await connectionManager.executeQuery(this.query);
+            }
+            
             this.queryResult = result;
         } catch (error) {
             console.error('Query execution failed:', error);
@@ -199,7 +226,15 @@ if (!result.canceled && result.filePath) {
         <div class="flex-1 border-b border-base-300 min-h-0 h-1/2">
           <div class="h-full p-4 flex flex-col">
             <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold text-base-content">Query Editor</h3>
+              <div class="flex flex-col">
+                <h3 class="text-sm font-semibold text-base-content">Query Editor</h3>
+                ${this.databaseName ? html`
+                  <div class="text-xs text-base-content opacity-70 flex items-center mt-1">
+                    <i class="fa-solid fa-database mr-1"></i>
+                    <span>Database: <span class="font-medium">${this.databaseName}</span></span>
+                  </div>
+                ` : ''}
+              </div>
               <div class="flex items-center space-x-2">
                 <!-- Execute Query Button (Play Icon) -->
                 <button 

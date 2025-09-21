@@ -44,7 +44,13 @@ export class MainPanel extends LitElement {
   private connection: Connection | undefined = undefined;
 
   @state()
-  private queryEditors: Array<{name: string, initialQuery?: string, queryState?: string}> = [];
+  private queryEditors: Array<{
+    name: string, 
+    initialQuery?: string, 
+    queryState?: string,
+    databaseName?: string,
+    connectionId?: string
+  }> = [];
 
   @state()
   private activeTabIndex: number = 0;
@@ -66,14 +72,31 @@ export class MainPanel extends LitElement {
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
-    const { query } = event.detail;
+    const { query, databaseName, connectionId } = event.detail;
     const editorName = `Query Editor ${this.queryEditors.length + 1}`;
     
-    this.queryEditors.push({name: editorName, initialQuery: query});
+    // Build initial query with database context
+    let initialQuery = '';
+    if (databaseName) {
+      initialQuery = `USE "${databaseName}";\n\n${query || '-- Your query here'}`;
+    } else {
+      initialQuery = query || '-- Your query here';
+    }
+    
+    this.queryEditors.push({
+      name: editorName, 
+      initialQuery: initialQuery,
+      databaseName: databaseName,
+      connectionId: connectionId
+    });
     this.activeTabIndex = this.queryEditors.length - 1; // Switch to new tab
     this.requestUpdate();
     
-    console.log(`Added new query editor: ${editorName} with query:`, query);
+    console.log(`Added new query editor: ${editorName} with database context:`, {
+      databaseName,
+      connectionId,
+      initialQuery
+    });
   }
 
   private switchToTab(index: number) {
@@ -116,6 +139,8 @@ export class MainPanel extends LitElement {
                   class="w-full h-full" 
                   .tabName=${editor.name} 
                   .initialQuery=${editor.queryState || editor.initialQuery || ''} 
+                  .databaseName=${editor.databaseName || ''}
+                  .connectionId=${editor.connectionId || ''}
                   .isActive=${this.activeTabIndex === index}
                   @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}>
                 </query-editor-container>

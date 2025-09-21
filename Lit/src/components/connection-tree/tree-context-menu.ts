@@ -48,11 +48,21 @@ export class TreeContextMenuHandler {
         
       case CONTEXT_MENU_ACTIONS.QUERY:
         console.log('🚀 Dispatching add-query-editor event from connection tree');
+        
+        // Extract database context from node ID
+        const databaseContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+        
+        const queryDetail = {
+          query: `-- Query for ${contextMenu.nodeType} "${contextMenu.nodeName}"`,
+          databaseName: databaseContext.databaseName,
+          connectionId: databaseContext.connectionId
+        };
+        
         eventDispatcher(new CustomEvent('add-query-editor', {
-          detail: { query: `-- Query for ${contextMenu.nodeType} "${contextMenu.nodeName}"` },
+          detail: queryDetail,
           bubbles: true
         }));
-        console.log('✅ Event dispatched successfully');
+        console.log('✅ Event dispatched successfully with database context:', databaseContext);
         break;
         
       case CONTEXT_MENU_ACTIONS.ADD_USER:
@@ -234,6 +244,27 @@ export class TreeContextMenuHandler {
     // });
     
     return actions;
+  }
+
+  /**
+   * Extract database context from node ID
+   */
+  static extractDatabaseContext(nodeId: string, nodeType: string): { connectionId: string; databaseName: string | null } {
+    const parts = nodeId.split('-');
+    const connectionId = parts[0];
+    
+    // Find database name in node ID (format: connectionId-database-databaseName-...)
+    const databaseIndex = parts.indexOf('database');
+    let databaseName: string | null = null;
+    
+    if (databaseIndex !== -1 && databaseIndex + 1 < parts.length) {
+      databaseName = parts[databaseIndex + 1];
+    }
+    
+    return {
+      connectionId,
+      databaseName
+    };
   }
 
   /**
