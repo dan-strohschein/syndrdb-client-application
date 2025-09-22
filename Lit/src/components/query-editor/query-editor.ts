@@ -6,8 +6,69 @@ import './suggestion-complete/suggestion-dropdown';
 
 @customElement('query-editor')
 export class QueryEditor extends LitElement {
-// Disable Shadow DOM to allow global Tailwind CSS
+
+  static styles = css`
+    .custom-textarea {
+      border: 1px solid #6b7280 !important; /* Dark grey border */
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+      background-color: transparent;
+      color: inherit;
+      outline: none !important;
+      box-shadow: none !important;
+      transition: border-color 0.2s ease-in-out;
+    }
+    
+    .custom-textarea:focus {
+      border-color: white !important;
+      box-shadow: none !important;
+      outline: none !important;
+    }
+    
+    .custom-textarea:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  `;
+
+  // Disable Shadow DOM to allow global Tailwind CSS but inject our custom styles
   createRenderRoot() {
+    // Add custom styles to document head
+    if (!document.querySelector('#query-editor-custom-styles')) {
+      const style = document.createElement('style');
+      style.id = 'query-editor-custom-styles';
+      style.textContent = `
+        .custom-textarea {
+          border: 1px solid #6b7280 !important;
+          border-radius: 0.375rem;
+          padding: 0.75rem;
+          background-color: transparent;
+          color: inherit;
+          outline: none !important;
+          box-shadow: none !important;
+          transition: border-color 0.2s ease-in-out;
+        }
+        
+        .custom-textarea:focus {
+          border-color: white !important;
+          box-shadow: none !important;
+          outline: none !important;
+        }
+        
+        .custom-textarea:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        
+        /* Override any DaisyUI/Tailwind textarea focus styles */
+        .custom-textarea.textarea:focus {
+          border-color: white !important;
+          box-shadow: none !important;
+          outline: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
     return this;
   }
     
@@ -286,7 +347,7 @@ export class QueryEditor extends LitElement {
         <div class="flex-1 relative">
           <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'syndrql' ? 'visible z-10' : 'invisible z-0'}">
             <textarea 
-              class="textarea textarea-bordered w-full h-full font-mono resize-none"
+              class="custom-textarea w-full h-full font-mono resize-none"
               placeholder="Enter your SyndrQL query..."
               .value=${this.queryText}
               @input=${this.handleQueryChange}
@@ -304,7 +365,7 @@ export class QueryEditor extends LitElement {
           </div>
           <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'graphql' ? 'visible z-10' : 'invisible z-0'}">
             <textarea 
-              class="textarea textarea-bordered w-full h-full font-mono resize-none"
+              class="custom-textarea w-full h-full font-mono resize-none"
               placeholder="Enter your GraphQL query..."
               .value=${this.queryText}
               @input=${this.handleQueryChange}

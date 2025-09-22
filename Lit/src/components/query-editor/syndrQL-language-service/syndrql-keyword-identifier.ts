@@ -397,3 +397,97 @@ export function highlightKeywordsCustom(
     return match;
   });
 }
+
+/**
+ * Highlights comments in a string by wrapping them with span elements
+ * @param input - The input string containing SyndrQL code with comments
+ * @returns The input string with comments wrapped in <span class="text-accent-content"> elements
+ */
+export function highlightComments(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return input;
+  }
+
+  // SyndrQL supports both single-line and multi-line comments
+  // Single-line comments: -- comment text
+  // Multi-line comments: /* comment text */
+  
+  let result = input;
+  
+  // Handle single-line comments (-- comment)
+  // Match from -- to the end of the line
+  result = result.replace(/(--.*?)(?=\n|$)/g, '<span class="text-accent-content">$1</span>');
+  
+  // Handle multi-line comments (/* comment */)
+  // Match from /* to */ including newlines
+  result = result.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="text-accent-content">$1</span>');
+  
+  return result;
+}
+
+/**
+ * Highlights identifiers in a string by wrapping them with span elements
+ * @param input - The input string containing SyndrQL code with identifiers
+ * @returns The input string with identifiers wrapped in <span class="text-accent-content"> elements
+ */
+export function highlightIdentifiers(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return input;
+  }
+
+  let result = input;
+  
+  // Identifiers in SyndrQL can be:
+  // 1. Quoted identifiers: "database_name", "bundle_name", "field_name"
+  // 2. Unquoted identifiers: database_name, bundle_name, field_name (alphanumeric + underscore, starting with letter)
+  
+  // First, highlight quoted identifiers
+  // Match anything between double quotes that isn't already in a span
+  result = result.replace(/(?<!<span[^>]*>.*?)"([^"]+)"(?!.*?<\/span>)/g, (match, identifier) => {
+    return `"<span class="text-accent-content">${identifier}</span>"`;
+  });
+  
+  // Then, highlight unquoted identifiers
+  // Match words that:
+  // - Start with a letter or underscore
+  // - Contain letters, numbers, or underscores
+  // - Are not SyndrQL keywords
+  // - Are not already inside HTML tags
+  // - Are not inside comments
+  const identifierRegex = /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
+  
+  result = result.replace(identifierRegex, (match) => {
+    // Skip if it's a keyword
+    if (isSyndrQLKeyword(match)) {
+      return match;
+    }
+    
+    // Skip if it's already wrapped in a span (to avoid double-wrapping)
+    // This is a simple check - for more robust handling, we'd need to parse HTML
+    const beforeMatch = result.substring(0, result.indexOf(match));
+    const afterMatch = result.substring(result.indexOf(match) + match.length);
+    
+    // Simple check to avoid wrapping already highlighted content
+    if (beforeMatch.endsWith('<span class="text-info">') || 
+        beforeMatch.endsWith('<span class="text-accent-content">') ||
+        afterMatch.startsWith('</span>')) {
+      return match;
+    }
+    
+    // Skip common programming constructs that aren't identifiers
+    const nonIdentifiers = ['true', 'false', 'null', 'undefined', 'this', 'self'];
+    if (nonIdentifiers.includes(match.toLowerCase())) {
+      return match;
+    }
+    
+    // Skip numbers (though they shouldn't match the regex anyway)
+    if (/^\d/.test(match)) {
+      return match;
+    }
+    
+    return `<span class="text-secondary-content">${match}</span>`;
+  });
+  
+  return result;
+}
+

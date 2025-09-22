@@ -1,4 +1,4 @@
-import { html, css, LitElement } from 'lit';
+import { html, css, LitElement, PropertyValues } from 'lit';
 import { provide } from '@lit/context'
 import { customElement, property, state } from 'lit/decorators.js';
 import { Connection, connectionManager } from '../services/connection-manager';
@@ -10,28 +10,11 @@ import { stat } from 'fs';
 @customElement('main-panel')
 export class MainPanel extends LitElement {
   @provide({context: queryEditorContext})
-  get queryEditorContextProvider(): QueryEditorContext {
-    return {
-      selectedConnectionId: this._selectedConnectionId,
-      setSelectedConnectionId: (id) => {
-        this._selectedConnectionId = id;
-        this.requestUpdate();
-      },
-      connection: connectionManager.getConnection(this._selectedConnectionId || ''),
-      setConnection: (connection) => {
-        this.connection = connection;
-        this.requestUpdate();
-      },
-      queryEditors: this.queryEditors,
-      setQueryEditors: (editors) => {
-        this.queryEditors = editors;
-        this.requestUpdate();
-      }
-    };
-  }
+  private queryEditorContextProvider: QueryEditorContext;
 
   @state()
   private _selectedConnectionId: string | null = null;
+  
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
     return this;
@@ -61,9 +44,49 @@ export class MainPanel extends LitElement {
   @state()
   private executing = false;
 
+  constructor() {
+    super();
+    // Initialize context provider once in constructor
+    this.queryEditorContextProvider = {
+      selectedConnectionId: this._selectedConnectionId,
+      setSelectedConnectionId: (id) => {
+        this._selectedConnectionId = id;
+        this.updateContextProvider();
+      },
+      connection: connectionManager.getConnection(this._selectedConnectionId || ''),
+      setConnection: (connection) => {
+        this.connection = connection;
+        this.updateContextProvider();
+      },
+      queryEditors: this.queryEditors,
+      setQueryEditors: (editors) => {
+        this.queryEditors = editors;
+        this.updateContextProvider();
+      }
+    };
+  }
+
+  private updateContextProvider() {
+    // Update the context provider properties without replacing the object
+    this.queryEditorContextProvider.selectedConnectionId = this._selectedConnectionId;
+    this.queryEditorContextProvider.connection = connectionManager.getConnection(this._selectedConnectionId || '');
+    this.queryEditorContextProvider.queryEditors = this.queryEditors;
+  }
+
+  willUpdate(changedProperties: PropertyValues) {
+    // Update context provider when relevant state changes
+    if (changedProperties.has('_selectedConnectionId') || 
+        changedProperties.has('queryEditors') || 
+        changedProperties.has('connection')) {
+      this.updateContextProvider();
+    }
+  }
+
   firstUpdated() {
-    this.queryEditors.push({name: "Default Query Editor"});
-    this.requestUpdate();
+    // Initialize with default editor if none exist
+    if (this.queryEditors.length === 0) {
+      this.queryEditors = [{name: "Default Query Editor"}];
+    }
     
     // Add event listener for add-query-editor events
     this.addEventListener('add-query-editor', (event: Event) => {
@@ -83,14 +106,14 @@ export class MainPanel extends LitElement {
       initialQuery = query || '-- Your query here';
     }
     
-    this.queryEditors.push({
+    // Create new array to ensure Lit detects the change
+    this.queryEditors = [...this.queryEditors, {
       name: editorName, 
       initialQuery: initialQuery,
       databaseName: databaseName,
       connectionId: connectionId
-    });
+    }];
     this.activeTabIndex = this.queryEditors.length - 1; // Switch to new tab
-    this.requestUpdate();
     
     console.log(`Added new query editor: ${editorName} with database context:`, {
       databaseName,
@@ -101,7 +124,7 @@ export class MainPanel extends LitElement {
 
   private switchToTab(index: number) {
     this.activeTabIndex = index;
-    this.requestUpdate();
+    // Lit automatically handles updates for @state properties
   }
 
   private closeTab(index: number) {
@@ -110,20 +133,23 @@ export class MainPanel extends LitElement {
       return;
     }
     
-    this.queryEditors.splice(index, 1);
+    // Create new array to ensure Lit detects the change
+    this.queryEditors = this.queryEditors.filter((_, i) => i !== index);
     
     // Adjust activeTabIndex if necessary
     if (this.activeTabIndex >= this.queryEditors.length) {
       this.activeTabIndex = this.queryEditors.length - 1;
     }
-    
-    this.requestUpdate();
   }
 
   private handleQueryStateChanged(event: CustomEvent, editorIndex: number) {
     const { queryText } = event.detail;
-    this.queryEditors[editorIndex].queryState = queryText;
-    // Don't need to requestUpdate as we're just storing state
+    // Use immutable update pattern to ensure Lit detects the change
+    this.queryEditors = this.queryEditors.map((editor, index) => 
+      index === editorIndex 
+        ? { ...editor, queryState: queryText }
+        : editor
+    );
   }
 
   render() {

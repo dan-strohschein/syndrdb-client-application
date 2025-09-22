@@ -30,20 +30,11 @@ public connectionId: string = '';
 @consume({ context: connectionContext })
   @state() connectionCtxt?: ConnectionContext;
 
-@provide({context: queryContext})
+  private _queryContextProvider: QueryContextValue;
+
+  @provide({context: queryContext})
   get queryContextProvider(): QueryContextValue {
-    return {
-      selectedConnectionId: this._selectedConnectionId,
-      setSelectedConnectionId: (id) => {
-        this._selectedConnectionId = id;
-        this.requestUpdate();
-      },
-      query: this.query,
-      setQuery: (query) => {
-        this.query = query;
-        this.requestUpdate();
-      },
-    };
+    return this._queryContextProvider;
   }
 
     @state()
@@ -57,33 +48,67 @@ public connectionId: string = '';
 
     @state()
     private executing = false;
+
+    constructor() {
+        super();
+        // Initialize context provider once
+        this._queryContextProvider = {
+            selectedConnectionId: this._selectedConnectionId,
+            setSelectedConnectionId: (id) => {
+                this._selectedConnectionId = id;
+                this._queryContextProvider.selectedConnectionId = id;
+            },
+            query: this.query,
+            setQuery: (query) => {
+                this.query = query;
+                this._queryContextProvider.query = query;
+            },
+        };
+    }
+
+  private _initialized = false;
+
+  willUpdate(changedProperties: PropertyValues) {
+        // Initialize properties only once when they first arrive
+        if (!this._initialized && (this.initialQuery || this.connectionId)) {
+            if (this.initialQuery) {
+                this.query = this.initialQuery;
+            }
+            
+            if (this.connectionId) {
+                this._selectedConnectionId = this.connectionId;
+            }
+            
+            this._initialized = true;
+        }
+        
+        // Update context provider when relevant state changes
+        if (changedProperties.has('_selectedConnectionId')) {
+            this._queryContextProvider.selectedConnectionId = this._selectedConnectionId;
+        }
+        if (changedProperties.has('query')) {
+            this._queryContextProvider.query = this.query;
+        }
+    }
     
     // Initialize query with initialQuery value
     firstUpdated() {
-        if (this.initialQuery) {
-            this.query = this.initialQuery;
-        }
-        
-        // Set connection context if connectionId is provided
-        if (this.connectionId) {
-            this._selectedConnectionId = this.connectionId;
-        }
-        
-        this.requestUpdate();
+        // Initialization now handled in willUpdate to prevent cascading updates
+        // No state changes needed here
     }
     
     // Handle property changes, especially when tab becomes active
     updated(changedProperties: PropertyValues) {
         super.updated(changedProperties);
         
-        // If the tab just became active, force child components to recalculate
+        // If the tab just became active, dispatch resize event to help child components
         if (changedProperties.has('isActive') && this.isActive) {
-            // Small delay to ensure DOM is updated
-            setTimeout(() => {
+            // Use requestAnimationFrame instead of setTimeout for better performance
+            requestAnimationFrame(() => {
                 // Trigger a resize event to help child components recalculate dimensions
                 window.dispatchEvent(new Event('resize'));
-                this.requestUpdate();
-            }, 0);
+                // No requestUpdate needed - this is after the update cycle
+            });
         }
     }
     

@@ -1,4 +1,4 @@
-import { html, css, LitElement } from 'lit';
+import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import "cally";
 
@@ -18,8 +18,6 @@ export class UserModal extends LitElement {
     failedLoginAttempts: number;
     lockoutExpiresOn: Date | string | null;
   } | null = null;
-
-  @state() isOpen = false;
 
   @state()
   private formData: {
@@ -45,8 +43,8 @@ export class UserModal extends LitElement {
         return this;
     }
 
-    updated(changedProperties: Map<string | number | symbol, unknown>) {
-        super.updated(changedProperties);
+    willUpdate(changedProperties: PropertyValues) {
+        super.willUpdate(changedProperties);
         
         // If the user property changed and we have user data, populate the form
         if (changedProperties.has('user') && this.user) {
@@ -60,7 +58,6 @@ export class UserModal extends LitElement {
                 failedLoginAttempts: this.user.failedLoginAttempts || 0,
                 lockoutExpiresOn: this.user.lockoutExpiresOn ? new Date(this.user.lockoutExpiresOn) : null
             };
-            this.requestUpdate();
         } else if (changedProperties.has('user') && !this.user) {
             // If user is cleared (for new user), reset form
             console.log('🆕 User cleared, resetting form for new user');
@@ -73,7 +70,6 @@ export class UserModal extends LitElement {
                 failedLoginAttempts: 0,
                 lockoutExpiresOn: null
             };
-            this.requestUpdate();
         }
     }
 
@@ -158,7 +154,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
     }
 
     render() {
-    if (!this.isOpen) {
+    if (!this.open) {
         return html``;
     }
 
