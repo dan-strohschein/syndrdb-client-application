@@ -28,18 +28,18 @@ const suggestionTestCases = [
     description: "Should suggest SELECT completion"
   },
   {
-    name: "After SELECT *",
-    input: "SELECT * ",
+    name: "After SELECT DOCUMENTS",
+    input: "SELECT DOCUMENTS ",
     description: "Should suggest FROM clause"
   },
   {
     name: "After FROM",
-    input: "SELECT * FROM ",
+    input: "SELECT DOCUMENTS FROM ",
     description: "Should suggest table/bundle names"
   },
   {
     name: "Complete SELECT with WHERE",
-    input: "SELECT * FROM users ",
+    input: "SELECT DOCUMENTS FROM users ",
     description: "Should suggest WHERE, ORDER BY, etc."
   },
   {

@@ -419,16 +419,25 @@ export class SyndrQLTokenizer {
     // Remove multi-line comments
     cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
     
-    // Normalize whitespace but preserve structure
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    // Normalize whitespace but preserve trailing space for suggestion context
+    // Replace multiple internal spaces with single spaces, but preserve leading/trailing
+    const leadingSpaces = cleaned.match(/^\s*/)?.[0] || '';
+    const trailingSpaces = cleaned.match(/\s*$/)?.[0] || '';
+    const middle = cleaned.replace(/^\s+|\s+$/g, '').replace(/\s+/g, ' ');
     
-    return cleaned;
+    return leadingSpaces + middle + trailingSpaces;
   }
 
   /**
    * Get the current partial input being typed
    */
   private getCurrentPartialInput(input: string): string {
+    // If input ends with whitespace, there's no partial input
+    if (input.endsWith(' ') || input.endsWith('\t') || input.endsWith('\n')) {
+      return '';
+    }
+    
+    // Look for partial word at the end
     const match = input.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
     return match ? match[1] : '';
   }
@@ -619,17 +628,14 @@ export class SyndrQLTokenizer {
     const { tokens, lastToken } = context;
     const suggestions: Suggestion[] = [];
     
-    // Debug: check what we're working with
-    // console.log('SELECT suggestions - tokens:', tokens.length, 'lastToken:', lastToken?.value);
-    
     if (tokens.length === 1) {
-      // After SELECT (first token)
+      // After SELECT (first token) - in SyndrQL, empty SELECT list means "all fields"
       suggestions.push(
         {
-          value: '*',
-          type: TokenType.OPERATOR,
-          kind: SuggestionKind.OPERATOR,
-          description: 'Select all columns',
+          value: 'DOCUMENTS',
+          type: TokenType.KEYWORD,
+          kind: SuggestionKind.KEYWORD,
+          description: 'Select all documents (empty SELECT list)',
           priority: 10
         },
         {
@@ -641,11 +647,23 @@ export class SyndrQLTokenizer {
         }
       );
       // Add column name placeholders
-      suggestions.push(this.createPlaceholderSuggestion('column_name', 'Column name'));
+      suggestions.push(this.createPlaceholderSuggestion('field_name', 'Field name'));
       return suggestions;
     }
     
-    // Check if we need FROM clause
+    // Check if we have SELECT DOCUMENTS but no FROM yet
+    if (tokens.length === 2 && tokens[1].value.toUpperCase() === 'DOCUMENTS' && !this.hasKeyword(tokens, 'FROM')) {
+      suggestions.push({
+        value: 'FROM',
+        type: TokenType.KEYWORD,
+        kind: SuggestionKind.KEYWORD,
+        description: 'Specify source bundle',
+        priority: 9
+      });
+      return suggestions;
+    }
+    
+    // Check if we need FROM clause (for other SELECT patterns)
     if (!this.hasKeyword(tokens, 'FROM')) {
       suggestions.push({
         value: 'FROM',

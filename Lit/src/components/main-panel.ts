@@ -104,6 +104,22 @@ export class MainPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private closeTab(index: number) {
+    if (this.queryEditors.length <= 1) {
+      // Prevent closing the last tab
+      return;
+    }
+    
+    this.queryEditors.splice(index, 1);
+    
+    // Adjust activeTabIndex if necessary
+    if (this.activeTabIndex >= this.queryEditors.length) {
+      this.activeTabIndex = this.queryEditors.length - 1;
+    }
+    
+    this.requestUpdate();
+  }
+
   private handleQueryStateChanged(event: CustomEvent, editorIndex: number) {
     const { queryText } = event.detail;
     this.queryEditors[editorIndex].queryState = queryText;
@@ -125,6 +141,7 @@ export class MainPanel extends LitElement {
               @click=${() => this.switchToTab(index)}
             >
               ${editor.name}
+              <span class="ml-2 text-accent-content hover:text-info"><a @click=${() => this.closeTab(index)}><i class="fa-solid fa-xmark"></i></a></span>
             </button>
           `)}
         </div>

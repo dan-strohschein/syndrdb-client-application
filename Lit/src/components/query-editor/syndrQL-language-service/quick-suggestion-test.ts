@@ -11,7 +11,7 @@ console.log('============================\n');
 
 const testCases = [
   'SELECT ',
-  'SELECT * ',
+  'SELECT DOCUMENTS ',
   'INSERT ',
   'CREATE '
 ];

@@ -7,6 +7,7 @@ import { connectionManager } from '../../services/connection-manager';
 import { ConnectionContext, connectionContext } from '../../context/connectionContext';
 import { Connect } from 'vite';
 import { ElectronAPI } from '../../types/electron-api';
+import { parseSyndrQLStatements, isCompleteStatement } from './syndrQL-language-service/syndrql-parser';
 
 @customElement('query-editor-container')
 export class QueryEditorContainer extends LitElement {
@@ -99,36 +100,87 @@ public connectionId: string = '';
         this.executing = true;
         
         try {
-            let result: QueryResult;
+            // Parse and validate the query using SyndrQL parser
+            console.log('Parsing SyndrQL query:', this.query);
+            const statements = parseSyndrQLStatements(this.query);
             
-            // If we have a connectionId and databaseName, use context-aware execution
-            if (this.connectionId && this.databaseName) {
-                // Set database context first if needed
-                await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
-                // Execute with context
-                result = await connectionManager.executeQueryWithContext(this.connectionId, this.query);
-            } else if (this.connectionId) {
-                // Execute on specific connection without database context
-                result = await connectionManager.executeQueryOnConnectionId(this.connectionId, this.query);
-            } else {
-                // Fallback to general execute method
-                result = await connectionManager.executeQuery(this.query);
+            if (statements.length === 0) {
+                throw new Error('No valid statements found in query');
             }
             
-            this.queryResult = result;
+            console.log(`Found ${statements.length} statement(s) to execute:`, statements);
+            
+            // Validate that all statements are complete
+            const incompleteStatements = statements.filter(stmt => !isCompleteStatement(stmt));
+            if (incompleteStatements.length > 0) {
+                throw new Error(`Incomplete statements found (missing semicolon): ${incompleteStatements.join(', ')}`);
+            }
+            
+            // Execute statements in order
+            let finalResult: QueryResult | null = null;
+            const allResults: QueryResult[] = [];
+            
+            for (let i = 0; i < statements.length; i++) {
+                const statement = statements[i];
+                console.log(`Executing statement ${i + 1}/${statements.length}:`, statement);
+                
+                let result: QueryResult;
+                
+                // If we have a connectionId and databaseName, use context-aware execution
+                if (this.connectionId && this.databaseName) {
+                    // Set database context first if needed
+                    await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
+                    // Execute with context
+                    result = await connectionManager.executeQueryWithContext(this.connectionId, statement);
+                } else if (this.connectionId) {
+                    // Execute on specific connection without database context
+                    result = await connectionManager.executeQueryOnConnectionId(this.connectionId, statement);
+                } else {
+                    // Fallback to general execute method
+                    result = await connectionManager.executeQuery(statement);
+                }
+                
+                allResults.push(result);
+                finalResult = result; // Keep the last result as the final result
+                
+                // If any statement fails, stop execution
+                if (!result.success) {
+                    throw new Error(`Statement ${i + 1} failed: ${result.error}`);
+                }
+                
+                console.log(`Statement ${i + 1} completed successfully`);
+            }
+            
+            // If we executed multiple statements, create a combined result
+            if (statements.length > 1) {
+                const totalExecutionTime = allResults.reduce((sum, result) => sum + (result.executionTime || 0), 0);
+                const totalDocumentCount = allResults.reduce((sum, result) => sum + (result.documentCount || 0), 0);
+                
+                this.queryResult = {
+                    success: true,
+                    data: finalResult?.data,
+                    executionTime: totalExecutionTime,
+                    documentCount: totalDocumentCount,
+                    ResultCount: finalResult?.ResultCount
+                };
+            } else {
+                // Single statement result
+                this.queryResult = finalResult;
+            }
+            
+            console.log('All statements executed successfully');
+            
         } catch (error) {
             console.error('Query execution failed:', error);
             this.queryResult = {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            executionTime: 0
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                executionTime: 0
             };
         }
 
         this.executing = false;
-        }
-
-        private async saveQuery() {
+    }        private async saveQuery() {
         // TODO: Implement query saving functionality
             console.log('Saving query:', this.query);
 
@@ -148,7 +200,7 @@ public connectionId: string = '';
             });
     
 
-if (!result.canceled && result.filePath) {
+    if (!result.canceled && result.filePath) {
             this.dispatchEvent(new CustomEvent('file-save-requested', {
                 detail: { 
                     panelType: 'query-editor',

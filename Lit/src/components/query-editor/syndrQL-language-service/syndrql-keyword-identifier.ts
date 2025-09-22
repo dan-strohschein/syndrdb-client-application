@@ -244,7 +244,7 @@ export function identifyStatementType(statement: string): string {
   if (trimmed.startsWith('CREATE HASH INDEX')) return 'CREATE_HASH_INDEX';
   if (trimmed.startsWith('SELECT DATABASES')) return 'SELECT_DATABASES';
   if (trimmed.startsWith('SELECT DOCUMENTS')) return 'SELECT_DOCUMENTS';
-  if (trimmed.startsWith('SELECT *')) return 'SELECT_ALL';
+  if (trimmed.startsWith('SELECT DOCUMENTS')) return 'SELECT_ALL';
   if (trimmed.startsWith('ADD DOCUMENT')) return 'INSERT_DOCUMENT';
   if (trimmed.startsWith('UPDATE DOCUMENTS')) return 'UPDATE_DOCUMENTS';
   if (trimmed.startsWith('DELETE DOCUMENTS')) return 'DELETE_DOCUMENTS';

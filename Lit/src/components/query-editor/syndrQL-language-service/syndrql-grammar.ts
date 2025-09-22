@@ -218,7 +218,7 @@ export const SYNDRQL_GRAMMAR_RULES: { [key: string]: GrammarRule } = {
       { type: TokenType.STRING_LITERAL, placeholder: 'BUNDLE_NAME' },
       { type: TokenType.SEMICOLON }
     ],
-    examples: ['SELECT * FROM "users";']
+    examples: ['SELECT DOCUMENTS FROM "users";']
   },
 
   SELECT_WITH_JOIN: {
