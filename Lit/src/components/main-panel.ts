@@ -179,7 +179,7 @@ export class MainPanel extends LitElement {
             return html`
               <div class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'visible z-10' : 'invisible z-0'}">
                 <query-editor-container 
-                  class="w-full h-full" 
+                  class="w-full h-full }" 
                   .tabName=${editor.name} 
                   .initialQuery=${editor.queryState || editor.initialQuery || ''} 
                   .databaseName=${editor.databaseName || ''}

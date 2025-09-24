@@ -298,7 +298,7 @@ public connectionId: string = '';
     const connection = connectionManager.getConnection(this._selectedConnectionId || '');
     
     return html`
-      <div class="h-full flex flex-col">
+      <div class="h-full flex flex-col ${this.isActive ? 'syndrql-active-tab' : ''}">
         <!-- Query Editor (Top Half) -->
         <div class="flex-1 border-b border-base-300 min-h-0 h-1/2">
           <div class="h-full p-4 flex flex-col">

@@ -13,6 +13,7 @@ export enum TokenType {
   OPERATOR = 'operator',
   PUNCTUATION = 'punctuation',
   WHITESPACE = 'whitespace',
+  NEWLINE = 'newline',
   COMMENT = 'comment',
   UNKNOWN = 'unknown'
 }
@@ -85,9 +86,6 @@ export class SyndrQLTokenizer {
   }
 
   private nextToken(): Token | null {
-    // Skip whitespace but track position
-    this.skipWhitespace();
-    
     if (this.position >= this.input.length) {
       return null;
     }
@@ -96,6 +94,16 @@ export class SyndrQLTokenizer {
     const startLine = this.line;
     const startColumn = this.column;
     const char = this.input[this.position];
+
+    // Handle newlines separately from other whitespace for better formatting control
+    if (char === '\n' || char === '\r') {
+      return this.readNewline(startPos, startLine, startColumn);
+    }
+    
+    // Handle other whitespace as tokens (don't skip them for syntax highlighting)
+    if (this.isWhitespace(char)) {
+      return this.readWhitespace(startPos, startLine, startColumn);
+    }
 
     // Handle single-line comments (-- or //)
     if (this.matchComment()) {
@@ -222,13 +230,67 @@ export class SyndrQLTokenizer {
     };
   }
 
+  private readWhitespace(startPos: number, startLine: number, startColumn: number): Token {
+    const start = this.position;
+    
+    // Read consecutive non-newline whitespace characters (spaces, tabs, etc.)
+    while (this.position < this.input.length && 
+           this.isWhitespace(this.input[this.position]) && 
+           this.input[this.position] !== '\n' && 
+           this.input[this.position] !== '\r') {
+      this.column++;
+      this.position++;
+    }
+
+    return {
+      type: TokenType.WHITESPACE,
+      value: this.input.substring(start, this.position),
+      startPosition: startPos,
+      endPosition: this.position,
+      line: startLine,
+      column: startColumn
+    };
+  }
+
+  private readNewline(startPos: number, startLine: number, startColumn: number): Token {
+    const start = this.position;
+    
+    // Handle different newline formats: \n, \r, or \r\n
+    if (this.input[this.position] === '\r' && 
+        this.position + 1 < this.input.length && 
+        this.input[this.position + 1] === '\n') {
+      // Windows-style \r\n
+      this.position += 2;
+    } else {
+      // Unix-style \n or Mac-style \r
+      this.position++;
+    }
+    
+    this.line++;
+    this.column = 1;
+
+    return {
+      type: TokenType.NEWLINE,
+      value: this.input.substring(start, this.position),
+      startPosition: startPos,
+      endPosition: this.position,
+      line: startLine,
+      column: startColumn
+    };
+  }
+
   private readStringLiteral(startPos: number, startLine: number, startColumn: number): Token {
     const quote = this.input[this.position];
     const start = this.position;
     
     this.advance(); // Skip opening quote
     
-    while (this.position < this.input.length && this.input[this.position] !== quote) {
+    // For contenteditable syntax highlighting, we want to treat newlines as separate tokens
+    // even within string literals, so stop at newlines
+    while (this.position < this.input.length && 
+           this.input[this.position] !== quote &&
+           this.input[this.position] !== '\n' &&
+           this.input[this.position] !== '\r') {
       if (this.input[this.position] === '\\') {
         this.advance(); // Skip escape character
         if (this.position < this.input.length) {
@@ -239,7 +301,8 @@ export class SyndrQLTokenizer {
       }
     }
     
-    if (this.position < this.input.length) {
+    // Only consume the closing quote if we found it (not a newline)
+    if (this.position < this.input.length && this.input[this.position] === quote) {
       this.advance(); // Skip closing quote
     }
 
@@ -473,7 +536,7 @@ export class SyndrQLTokenizer {
       case 'SELECT':
         suggestions.push(...this.getSelectSuggestions(context));
         break;
-      case 'INSERT':
+      case 'ADD':
         suggestions.push(...this.getInsertSuggestions(context));
         break;
       case 'CREATE':
@@ -546,7 +609,7 @@ export class SyndrQLTokenizer {
         value: 'DOCUMENT',
         type: TokenType.KEYWORD,
         kind: SuggestionKind.KEYWORD,
-        description: 'Insert a document',
+        description: 'Add a document',
         priority: 7
       },
       {
@@ -579,11 +642,11 @@ export class SyndrQLTokenizer {
         priority: 10
       },
       {
-        value: 'INSERT',
+        value: 'ADD',
         type: TokenType.KEYWORD,
         kind: SuggestionKind.KEYWORD,
         category: 'DML',
-        description: 'Insert new data',
+        description: 'ADD a new Document',
         priority: 9
       },
       {
@@ -706,7 +769,7 @@ export class SyndrQLTokenizer {
         value: 'DOCUMENT',
         type: TokenType.KEYWORD,
         kind: SuggestionKind.KEYWORD,
-        description: 'Insert a document',
+        description: 'Add a document',
         priority: 10
       });
       return suggestions;
@@ -936,4 +999,274 @@ export class SyndrQLTokenizer {
       return a.value.localeCompare(b.value);
     });
   }
+}
+
+// =============================================================================
+// ENHANCED TOKENIZER WITH CLASSIFICATION
+// =============================================================================
+// The following functions provide semantic classification capabilities
+// for syntax highlighting while preserving all existing tokenization functionality
+// =============================================================================
+
+/**
+ * Enhanced token interface that extends the base Token with semantic classification
+ */
+export interface ClassifiedToken extends Token {
+  /** Semantic category (DDL, DQL, DML, OBJECTS, FIELDS, etc.) */
+  category?: string;
+  /** Specific keyword subtype within category */
+  subType?: string;
+  /** Additional semantic metadata */
+  metadata?: {
+    isReserved?: boolean;
+    isSystemKeyword?: boolean;
+    contextRelevance?: string;
+  };
+}
+
+/**
+ * Token category types for semantic highlighting
+ */
+export enum TokenCategory {
+  DDL = 'DDL',                    // Data Definition Language
+  DQL = 'DQL',                    // Data Query Language  
+  DML = 'DML',                    // Data Manipulation Language
+  OBJECTS = 'OBJECTS',            // Database objects
+  FIELDS = 'FIELDS',              // Field-related keywords
+  CONTROL = 'CONTROL',            // Control flow
+  SECURITY = 'SECURITY',          // Security/permissions
+  SYSTEM = 'SYSTEM',              // System commands
+  OPERATORS = 'OPERATORS',        // Logical/comparison operators
+  RESERVED = 'RESERVED',          // Reserved words
+  LITERAL_STRING = 'LITERAL_STRING',
+  LITERAL_NUMBER = 'LITERAL_NUMBER',
+  LITERAL_BOOLEAN = 'LITERAL_BOOLEAN',
+  COMMENT_SINGLE = 'COMMENT_SINGLE',
+  COMMENT_MULTI = 'COMMENT_MULTI',
+  IDENTIFIER_QUOTED = 'IDENTIFIER_QUOTED',
+  IDENTIFIER_UNQUOTED = 'IDENTIFIER_UNQUOTED',
+  WHITESPACE = 'WHITESPACE',
+  NEWLINE = 'NEWLINE'
+}
+
+/**
+ * Classifies existing tokens with semantic categories using keyword identifier data
+ * @param tokens - Array of base tokens from the standard tokenizer
+ * @returns Array of tokens enhanced with semantic classification
+ */
+export function classifyTokens(tokens: Token[]): ClassifiedToken[] {
+  return tokens.map(token => {
+    const classifiedToken: ClassifiedToken = { ...token };
+
+    switch (token.type) {
+      case TokenType.KEYWORD:
+        const keywordInfo = getKeywordInfo(token.value);
+        if (keywordInfo) {
+          classifiedToken.category = keywordInfo.category;
+          classifiedToken.subType = token.value.toUpperCase();
+          classifiedToken.metadata = {
+            isReserved: keywordInfo.category === 'RESERVED',
+            isSystemKeyword: keywordInfo.category === 'SYSTEM',
+            contextRelevance: keywordInfo.description
+          };
+        }
+        break;
+
+      case TokenType.LITERAL:
+        // Classify literal types for more granular highlighting
+        if (isStringLiteral(token.value)) {
+          classifiedToken.category = TokenCategory.LITERAL_STRING;
+        } else if (isNumericLiteral(token.value)) {
+          classifiedToken.category = TokenCategory.LITERAL_NUMBER;
+        } else if (isBooleanLiteral(token.value)) {
+          classifiedToken.category = TokenCategory.LITERAL_BOOLEAN;
+        }
+        break;
+
+      case TokenType.COMMENT:
+        // Distinguish comment types
+        if (token.value.startsWith('--')) {
+          classifiedToken.category = TokenCategory.COMMENT_SINGLE;
+        } else if (token.value.startsWith('/*')) {
+          classifiedToken.category = TokenCategory.COMMENT_MULTI;
+        }
+        break;
+
+      case TokenType.IDENTIFIER:
+        // Distinguish quoted vs unquoted identifiers
+        if (token.value.startsWith('"') && token.value.endsWith('"')) {
+          classifiedToken.category = TokenCategory.IDENTIFIER_QUOTED;
+        } else {
+          classifiedToken.category = TokenCategory.IDENTIFIER_UNQUOTED;
+        }
+        break;
+
+      case TokenType.OPERATOR:
+        classifiedToken.category = TokenCategory.OPERATORS;
+        break;
+
+      case TokenType.WHITESPACE:
+        classifiedToken.category = TokenCategory.WHITESPACE;
+        break;
+        
+      case TokenType.NEWLINE:
+        classifiedToken.category = TokenCategory.NEWLINE;
+        break;
+    }
+
+    return classifiedToken;
+  });
+}
+
+/**
+ * Helper function to check if a token value is a string literal
+ */
+function isStringLiteral(value: string): boolean {
+  return (value.startsWith("'") && value.endsWith("'")) ||
+         (value.startsWith('"') && value.endsWith('"') && !isQuotedIdentifier(value));
+}
+
+/**
+ * Helper function to check if a token value is a numeric literal
+ */
+function isNumericLiteral(value: string): boolean {
+  return /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value);
+}
+
+/**
+ * Helper function to check if a token value is a boolean literal
+ */
+function isBooleanLiteral(value: string): boolean {
+  const normalized = value.toUpperCase();
+  return normalized === 'TRUE' || normalized === 'FALSE';
+}
+
+/**
+ * Helper function to distinguish quoted identifiers from string literals
+ */
+function isQuotedIdentifier(value: string): boolean {
+  // In SyndrQL, quoted identifiers use double quotes, string literals use single quotes
+  return value.startsWith('"') && value.endsWith('"');
+}
+
+/**
+ * Gets the semantic category of a token
+ * @param token - The classified token
+ * @returns The token's category or null if not classified
+ */
+export function getTokenCategory(token: ClassifiedToken): string | null {
+  return token.category || null;
+}
+
+/**
+ * Checks if a token belongs to a specific category
+ * @param token - The classified token
+ * @param category - The category to check against
+ * @returns True if the token belongs to the specified category
+ */
+export function isTokenOfType(token: ClassifiedToken, category: string | TokenCategory): boolean {
+  return token.category === category;
+}
+
+/**
+ * Filters tokens by semantic category
+ * @param tokens - Array of classified tokens
+ * @param category - The category to filter by
+ * @returns Filtered array of tokens matching the category
+ */
+export function getSemanticTokens(tokens: ClassifiedToken[], category: string | TokenCategory): ClassifiedToken[] {
+  return tokens.filter(token => isTokenOfType(token, category));
+}
+
+/**
+ * Generates syntax highlighted HTML from classified tokens
+ * @param tokens - Array of classified tokens
+ * @param options - Highlighting options
+ * @returns HTML string with syntax highlighting CSS classes
+ */
+export function generateSyntaxHighlighting(
+  tokens: ClassifiedToken[], 
+  options: {
+    preserveWhitespace?: boolean;
+    cssClassPrefix?: string;
+  } = {}
+): string {
+  const { preserveWhitespace = true, cssClassPrefix = 'syndrql' } = options;
+  
+  const html = tokens.map(token => {
+    let cssClass = `${cssClassPrefix}-${token.type}`;
+    
+    // Add semantic category classes for more specific styling
+    if (token.category) {
+      cssClass += ` ${cssClassPrefix}-${token.category.toLowerCase()}`;
+    }
+    
+    // Add special classes for reserved words and system keywords
+    if (token.metadata?.isReserved) {
+      cssClass += ` ${cssClassPrefix}-reserved`;
+    }
+    if (token.metadata?.isSystemKeyword) {
+      cssClass += ` ${cssClassPrefix}-system`;
+    }
+
+    // Escape HTML entities in token value
+    const escapedValue = escapeHtml(token.value);
+    
+    // Handle whitespace preservation for contenteditable
+    if (token.type === TokenType.WHITESPACE) {
+      return escapedValue;
+    }
+    
+    // Convert newlines to <br> elements for contenteditable compatibility
+    if (token.type === TokenType.NEWLINE) {
+      // Replace any newline character(s) with <br> for proper contenteditable display
+      return token.value.replace(/\r\n|\r|\n/g, '<br>');
+    }
+    
+    return `<span class="${cssClass}">${escapedValue}</span>`;
+  }).join('');
+  
+  // Fix for contenteditable: if HTML ends with <br>, add a zero-width space to prevent browser from removing it
+  if (html.endsWith('<br>')) {
+    return html + '&#8203;'; // Zero-width space to preserve trailing <br>
+  }
+  
+  return html;
+}
+
+/**
+ * Escapes HTML entities in a string
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Convenience function that combines tokenization and classification
+ * @param input - SyndrQL statement to tokenize and classify
+ * @returns Array of classified tokens
+ */
+export function tokenizeAndClassify(input: string): ClassifiedToken[] {
+  const tokenizer = new SyndrQLTokenizer();
+  const baseTokens = tokenizer.tokenize(input);
+  return classifyTokens(baseTokens);
+}
+
+/**
+ * One-shot function to get syntax highlighted HTML from raw SyndrQL text
+ * @param input - SyndrQL statement to highlight
+ * @param options - Highlighting options
+ * @returns HTML string with syntax highlighting
+ */
+export function getHighlightedText(
+  input: string, 
+  options: {
+    preserveWhitespace?: boolean;
+    cssClassPrefix?: string;
+  } = {}
+): string {
+  const classifiedTokens = tokenizeAndClassify(input);
+  return generateSyntaxHighlighting(classifiedTokens, options);
 }
