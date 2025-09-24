@@ -110,8 +110,17 @@ export class QueryEditor extends LitElement {
   @property({ type: String })
   public activeTab: 'syndrql' | 'graphql' = 'syndrql';
   
+  @property({ type: String })
+  public databaseName: string = '';
+  
   @state()
   public queryText: string = '';
+
+  @state()
+  private syndrqlQueryText: string = '';
+
+  @state()
+  private graphqlQueryText: string = '';
 
   @state()
   private showSuggestions: boolean = false;
@@ -146,6 +155,14 @@ export class QueryEditor extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // Initialize SyndrQL query text with database name if provided
+    if (this.databaseName && !this.syndrqlQueryText) {
+      this.syndrqlQueryText = `USE "${this.databaseName}";`;
+    } else if (!this.syndrqlQueryText) {
+      this.syndrqlQueryText = 'USE "<Database_Name>";';
+    }
+    // Initialize queryText with the active tab's content
+    this.queryText = this.activeTab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
     // Listen for window resize events
     window.addEventListener('resize', this.resizeHandler);
   }
@@ -165,6 +182,18 @@ export class QueryEditor extends LitElement {
   updated(changedProperties: PropertyValues) {
     super.updated(changedProperties);
     
+    // Handle database name changes
+    if (changedProperties.has('databaseName') && this.databaseName) {
+      // Update SyndrQL query text only if it's still the default/empty
+      if (!this.syndrqlQueryText || this.syndrqlQueryText === 'USE "<Database_Name>";' || this.syndrqlQueryText.match(/^USE\s+"[^"]+";?\s*$/)) {
+        this.syndrqlQueryText = `USE "${this.databaseName}";`;
+        // Update main query text if SyndrQL tab is active
+        if (this.activeTab === 'syndrql') {
+          this.queryText = this.syndrqlQueryText;
+        }
+      }
+    }
+    
     // If any properties changed, ensure proper layout recalculation
     if (changedProperties.has('activeTab') || changedProperties.has('queryText')) {
       // Small timeout to ensure DOM is updated
@@ -173,7 +202,7 @@ export class QueryEditor extends LitElement {
         
         // Reconfigure after tab switch
         if (changedProperties.has('activeTab')) {
-          console.log('TAB SWITCHED - reconfiguring contenteditable behavior');
+         // console.log('TAB SWITCHED - reconfiguring contenteditable behavior');
           this.configureContentEditableBehavior();
         }
       }, 0);
@@ -182,8 +211,21 @@ export class QueryEditor extends LitElement {
 
   firstUpdated() {
     // Find and configure the editor elements to use <br> tags only, never <div> tags
-    console.log('FIRST UPDATED - configuring contenteditable behavior');
+   // console.log('FIRST UPDATED - configuring contenteditable behavior');
     this.configureContentEditableBehavior();
+    
+    // Set initial content in the active editor
+    setTimeout(() => {
+      const activeEditor = this.getActiveEditor();
+      if (activeEditor && this.queryText && !activeEditor.textContent) {
+        activeEditor.textContent = this.queryText;
+        
+        // Initialize syntax highlighting for SyndrQL tab if needed
+        if (this.activeTab === 'syndrql' && this.queryText.length > 0) {
+          this.initializeSyntaxHighlighting(activeEditor);
+        }
+      }
+    }, 0);
   }
 
   private configureContentEditableBehavior() {
@@ -202,25 +244,25 @@ export class QueryEditor extends LitElement {
   private getActiveEditor(): HTMLElement | null {
     // First try to use the stored editorRef
     if (this.editorRef) {
-      console.log('Using stored editorRef');
+     // console.log('Using stored editorRef');
       return this.editorRef;
     }
 
     // Since we're not using Shadow DOM, we need to search for the active tab ancestor
     // Look for the closest ancestor with .syndrql-active-tab class
     const activeTabElement = this.closest('.syndrql-active-tab');
-    console.log('FOUND Active tab ancestor element:', activeTabElement);
+    //console.log('FOUND Active tab ancestor element:', activeTabElement);
     if (activeTabElement) {
       const editor = activeTabElement.querySelector('.custom-editor') as HTMLElement;
       if (editor) {
-        console.log('Found active editor within syndrql-active-tab ancestor');
+       // console.log('Found active editor within syndrql-active-tab ancestor');
         this.editorRef = editor; // Store it for future use
         return editor;
       } else {
-        console.log('No .custom-editor found within .syndrql-active-tab ancestor');
+       // console.log('No .custom-editor found within .syndrql-active-tab ancestor');
       }
     } else {
-      console.log('No ancestor element with .syndrql-active-tab class found');
+      // console.log('No ancestor element with .syndrql-active-tab class found');
     }
 
     // Fallback: just find any custom editor within this component
@@ -231,12 +273,12 @@ export class QueryEditor extends LitElement {
       return fallbackEditor;
     }
 
-    console.log('No active editor found');
+    //console.log('No active editor found');
     return null;
   }
 
   private setupEditorBehavior(editor: HTMLElement) {
-    console.log('SETTING UP behavior for editor');
+    //console.log('SETTING UP behavior for editor');
     
     // Remove existing listeners by cloning (clean slate approach)
     const clonedEditor = editor.cloneNode(true) as HTMLElement;
@@ -245,12 +287,33 @@ export class QueryEditor extends LitElement {
     // Update our reference to the fresh editor
     this.editorRef = clonedEditor;
 
+    // Handle paste events to strip formatting
+    clonedEditor.addEventListener("paste", (e: ClipboardEvent) => {
+      e.preventDefault();
+      
+      // Get plain text from clipboard
+      const paste = e.clipboardData?.getData('text/plain') || '';
+      
+      // Insert as plain text using execCommand (preserves contenteditable structure)
+      if (paste) {
+        document.execCommand('insertText', false, paste);
+        
+        // Force cleanup and syntax highlighting after paste
+        setTimeout(() => {
+   //       this.cleanupDivStructures(clonedEditor);
+          if (this.activeTab === 'syndrql') {
+            this.scheduleHighlighting(clonedEditor);
+          }
+        }, 0);
+      }
+    });
+
     // Set contenteditable configuration immediately and repeatedly
     this.enforceBreakOnlyBehavior(clonedEditor);
     
     // Configure contenteditable to use <br> tags only on focus
     clonedEditor.addEventListener("focus", (e) => {
-      console.log('FOCUS EVENT - enforcing br-only behavior');
+     // console.log('FOCUS EVENT - enforcing br-only behavior');
       this.enforceBreakOnlyBehavior(clonedEditor);
       // Also handle the original focus behavior
       this.editorRef = e.target as HTMLElement;
@@ -344,7 +407,7 @@ export class QueryEditor extends LitElement {
         
         // Force cleanup immediately after
         setTimeout(() => {
-          this.cleanupDivStructures(clonedEditor);
+//          this.cleanupDivStructures(clonedEditor);
         }, 0);
       }
       
@@ -359,9 +422,9 @@ export class QueryEditor extends LitElement {
 
     // Handle input for both div cleanup and syntax highlighting/suggestions
     clonedEditor.addEventListener("input", (e) => {
-      console.log('INPUT EVENT - input type:', (e as InputEvent).inputType);
-      console.log('INPUT EVENT - Cleaning up divs');
-      this.cleanupDivStructures(clonedEditor);
+     // console.log('INPUT EVENT - input type:', (e as InputEvent).inputType);
+     // console.log('INPUT EVENT - Cleaning up divs');
+  //    this.cleanupDivStructures(clonedEditor);
       
       // Also handle the original input behavior
       this.handleQueryChange(e);
@@ -387,8 +450,8 @@ export class QueryEditor extends LitElement {
         });
       });
       if (hasNewDivs) {
-        console.log('MUTATION OBSERVER - DIVs detected, cleaning up');
-        this.cleanupDivStructures(clonedEditor);
+//        console.log('MUTATION OBSERVER - DIVs detected, cleaning up');
+//        this.cleanupDivStructures(clonedEditor);
       }
     });
 
@@ -397,7 +460,7 @@ export class QueryEditor extends LitElement {
       subtree: true
     });
 
-    console.log('SETUP COMPLETE for editor');
+   // console.log('SETUP COMPLETE for editor');
   }
 
   private enforceBreakOnlyBehavior(editor: HTMLElement) {
@@ -409,39 +472,39 @@ export class QueryEditor extends LitElement {
     editor.style.whiteSpace = 'pre-wrap';
   }
 
-  private cleanupDivStructures(editor: HTMLElement) {
-    const divs = editor.querySelectorAll('div');
-    if (divs.length > 0) {
-      console.log(`CLEANUP: Found ${divs.length} div elements to convert`);
-      console.log('CLEANUP: HTML before:', editor.innerHTML);
-    }
+  // private cleanupDivStructures(editor: HTMLElement) {
+  //   const divs = editor.querySelectorAll('div');
+  //   if (divs.length > 0) {
+  //    // console.log(`CLEANUP: Found ${divs.length} div elements to convert`);
+  //     //console.log('CLEANUP: HTML before:', editor.innerHTML);
+  //   }
     
-    divs.forEach((div, index) => {
-      console.log(`CLEANUP: Converting div ${index}:`, div.outerHTML);
+  //   divs.forEach((div, index) => {
+  //     console.log(`CLEANUP: Converting div ${index}:`, div.outerHTML);
       
-      // Extract all the text content from the div
-      const textContent = div.textContent || '';
+  //     // Extract all the text content from the div
+  //     const textContent = div.textContent || '';
       
-      if (textContent.trim()) {
-        // If div has text content, create a text node and a br
-        const textNode = document.createTextNode(textContent);
-        div.parentNode?.insertBefore(textNode, div);
-        const br = document.createElement('br');
-        div.parentNode?.insertBefore(br, div);
-        console.log(`CLEANUP: Replaced div with text "${textContent}" + <br>`);
-      } else {
-        // Empty div or div with only br, just replace with br
-        const br = document.createElement('br');
-        div.parentNode?.insertBefore(br, div);
-        console.log(`CLEANUP: Replaced empty div with <br>`);
-      }
-      div.remove();
-    });
+  //     if (textContent.trim()) {
+  //       // If div has text content, create a text node and a br
+  //       const textNode = document.createTextNode(textContent);
+  //       div.parentNode?.insertBefore(textNode, div);
+  //       const br = document.createElement('br');
+  //       div.parentNode?.insertBefore(br, div);
+  //       console.log(`CLEANUP: Replaced div with text "${textContent}" + <br>`);
+  //     } else {
+  //       // Empty div or div with only br, just replace with br
+  //       const br = document.createElement('br');
+  //       div.parentNode?.insertBefore(br, div);
+  //       console.log(`CLEANUP: Replaced empty div with <br>`);
+  //     }
+  //     div.remove();
+  //   });
     
-    if (divs.length > 0) {
-      console.log('CLEANUP: HTML after:', editor.innerHTML);
-    }
-  }
+  //   if (divs.length > 0) {
+  //     console.log('CLEANUP: HTML after:', editor.innerHTML);
+  //   }
+  // }
 
   private handleQueryChange(event: Event) {
     const target = event.target as HTMLElement;
@@ -454,6 +517,14 @@ export class QueryEditor extends LitElement {
     if (this.queryText !== newText) {
       const oldText = this.queryText;
       this.queryText = newText;
+      
+      // Also save to the tab-specific state
+      if (this.activeTab === 'syndrql') {
+        this.syndrqlQueryText = newText;
+      } else {
+        this.graphqlQueryText = newText;
+      }
+      
       this.updateCursorPosition();
       
       // Only reset dismissed state if text was actually added (not deleted)
@@ -538,7 +609,7 @@ export class QueryEditor extends LitElement {
           // Let the dropdown handle this
           return;
         case 'Tab':
-        case 'Enter':
+        //case 'Enter':
           if (this.showSuggestions) {
             event.preventDefault();
             // Let the dropdown handle this
@@ -741,7 +812,7 @@ export class QueryEditor extends LitElement {
    * Now simplified to only handle <br> tags since we've configured contenteditable to use only <br>
    */
   private getEditorTextContent(editor: HTMLElement): string {
-    console.log('DEBUG: Original HTML structure:', JSON.stringify(editor.innerHTML));
+//    console.log('DEBUG: Original HTML structure:', JSON.stringify(editor.innerHTML));
     
     // Create a temporary element for processing
     const tempDiv = document.createElement('div');
@@ -781,7 +852,7 @@ export class QueryEditor extends LitElement {
     // Remove the zero-width space we added to preserve trailing <br>
     const cleanText = text.replace(/\u200B/g, '');
     
-    console.log('DEBUG: Converted text:', JSON.stringify(cleanText));
+//    console.log('DEBUG: Converted text:', JSON.stringify(cleanText));
     return cleanText;
   }
 
@@ -877,58 +948,58 @@ export class QueryEditor extends LitElement {
   private applyFullHighlighting(editor: HTMLElement, textContent: string) {
     try {
       // Special debugging for the specific case: USE "TestDB";\n
-      if (textContent.includes('USE "TestDB"')) {
-        console.log('=== DEBUGGING USE TestDB CASE ===');
-        console.log('Editor innerHTML before:', JSON.stringify(editor.innerHTML));
-        console.log('Extracted text content:', JSON.stringify(textContent));
-        console.log('Text length:', textContent.length);
-        console.log('Text ends with newline?', textContent.endsWith('\n'));
-        console.log('Character by character:');
-        for (let i = 0; i < textContent.length; i++) {
-          const char = textContent[i];
-          if (char === '\n') {
-            console.log(`  [${i}]: NEWLINE`);
-          } else if (char === ' ') {
-            console.log(`  [${i}]: SPACE`);
-          } else {
-            console.log(`  [${i}]: "${char}"`);
-          }
-        }
-      }
+      // if (textContent.includes('USE "TestDB"')) {
+      //   // console.log('=== DEBUGGING USE TestDB CASE ===');
+      //   // console.log('Editor innerHTML before:', JSON.stringify(editor.innerHTML));
+      //   // console.log('Extracted text content:', JSON.stringify(textContent));
+      //   // console.log('Text length:', textContent.length);
+      //   // console.log('Text ends with newline?', textContent.endsWith('\n'));
+      //   // console.log('Character by character:');
+      //   for (let i = 0; i < textContent.length; i++) {
+      //     const char = textContent[i];
+      //     if (char === '\n') {
+      //       console.log(`  [${i}]: NEWLINE`);
+      //     } else if (char === ' ') {
+      //       console.log(`  [${i}]: SPACE`);
+      //     } else {
+      //       console.log(`  [${i}]: "${char}"`);
+      //     }
+      //   }
+      // }
 
       // Debug newline handling - especially trailing newlines and empty lines
       if (textContent.includes('\n')) {
-        console.log('=== NEWLINE DEBUG ===');
-        console.log('Editor innerHTML before:', JSON.stringify(editor.innerHTML));
+        //console.log('=== NEWLINE DEBUG ===');
+        //console.log('Editor innerHTML before:', JSON.stringify(editor.innerHTML));
         
         // Check for <div> elements which indicate line breaks
         const divCount = (editor.innerHTML.match(/<div>/g) || []).length;
         const brCount = (editor.innerHTML.match(/<br>/g) || []).length;
-        console.log('DIV elements found:', divCount, 'BR elements found:', brCount);
+        // console.log('DIV elements found:', divCount, 'BR elements found:', brCount);
         
-        console.log('Extracted text content:', JSON.stringify(textContent));
-        console.log('Text length:', textContent.length);
-        console.log('Text chars:', textContent.split('').map((c, i) => 
-          c === '\n' ? `[NEWLINE-${i}]` : c === ' ' ? `[SPACE-${i}]` : c
-        ));
+        // console.log('Extracted text content:', JSON.stringify(textContent));
+        // console.log('Text length:', textContent.length);
+        // console.log('Text chars:', textContent.split('').map((c, i) => 
+        //   c === '\n' ? `[NEWLINE-${i}]` : c === ' ' ? `[SPACE-${i}]` : c
+        // ));
         
         const newlineCount = (textContent.match(/\n/g) || []).length;
-        console.log('Total newlines found:', newlineCount);
+       // console.log('Total newlines found:', newlineCount);
         
         // Check for trailing newlines specifically
         const endsWithNewline = textContent.endsWith('\n');
         const trailingNewlines = textContent.match(/\n+$/);
-        console.log('Ends with newline:', endsWithNewline);
+       // console.log('Ends with newline:', endsWithNewline);
         if (trailingNewlines) {
-          console.log('Trailing newlines count:', trailingNewlines[0].length);
+//          console.log('Trailing newlines count:', trailingNewlines[0].length);
         }
         
         // Check for consecutive newlines (empty lines)
         const emptyLines = textContent.match(/\n\n+/g);
         if (emptyLines) {
-          console.log('Empty line sequences found:', emptyLines.length);
+//          console.log('Empty line sequences found:', emptyLines.length);
           emptyLines.forEach((seq, i) => {
-            console.log(`Empty line sequence ${i}: ${seq.length - 1} empty lines`);
+//            console.log(`Empty line sequence ${i}: ${seq.length - 1} empty lines`);
           });
         }
       }
@@ -939,8 +1010,8 @@ export class QueryEditor extends LitElement {
       
       // Debug tokens - focus on newline tokens and their positions
       if (textContent.includes('\n')) {
-        console.log('=== DETAILED TOKEN ANALYSIS ===');
-        console.log('Total tokens:', classifiedTokens.length);
+        //console.log('=== DETAILED TOKEN ANALYSIS ===');
+        //console.log('Total tokens:', classifiedTokens.length);
         
         // Show ALL tokens with their positions
         classifiedTokens.forEach((token, i) => {
@@ -950,7 +1021,7 @@ export class QueryEditor extends LitElement {
             Math.min(textContent.length, token.endPosition + 2)
           ).replace(/\n/g, '\\n');
           
-          console.log(`Token ${i}: ${token.type} = ${JSON.stringify(token.value)} at pos ${token.startPosition}-${token.endPosition} context:"${surroundingContext}"`);
+//          console.log(`Token ${i}: ${token.type} = ${JSON.stringify(token.value)} at pos ${token.startPosition}-${token.endPosition} context:"${surroundingContext}"`);
         });
         
         // Check for gaps in positions (missing tokens)
@@ -966,8 +1037,8 @@ export class QueryEditor extends LitElement {
         }
         
         const newlineTokens = classifiedTokens.filter(t => t.type === 'newline');
-        console.log('Newline tokens found:', newlineTokens.length);
-        console.log('=== END DETAILED ANALYSIS ===');
+        //console.log('Newline tokens found:', newlineTokens.length);
+        //console.log('=== END DETAILED ANALYSIS ===');
       }
       
       // Generate highlighted HTML
@@ -977,40 +1048,40 @@ export class QueryEditor extends LitElement {
       });
       
       // Special debugging for USE "TestDB" case
-      if (textContent.includes('USE "TestDB"')) {
-        console.log('=== DEBUGGING USE TestDB HTML GENERATION ===');
-        console.log('Generated HTML:', JSON.stringify(highlightedHtml));
-        console.log('HTML character by character:');
-        for (let i = 0; i < highlightedHtml.length; i++) {
-          const char = highlightedHtml[i];
-          if (char === '<') {
-            const tagEnd = highlightedHtml.indexOf('>', i);
-            if (tagEnd !== -1) {
-              const tag = highlightedHtml.substring(i, tagEnd + 1);
-              console.log(`  [${i}-${tagEnd}]: TAG "${tag}"`);
-              i = tagEnd;
-            }
-          } else if (char === '\n') {
-            console.log(`  [${i}]: NEWLINE`);
-          } else if (char === ' ') {
-            console.log(`  [${i}]: SPACE`);
-          } else {
-            console.log(`  [${i}]: "${char}"`);
-          }
-        }
-      }
+      // if (textContent.includes('USE "TestDB"')) {
+      //   // console.log('=== DEBUGGING USE TestDB HTML GENERATION ===');
+      //   // console.log('Generated HTML:', JSON.stringify(highlightedHtml));
+      //   // console.log('HTML character by character:');
+      //   for (let i = 0; i < highlightedHtml.length; i++) {
+      //     const char = highlightedHtml[i];
+      //     if (char === '<') {
+      //       const tagEnd = highlightedHtml.indexOf('>', i);
+      //       if (tagEnd !== -1) {
+      //         const tag = highlightedHtml.substring(i, tagEnd + 1);
+      //         console.log(`  [${i}-${tagEnd}]: TAG "${tag}"`);
+      //         i = tagEnd;
+      //       }
+      //     } else if (char === '\n') {
+      //       console.log(`  [${i}]: NEWLINE`);
+      //     } else if (char === ' ') {
+      //       console.log(`  [${i}]: SPACE`);
+      //     } else {
+      //       console.log(`  [${i}]: "${char}"`);
+      //     }
+      //   }
+      // }
       
       // Debug HTML generation
       if (textContent.includes('\n')) {
-        console.log('Generated HTML:', JSON.stringify(highlightedHtml));
+        //console.log('Generated HTML:', JSON.stringify(highlightedHtml));
         const brCount = (highlightedHtml.match(/<br>/g) || []).length;
-        console.log('Number of <br> tags generated:', brCount);
+        //console.log('Number of <br> tags generated:', brCount);
         
         // Check if HTML ends with <br> for trailing newlines
         const endsWithBr = highlightedHtml.endsWith('<br>');
         const endsWithBrAndZws = highlightedHtml.endsWith('<br>&#8203;');
-        console.log('Generated HTML ends with <br>:', endsWithBr);
-        console.log('Generated HTML ends with <br> + zero-width space:', endsWithBrAndZws);
+        ////console.log('Generated HTML ends with <br>:', endsWithBr);
+        //console.log('Generated HTML ends with <br> + zero-width space:', endsWithBrAndZws);
       }
       
       // Only apply if we have actual highlighting and content matches
@@ -1032,18 +1103,18 @@ export class QueryEditor extends LitElement {
           editor.innerHTML = highlightedHtml;
           
           if (textContent.includes('\n')) {
-            console.log('After setting innerHTML:', JSON.stringify(editor.innerHTML));
+            //console.log('After setting innerHTML:', JSON.stringify(editor.innerHTML));
             const newTextContent = this.getEditorTextContent(editor);
-            console.log('New extracted text:', JSON.stringify(newTextContent));
-            console.log('New text length:', newTextContent.length);
-            console.log('Length preserved?', newTextContent.length === textContent.length);
-            console.log('Newlines preserved?', newTextContent === textContent);
+            // console.log('New extracted text:', JSON.stringify(newTextContent));
+            // console.log('New text length:', newTextContent.length);
+            // console.log('Length preserved?', newTextContent.length === textContent.length);
+            // console.log('Newlines preserved?', newTextContent === textContent);
             
             // Check specifically for trailing newlines after the operation
             const newEndsWithNewline = newTextContent.endsWith('\n');
-            console.log('Still ends with newline after highlighting:', newEndsWithNewline);
-            
-            console.log('=== END NEWLINE DEBUG ===');
+            // console.log('Still ends with newline after highlighting:', newEndsWithNewline);
+
+            // console.log('=== END NEWLINE DEBUG ===');
           }
           
           // Update tracking
@@ -1261,7 +1332,18 @@ export class QueryEditor extends LitElement {
 
   private handleTabClick(tab: 'syndrql' | 'graphql') {
     if (this.activeTab !== tab) {
+      // Save current tab's content before switching
+      if (this.activeTab === 'syndrql') {
+        this.syndrqlQueryText = this.queryText;
+      } else {
+        this.graphqlQueryText = this.queryText;
+      }
+      
       this.activeTab = tab;
+      
+      // Load the content for the new tab
+      const newTabQueryText = tab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
+      this.queryText = newTabQueryText;
       
       // Update editor reference when tab changes
       setTimeout(() => {
@@ -1272,9 +1354,9 @@ export class QueryEditor extends LitElement {
         const editor = this.querySelector(editorSelector) as HTMLElement;
         if (editor) {
           this.editorRef = editor;
-          // Ensure editor has current content
-          if (editor.textContent !== this.queryText) {
-            editor.textContent = this.queryText;
+          // Ensure editor has the correct content for this tab
+          if (editor.textContent !== newTabQueryText) {
+            editor.textContent = newTabQueryText;
           }
           
           // Initialize syntax highlighting for SyndrQL tab

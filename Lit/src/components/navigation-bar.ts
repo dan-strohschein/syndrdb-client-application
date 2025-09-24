@@ -34,6 +34,17 @@ export class NavigationBar extends LitElement {
         this.requestUpdate();
     }
 
+    private handleNewConnection(event: Event) {
+        event.preventDefault();
+        this.handleMenuClose(); // Close the menu
+        
+        // Emit event to request connection modal
+        this.dispatchEvent(new CustomEvent('new-connection-requested', {
+            bubbles: true,
+            composed: true
+        }));
+    }
+
     // Close menus when clicking outside
     connectedCallback() {
         super.connectedCallback();
@@ -338,7 +349,7 @@ export class NavigationBar extends LitElement {
                             </button>
                             ${this.openMenu === 'servers' ? html`
                                 <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">New&nbsp;Connection</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleNewConnection}>New&nbsp;Connection</a></li>
                                 </ul>
                             ` : ''}
                         </li>

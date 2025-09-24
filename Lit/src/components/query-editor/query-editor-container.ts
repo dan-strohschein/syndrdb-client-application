@@ -338,7 +338,7 @@ public connectionId: string = '';
               </div>
             </div>
             <div class="flex-1 bg-base-100 rounded border border-base-300">
-              <query-editor .activeTab='syndrql' .queryText=${this.query} @query-changed=${this.handleQueryChange}></query-editor>
+              <query-editor .activeTab='syndrql' .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange}></query-editor>
             </div>
           </div>
         </div>

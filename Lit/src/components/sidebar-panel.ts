@@ -15,6 +15,8 @@ export class SidebarPanel extends LitElement {
   @state()
   private showConnectionModal = false;
 
+  private newConnectionHandler: (() => void) | null = null;
+
   connectedCallback() {
     super.connectedCallback();
     
@@ -23,8 +25,22 @@ export class SidebarPanel extends LitElement {
     connectionManager.addEventListener('connectionStatusChanged', () => this.updateConnections());
     connectionManager.addEventListener('connectionRemoved', () => this.updateConnections());
     
+    // Listen for new connection requests from navigation menu
+    this.newConnectionHandler = () => {
+      this.openConnectionModal();
+    };
+    document.addEventListener('new-connection-requested', this.newConnectionHandler);
+    
     // Load saved connections and then update the display
     this.loadSavedConnections();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up event listener
+    if (this.newConnectionHandler) {
+      document.removeEventListener('new-connection-requested', this.newConnectionHandler);
+    }
   }
 
   private async loadSavedConnections() {
