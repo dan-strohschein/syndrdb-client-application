@@ -1168,41 +1168,50 @@ export class QueryEditor extends LitElement {
     const insertText = suggestion.insertText || suggestion.value;
     
     try {
-      // Simple approach: use execCommand which preserves DOM structure
-      // This is deprecated but still works and is much safer
-      if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
-        // First, select the partial word if there is one
-        const textContent = this.editorRef.textContent || '';
-        const cursorPos = this.currentCursorPosition;
+      // Modern approach: Use Selection API directly for text insertion
+      const textContent = this.editorRef.textContent || '';
+      const cursorPos = this.currentCursorPosition;
+      
+      // Find word start
+      let wordStart = cursorPos;
+      let wordLength = 0;
+      while (wordStart > 0 && /\w/.test(textContent[wordStart - 1])) {
+        wordStart--;
+        wordLength++;
+      }
+      
+      // If there's a partial word, select it for replacement
+      if (wordLength > 0) {
+        // Move the selection to cover the partial word
+        const currentRange = selection.getRangeAt(0);
         
-        // Find word start
-        let wordStart = cursorPos;
-        let wordLength = 0;
-        while (wordStart > 0 && /\w/.test(textContent[wordStart - 1])) {
-          wordStart--;
-          wordLength++;
+        // Try to select backward by the word length
+        try {
+          currentRange.setStart(currentRange.startContainer, Math.max(0, currentRange.startOffset - wordLength));
+        } catch (e) {
+          // If that fails, just insert at cursor
+        }
+      }
+      
+      // Try modern execCommand first (still works in most browsers)
+      let insertSuccess = false;
+      try {
+        insertSuccess = document.execCommand('insertText', false, insertText);
+      } catch (e) {
+        // execCommand failed, fall back to manual insertion
+      }
+      
+      // If execCommand failed or isn't supported, use manual insertion
+      if (!insertSuccess) {
+        // Delete any selected content first
+        if (!selection.isCollapsed) {
+          selection.deleteFromDocument();
         }
         
-        // If there's a partial word, select it for replacement
-        if (wordLength > 0) {
-          // Move the selection to cover the partial word
-          const currentRange = selection.getRangeAt(0);
-          
-          // Try to select backward by the word length
-          try {
-            currentRange.setStart(currentRange.startContainer, Math.max(0, currentRange.startOffset - wordLength));
-          } catch (e) {
-            // If that fails, just insert at cursor
-          }
-        }
-        
-        // Use execCommand to insert the text (preserves DOM structure)
-        document.execCommand('insertText', false, insertText);
-        
-      } else {
-        // Fallback: manual insertion
+        // Create and insert text node
         const textNode = document.createTextNode(insertText);
-        range.insertNode(textNode);
+        const insertRange = selection.getRangeAt(0);
+        insertRange.insertNode(textNode);
         
         // Position cursor after inserted text
         const newRange = document.createRange();
@@ -1219,17 +1228,21 @@ export class QueryEditor extends LitElement {
     } catch (error) {
       console.warn('Error in suggestion insertion:', error);
       
-      // Ultimate fallback: just append the text
-      const textNode = document.createTextNode(insertText);
-      range.insertNode(textNode);
-      
-      const newRange = document.createRange();
-      newRange.setStartAfter(textNode);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      
-      this.queryText = this.editorRef.textContent || '';
+      // Ultimate fallback: manual text node insertion
+      try {
+        const textNode = document.createTextNode(insertText);
+        range.insertNode(textNode);
+        
+        const newRange = document.createRange();
+        newRange.setStartAfter(textNode);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+        
+        this.queryText = this.editorRef.textContent || '';
+      } catch (fallbackError) {
+        console.error('All text insertion methods failed:', fallbackError);
+      }
     }
     
     // Hide suggestions and reset state

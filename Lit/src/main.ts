@@ -18,6 +18,7 @@ import './components/bundle-modal/bundle-modal';
 import './components/bundle-modal/fields-tab';
 import './components/bundle-modal/indexes-tab';
 import './components/bundle-modal/field-definition-editor';
+import './components/error-modal';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -33,6 +34,21 @@ export class AppRoot extends LitElement {
       this.handleAddQueryEditor(event as CustomEvent);
     });
     
+    // List for edit connection events
+    this.addEventListener('edit-connection', (event: Event) => {
+      this.handleEditConnection(event as CustomEvent);
+    });
+    
+    // Listen for edit-database events
+    this.addEventListener('edit-database', (event: Event) => {
+      this.handleEditDatabase(event as CustomEvent);
+    });
+    
+    // List for delete connection events
+    this.addEventListener('delete-connection', (event: Event) => {
+      this.handleDeleteConnection(event as CustomEvent);
+    });
+
     // Listen for about modal requests
     this.addEventListener('about-modal-requested', (event: Event) => {
       this.handleAboutModalRequest(event as CustomEvent);
@@ -77,6 +93,79 @@ export class AppRoot extends LitElement {
     this.addEventListener('test-connection', (event: Event) => {
       this.handleTestConnection(event as CustomEvent);
     });
+
+    // Listen for connection-error events
+    this.addEventListener('connection-error', (event: Event) => {
+      this.handleConnectionError(event as CustomEvent);
+    });
+  }
+
+  private handleEditConnection(event: CustomEvent) {
+    console.log('🎯 App root received edit-connection event');
+    console.log('Event detail:', event.detail);
+    
+    // Get the actual connection object from connection manager
+    const { connectionId } = event.detail;
+    
+    // Import connection manager to get the connection object
+    import('./services/connection-manager').then(({ connectionManager }) => {
+      const connection = connectionManager.getConnection(connectionId);
+      
+      if (!connection) {
+        console.error('❌ Connection not found:', connectionId);
+        return;
+      }
+      
+      // Find the connection-modal element and open it for editing
+      const connectionModal = this.querySelector('connection-modal');
+      if (connectionModal) {
+        console.log('📤 Opening connection modal for editing connection:', connection.name);
+        (connectionModal as any).open = true;
+        (connectionModal as any).editMode = true;
+        (connectionModal as any).connectionToEdit = connection;
+        (connectionModal as any).requestUpdate();
+      } else {
+        console.error('❌ Could not find connection-modal element');
+      }
+    }).catch(error => {
+      console.error('❌ Error importing connection manager:', error);
+    });
+  }
+
+  private handleEditDatabase(event: CustomEvent) {
+    console.log('🗄️ App root received edit-database event');
+    console.log('Event detail:', event.detail);
+    
+    const { connectionId, databaseName } = event.detail;
+    
+    // Find the database-modal element and open it for editing
+    const databaseModal = this.querySelector('database-modal');
+    if (databaseModal) {
+      console.log('📤 Opening database modal for editing database:', databaseName);
+      (databaseModal as any).open = true;
+      (databaseModal as any).editMode = true;
+      (databaseModal as any).connectionId = connectionId;
+      (databaseModal as any).databaseToEdit = { name: databaseName };
+      (databaseModal as any).requestUpdate();
+    } else {
+      console.error('❌ Could not find database-modal element');
+    }
+  }
+
+  private handleDeleteConnection(event: CustomEvent) {
+    console.log('🎯 App root received delete-connection event');
+    console.log('Event detail:', event.detail);
+    
+    // Find the connection-modal element and open it for deletion confirmation
+    const connectionModal = this.querySelector('connection-modal');
+    if (connectionModal) {
+      console.log('📤 Opening connection modal for deleting connection:', event.detail.connectionName);
+      (connectionModal as any).open = true;
+      (connectionModal as any).connectionId = event.detail?.connectionId;
+      (connectionModal as any).requestUpdate();
+    } else {
+      console.error('❌ Could not find connection-modal element');
+    }
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
@@ -253,6 +342,33 @@ private async handleNewBundleRequest(event: CustomEvent) {
     }, 100); // Small delay to let the context menu close first
   }
 
+  private handleConnectionError(event: CustomEvent) {
+    console.log('🎯 App root received connection-error event');
+    console.log('Event detail:', event.detail);
+    
+    const { connectionName, error } = event.detail;
+    const errorMessage = error || 'Unknown connection error occurred.';
+    
+    console.log('🔍 Attempting to find error-modal element...');
+    
+    // Find the error modal and show it with the error message
+    const errorModal = this.querySelector('error-modal');
+    
+    console.log('🔍 Error modal element found:', !!errorModal);
+    
+    if (errorModal) {
+      console.log('📤 Showing error modal with message:', errorMessage);
+      (errorModal as any).open = true;
+      (errorModal as any).errorMessage = `Failed to connect to "${connectionName}": ${errorMessage}`;
+      (errorModal as any).requestUpdate();
+      console.log('✅ Error modal should now be visible');
+    } else {
+      console.error('❌ Could not find error-modal element');
+      // Fallback: show an alert for debugging
+      alert(`Connection Error: Failed to connect to "${connectionName}": ${errorMessage}`);
+    }
+  }
+
   render() {
     return html`
       <div class="h-screen bg-base-100 text-base-content flex flex-col">
@@ -283,6 +399,9 @@ private async handleNewBundleRequest(event: CustomEvent) {
 
         <!-- Bundle Modal -->
         <bundle-modal></bundle-modal>
+
+        <!-- Error Modal -->
+        <error-modal></error-modal>
     </div>    
     `;
   }

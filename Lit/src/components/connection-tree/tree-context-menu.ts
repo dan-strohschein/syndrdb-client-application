@@ -45,7 +45,17 @@ export class TreeContextMenuHandler {
           bubbles: true
         }));
         break;
-        
+      case CONTEXT_MENU_ACTIONS.EDIT_CONNECTION:
+        console.log('✏️ Dispatching edit-connection event from connection tree');
+        eventDispatcher(new CustomEvent('edit-connection', {
+          detail: { 
+            connectionId: contextMenu.nodeId,
+            connectionName: contextMenu.nodeName 
+          },
+          bubbles: true
+        }));
+        console.log('✅ Edit connection event dispatched successfully');
+        break;  
       case CONTEXT_MENU_ACTIONS.QUERY:
         console.log('🚀 Dispatching add-query-editor event from connection tree');
         
@@ -108,17 +118,18 @@ export class TreeContextMenuHandler {
         console.log('✅ New database event dispatched successfully');
         break;
         case CONTEXT_MENU_ACTIONS.EDIT_DATABASE:
-            console.log('🗄️ Dispatching edit-database-requested event from connection tree')
-            eventDispatcher(new CustomEvent('edit-database-requested', {
+            console.log('🗄️ Dispatching edit-database event from connection tree');
+            const editDatabaseContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            eventDispatcher(new CustomEvent('edit-database', {
                 detail: { 
-                connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
-                nodeType: contextMenu.nodeType,
-                nodeName: contextMenu.nodeName,
-                nodeId: contextMenu.nodeId
-            },
-            bubbles: true
+                    connectionId: editDatabaseContext.connectionId,
+                    databaseName: editDatabaseContext.databaseName || contextMenu.nodeName,
+                    nodeType: contextMenu.nodeType,
+                    nodeId: contextMenu.nodeId
+                },
+                bubbles: true
             }));
-            console.log('✅ Edit database event dispatched successfully');
+            console.log('✅ Edit database event dispatched successfully with database context:', editDatabaseContext);
         break;
         case CONTEXT_MENU_ACTIONS.DELETE_DATABASE:
             console.log('🗄️ Dispatching delete-database-requested event from connection tree')
@@ -188,7 +199,18 @@ export class TreeContextMenuHandler {
         icon: 'fa-database',
         label: 'New Database'
       });
-
+    } else if (nodeType === NODE_TYPES.CONNECTION) {
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.EDIT_CONNECTION,
+        icon: 'fa-pen-to-square',
+        label: 'Edit Connection'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.NEW_DATABASE,
+         icon: 'fa-database',
+         label: 'New Database'
+      });
+     
     } else if (nodeType === NODE_TYPES.DATABASE) {
       actions.push({
         action: CONTEXT_MENU_ACTIONS.EDIT_DATABASE,
@@ -285,7 +307,11 @@ export class TreeContextMenuHandler {
         <ul class="menu bg-base-200 w-56 rounded-box shadow-lg">
           ${actions.map(({action, icon, label}) => html`
             <li>
-              <a @click=${() => onAction(action)}>
+              <a @click=${(e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAction(action);
+              }}>
                 <i class="fa-solid ${icon} mr-2"></i>
                 ${label}${action === CONTEXT_MENU_ACTIONS.TEST ? ` - ${contextMenu.nodeName}` : ''}
               </a>

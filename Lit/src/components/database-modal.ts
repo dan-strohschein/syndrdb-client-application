@@ -16,6 +16,14 @@ export class DatabaseModal extends LitElement {
     name: string;
   } | null = null;
 
+@property({ type: Boolean })
+  editMode = false;
+
+@property({ type: Object })
+  databaseToEdit: {
+    name: string;
+  } | null = null;
+
 @state()
   private formData: {
     name: string;
@@ -60,13 +68,27 @@ export class DatabaseModal extends LitElement {
         this.errorMessage = '';
         this.isLoading = false;
         
+        // Reset form data
         this.formData = {
             name: '',
         };
         
+        // Reset edit mode state
+        this.editMode = false;
+        this.databaseToEdit = null;
+        
         this.dispatchEvent(new CustomEvent('close-modal', {
             bubbles: true
         }));
+    }
+    
+    private prepopulateForm() {
+        if (this.editMode && this.databaseToEdit) {
+            this.formData = {
+                name: this.databaseToEdit.name
+            };
+            console.log('📝 Prepopulated database form with data:', this.formData);
+        }
     }
 
     private handleInputChange(field: string, value: string | boolean | number | Date) {
@@ -100,22 +122,17 @@ export class DatabaseModal extends LitElement {
                 return;
             }
 
-            // Send CREATE DATABASE command to server
-            const createCommand = `CREATE DATABASE "${this.formData.name}";`;
-            console.log('🗄️ Sending CREATE DATABASE command:', createCommand);
-
-            const result = await connectionManager.executeQueryWithContext(this.connectionId, createCommand);
-            
-            if (result.success) {
-                console.log('✅ Database created successfully:', this.formData.name);
+            if (this.editMode) {
+                // For edit mode, we would typically send an ALTER DATABASE command
+                // However, SyndrDB might not support renaming databases
+                // For now, we'll just update the local state and dispatch an event
+                console.log('✏️ Editing database name from', this.databaseToEdit?.name, 'to', this.formData.name);
                 
-                // Refresh connection metadata to update the databases list
-                await connectionManager.refreshMetadata(this.connectionId);
-                
-                // Dispatch success event
-                this.dispatchEvent(new CustomEvent('database-created', {
+                // Dispatch database-updated event
+                this.dispatchEvent(new CustomEvent('database-updated', {
                     detail: { 
-                        databaseName: this.formData.name,
+                        oldDatabaseName: this.databaseToEdit?.name,
+                        newDatabaseName: this.formData.name,
                         connectionId: this.connectionId 
                     },
                     bubbles: true
@@ -124,14 +141,48 @@ export class DatabaseModal extends LitElement {
                 // Close modal
                 this.handleClose();
             } else {
-                console.error('❌ Failed to create database:', result);
-                this.errorMessage = result.error || 'Failed to create database. Please try again.';
+                // Send CREATE DATABASE command to server
+                const createCommand = `CREATE DATABASE "${this.formData.name}";`;
+                console.log('🗄️ Sending CREATE DATABASE command:', createCommand);
+
+                const result = await connectionManager.executeQueryWithContext(this.connectionId, createCommand);
+                
+                if (result.success) {
+                    console.log('✅ Database created successfully:', this.formData.name);
+                    
+                    // Refresh connection metadata to update the databases list
+                    await connectionManager.refreshMetadata(this.connectionId);
+                    
+                    // Dispatch success event
+                    this.dispatchEvent(new CustomEvent('database-created', {
+                        detail: { 
+                            databaseName: this.formData.name,
+                            connectionId: this.connectionId 
+                        },
+                        bubbles: true
+                    }));
+                    
+                    // Close modal
+                    this.handleClose();
+                } else {
+                    console.error('❌ Failed to create database:', result);
+                    this.errorMessage = result.error || 'Failed to create database. Please try again.';
+                }
             }
         } catch (error) {
             console.error('❌ Error creating database:', error);
             this.errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         } finally {
             this.isLoading = false;
+        }
+    }
+
+    updated(changedProperties: Map<string, any>) {
+        super.updated(changedProperties);
+        
+        // If edit mode or databaseToEdit changed and we're in edit mode, prepopulate the form
+        if ((changedProperties.has('editMode') || changedProperties.has('databaseToEdit')) && this.editMode) {
+            this.prepopulateForm();
         }
     }
 
@@ -145,7 +196,7 @@ export class DatabaseModal extends LitElement {
             <div class="modal-box w-11/12 max-w-2xl">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between mb-6">
-                    <h3 class="font-bold text-lg">${this.database ? 'Edit Database' : 'Add New Database'}</h3>
+                    <h3 class="font-bold text-lg">${this.editMode ? 'Edit Database' : 'Add New Database'}</h3>
                     <button 
                         class="btn btn-sm btn-circle btn-ghost" 
                         @click=${this.handleClose}
@@ -198,7 +249,7 @@ export class DatabaseModal extends LitElement {
                             class="btn btn-primary ${this.isLoading ? 'loading' : ''}" 
                             ?disabled="${this.isLoading || !this.formData.name.trim()}"
                         >
-                            ${this.isLoading ? 'Creating...' : 'Create Database'}
+                            ${this.isLoading ? (this.editMode ? 'Updating...' : 'Creating...') : (this.editMode ? 'Update Database' : 'Create Database')}
                         </button>
                     </div>
                 </form>

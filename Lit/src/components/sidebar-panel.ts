@@ -69,9 +69,52 @@ export class SidebarPanel extends LitElement {
 
   private async connectToDatabase(connectionId: string) {
     try {
-      await connectionManager.connect(connectionId);
+      const success = await connectionManager.connect(connectionId);
+      
+      // Check if connection failed (returned false)
+      if (!success) {
+        console.error('Connection failed: connect method returned false');
+        
+        // Get the connection to access its name and error details
+        const connection = connectionManager.getConnection(connectionId);
+        const connectionName = connection ? connection.name : 'Unknown Connection';
+        const errorMessage = connection?.lastError || 'Connection failed';
+        
+        console.log('🚨 Emitting connection-error event:', { connectionId, connectionName, error: errorMessage });
+        
+        // Emit connection-error event to show the error modal
+        this.dispatchEvent(new CustomEvent('connection-error', {
+          detail: { 
+            connectionId,
+            connectionName,
+            error: errorMessage
+          },
+          bubbles: true
+        }));
+        
+        console.log('✅ connection-error event emitted successfully');
+      }
     } catch (error) {
-      console.error('Failed to connect:', error);
+      console.error('Failed to connect with exception:', error);
+      
+      // Get the connection to access its name and error details
+      const connection = connectionManager.getConnection(connectionId);
+      const connectionName = connection ? connection.name : 'Unknown Connection';
+      const errorMessage = connection?.lastError || (error instanceof Error ? error.message : 'Unknown error');
+      
+      console.log('🚨 Emitting connection-error event (from catch):', { connectionId, connectionName, error: errorMessage });
+      
+      // Emit connection-error event to show the error modal
+      this.dispatchEvent(new CustomEvent('connection-error', {
+        detail: { 
+          connectionId,
+          connectionName,
+          error: errorMessage
+        },
+        bubbles: true
+      }));
+      
+      console.log('✅ connection-error event emitted successfully (from catch)');
     }
   }
 

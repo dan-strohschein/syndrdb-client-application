@@ -13,10 +13,28 @@ export class ConnectionModal extends LitElement {
   @property({ type: Boolean })
   open = false;
 
+  @property({ type: Boolean })
+  editMode = false;
+
+  @property({ type: Object })
+  connectionToEdit: any = null;
+
   // Add debugging for when open property changes
   updated(changedProperties: Map<string, any>) {
     if (changedProperties.has('open')) {
       console.log('Modal open property changed to:', this.open);
+      
+      // If opening in edit mode, prepopulate the form
+      if (this.open && this.editMode && this.connectionToEdit) {
+        this.prepopulateForm();
+      }
+    }
+    
+    if (changedProperties.has('connectionToEdit') && this.connectionToEdit) {
+      console.log('Connection to edit changed:', this.connectionToEdit);
+      if (this.open && this.editMode) {
+        this.prepopulateForm();
+      }
     }
   }
 
@@ -35,6 +53,23 @@ export class ConnectionModal extends LitElement {
 
   @state()
   private testResult = '';
+
+  private prepopulateForm() {
+    if (this.connectionToEdit && this.connectionToEdit.config) {
+      console.log('Prepopulating form with connection data:', this.connectionToEdit.config);
+      this.formData = {
+        name: this.connectionToEdit.config.name || this.connectionToEdit.name || '',
+        hostname: this.connectionToEdit.config.hostname || '',
+        port: this.connectionToEdit.config.port || '1776',
+        database: this.connectionToEdit.config.database || '',
+        username: this.connectionToEdit.config.username || '',
+        password: this.connectionToEdit.config.password || ''
+      };
+      
+      // Force a re-render to update the input fields
+      this.requestUpdate();
+    }
+  }
 
   private handleInputChange(field: string, value: string) {
     this.formData = {
@@ -74,7 +109,7 @@ export class ConnectionModal extends LitElement {
     try {
       // Create connection config from form data
       const config: ConnectionConfig = {
-        name: this.formData.name || 'New Connection',
+        name: this.formData.name || (this.editMode ? 'Edited Connection' : 'New Connection'),
         hostname: this.formData.hostname,
         port: this.formData.port || '1776',
         database: this.formData.database,
@@ -88,8 +123,10 @@ export class ConnectionModal extends LitElement {
         throw new Error('Connection storage service not available');
       }
 
-      // Try to save the connection
-      const saveResult = await electronAPI.connectionStorage.save(config);
+      // For edit mode, use overwrite to replace the existing connection
+      const saveResult = this.editMode 
+        ? await electronAPI.connectionStorage.overwrite(config)
+        : await electronAPI.connectionStorage.save(config);
       
       if (!saveResult.success) {
         if (saveResult.connectionExists) {
@@ -133,6 +170,8 @@ export class ConnectionModal extends LitElement {
 
   private handleClose() {
     this.open = false;
+    this.editMode = false;
+    this.connectionToEdit = null;
     this.testResult = '';
     this.formData = {
       name: '',
@@ -154,7 +193,7 @@ export class ConnectionModal extends LitElement {
         <div class="modal-box w-11/12 max-w-2xl">
           <!-- Modal Header -->
           <div class="flex items-center justify-between mb-6">
-            <h3 class="font-bold text-lg">New Database Connection</h3>
+            <h3 class="font-bold text-lg">${this.editMode ? 'Edit Database Connection' : 'New Database Connection'}</h3>
             <button class="btn btn-sm btn-circle btn-ghost" @click=${this.handleClose}>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -287,12 +326,13 @@ export class ConnectionModal extends LitElement {
             <button class="btn btn-ghost" @click=${this.handleClose}>
               Cancel
             </button>
-            <button 
+                        <button
+              type="button"
               class="btn btn-primary"
               @click=${this.handleSave}
               ?disabled=${!this.formData.name || !this.formData.hostname || !this.formData.port}
             >
-              Save Connection
+              ${this.editMode ? 'Update Connection' : 'Save Connection'}
             </button>
           </div>
         </div>

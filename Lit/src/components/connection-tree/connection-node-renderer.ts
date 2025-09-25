@@ -94,7 +94,7 @@ export class ConnectionNodeRenderer {
   }
 
   /**
-   * Render connection action buttons (connect/disconnect)
+   * Render connection action buttons (connect/disconnect/retry)
    */
   static renderConnectionActions(
     connection: Connection,
@@ -113,6 +113,16 @@ export class ConnectionNodeRenderer {
           title="Connect"
         >
           <i class="fa-solid fa-play text-xs"></i>
+        </button>
+      ` : ''}
+      
+      ${connection.status === 'error' ? html`
+        <button 
+          class="btn btn-xs btn-warning"
+          @click=${(e: Event) => onConnect(e, connection.id)}
+          title="Retry Connection"
+        >
+          <i class="fa-solid fa-rotate-right text-xs"></i>
         </button>
       ` : ''}
       
