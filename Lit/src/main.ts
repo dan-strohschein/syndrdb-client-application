@@ -19,6 +19,8 @@ import './components/bundle-modal/fields-tab';
 import './components/bundle-modal/indexes-tab';
 import './components/bundle-modal/field-definition-editor';
 import './components/error-modal';
+import './components/status-bar';
+import './components/status-bar';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -97,6 +99,11 @@ export class AppRoot extends LitElement {
     // Listen for connection-error events
     this.addEventListener('connection-error', (event: Event) => {
       this.handleConnectionError(event as CustomEvent);
+    });
+    
+    // Listen for query execution results to update status bar
+    this.addEventListener('query-executed', (event: Event) => {
+      this.handleQueryExecuted(event as CustomEvent);
     });
   }
 
@@ -368,6 +375,32 @@ private async handleNewBundleRequest(event: CustomEvent) {
       alert(`Connection Error: Failed to connect to "${connectionName}": ${errorMessage}`);
     }
   }
+  
+  /**
+   * Handle query execution results and update status bar
+   */
+  private handleQueryExecuted(event: CustomEvent) {
+    console.log('⏱️ App root received query-executed event');
+    console.log('Query result detail:', event.detail);
+    
+    const { executionTime, ResultCount } = event.detail;
+    
+    // Find the status bar and update execution time and result count
+    const statusBar = this.querySelector('#main-status-bar') as any;
+    if (statusBar) {
+      if (executionTime !== undefined) {
+        statusBar.executionTimeMS = executionTime;
+        console.log('✅ Updated status bar with execution time:', executionTime, 'ms');
+      }
+      
+      if (ResultCount !== undefined) {
+        statusBar.resultCount = ResultCount;
+        console.log('✅ Updated status bar with result count:', ResultCount);
+      }
+    } else {
+      console.warn('⚠️ Could not find status bar element');
+    }
+  }
 
   render() {
     return html`
@@ -387,6 +420,9 @@ private async handleNewBundleRequest(event: CustomEvent) {
           <!-- Main Content (70%) -->
           <main-panel class="w-[70%] bg-base-100"></main-panel>
         </div>
+        
+        <!-- Status Bar at the bottom -->
+        <status-bar id="main-status-bar"></status-bar>
         
         <!-- About Modal -->
         <about-modal></about-modal>

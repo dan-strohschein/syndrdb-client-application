@@ -175,14 +175,7 @@ export class BundleModal extends LitElement {
                     fieldString += '} ';
                     fieldStrings.push(fieldString);
                 });
-                //     return ({
 
-                //     name: field.name,
-                //     type: field.type,
-                //     isRequired: field.isRequired,
-                //     isUnique: field.isUnique,
-                //     defaultValue: field.defaultValue
-                // });
 
             
                 fieldStrings.forEach((fs, index) => {

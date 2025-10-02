@@ -195,6 +195,18 @@ public connectionId: string = '';
             
             console.log('All statements executed successfully');
             
+            // Dispatch query-executed event to update status bar
+            if (this.queryResult) {
+                this.dispatchEvent(new CustomEvent('query-executed', {
+                    detail: {
+                        executionTime: this.queryResult.executionTime || 0,
+                        ResultCount: this.queryResult.ResultCount || 0,
+                        success: this.queryResult.success
+                    },
+                    bubbles: true
+                }));
+            }
+            
         } catch (error) {
             console.error('Query execution failed:', error);
             this.queryResult = {

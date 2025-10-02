@@ -285,6 +285,11 @@ export class ConnectionManager {
         if (bundlesResult.ResultCount && bundlesResult.ResultCount > 0 && bundlesResult.data != null) {
           if (Array.isArray(bundlesResult.data)) {
             bundles = bundlesResult.data.map((bundle: any) => {
+              // The new structure has BundleMetadata containing the bundle info
+              if (bundle.BundleMetadata && bundle.BundleMetadata.Name) {
+                return bundle.BundleMetadata.Name;
+              }
+              // Fallback to old structure if BundleMetadata doesn't exist
               return bundle.Name || String(bundle);
             });
           }
@@ -482,21 +487,28 @@ export class ConnectionManager {
         console.log('🔍 Raw data from SHOW BUNDLE:', JSON.stringify(data, null, 2));
         console.log('🔍 Available properties in data:', Object.keys(data));
         
-        if (data.DocumentStructure && data.DocumentStructure.FieldDefinitions) {
-          console.log('📋 FieldDefinitions found:', data.DocumentStructure.FieldDefinitions);
-          console.log('📋 FieldDefinitions type:', typeof data.DocumentStructure.FieldDefinitions);
-          console.log('📋 FieldDefinitions isArray:', Array.isArray(data.DocumentStructure.FieldDefinitions));
+        // Handle new structure where bundle data might be under BundleMetadata
+        let bundleData = data;
+        if (data.BundleMetadata) {
+          console.log('📦 Found BundleMetadata, using nested structure');
+          bundleData = data.BundleMetadata;
+        }
+        
+        if (bundleData.DocumentStructure && bundleData.DocumentStructure.FieldDefinitions) {
+          console.log('📋 FieldDefinitions found:', bundleData.DocumentStructure.FieldDefinitions);
+          console.log('📋 FieldDefinitions type:', typeof bundleData.DocumentStructure.FieldDefinitions);
+          console.log('📋 FieldDefinitions isArray:', Array.isArray(bundleData.DocumentStructure.FieldDefinitions));
           
           // Handle FieldDefinitions - it can be either an object with field names as keys, or an array
           let fieldDefinitionsArray: any[] = [];
           
-          if (Array.isArray(data.DocumentStructure.FieldDefinitions)) {
+          if (Array.isArray(bundleData.DocumentStructure.FieldDefinitions)) {
             // Already an array
-            fieldDefinitionsArray = data.DocumentStructure.FieldDefinitions;
+            fieldDefinitionsArray = bundleData.DocumentStructure.FieldDefinitions;
             console.log('✅ Using FieldDefinitions as array');
-          } else if (data.DocumentStructure.FieldDefinitions && typeof data.DocumentStructure.FieldDefinitions === 'object') {
+          } else if (bundleData.DocumentStructure.FieldDefinitions && typeof bundleData.DocumentStructure.FieldDefinitions === 'object') {
             // Convert object to array - the object keys are field names
-            fieldDefinitionsArray = Object.values(data.DocumentStructure.FieldDefinitions);
+            fieldDefinitionsArray = Object.values(bundleData.DocumentStructure.FieldDefinitions);
             console.log('🔄 Converted FieldDefinitions object to array:', fieldDefinitionsArray.length, 'fields');
           }
           
@@ -513,34 +525,34 @@ export class ConnectionManager {
 
         // Parse relationships if they exist
         console.log('🔗 Looking for relationships in data...');
-        console.log('🔗 data.Relationships:', data.Relationships);
-        console.log('🔗 data.Relationships type:', typeof data.Relationships);
+        console.log('🔗 bundleData.Relationships:', bundleData.Relationships);
+        console.log('🔗 bundleData.Relationships type:', typeof bundleData.Relationships);
         
-        if (data.Relationships && typeof data.Relationships === 'object' && !Array.isArray(data.Relationships)) {
+        if (bundleData.Relationships && typeof bundleData.Relationships === 'object' && !Array.isArray(bundleData.Relationships)) {
           // This is a Go map serialized as JSON object: { "relationshipName": { "RelationshipName": "...", ... } }
           console.log('🔗 Found Relationships as Go map object, converting to array');
-          const relationshipsArray = Object.entries(data.Relationships).map(([key, relationshipData]: [string, any]) => ({
+          const relationshipsArray = Object.entries(bundleData.Relationships).map(([key, relationshipData]: [string, any]) => ({
             ...relationshipData, // Spread all properties from the relationship object
             _mapKey: key // Include the original map key for reference
           }));
           bundleDetails.relationships = relationshipsArray;
           console.log('🔗 Converted relationships map to array:', relationshipsArray);
-        } else if (data.Relationships && Array.isArray(data.Relationships)) {
-          console.log('🔗 Found Relationships as array (unexpected but handling):', data.Relationships);
-          bundleDetails.relationships = data.Relationships;
+        } else if (bundleData.Relationships && Array.isArray(bundleData.Relationships)) {
+          console.log('🔗 Found Relationships as array (unexpected but handling):', bundleData.Relationships);
+          bundleDetails.relationships = bundleData.Relationships;
         } else {
           console.log('❌ No Relationships found in data');
         }
 
         // Parse indexes if they exist
         console.log('📑 Looking for indexes in data...');
-        console.log('📑 data.Indexes:', data.Indexes);
-        console.log('📑 data.Indexes type:', typeof data.Indexes);
+        console.log('📑 bundleData.Indexes:', bundleData.Indexes);
+        console.log('📑 bundleData.Indexes type:', typeof bundleData.Indexes);
         
-        if (data.Indexes && typeof data.Indexes === 'object' && !Array.isArray(data.Indexes)) {
+        if (bundleData.Indexes && typeof bundleData.Indexes === 'object' && !Array.isArray(bundleData.Indexes)) {
           // This is a Go map serialized as JSON object: { "indexName": { "IndexName": "...", "IndexType": "..." } }
           console.log('📑 Found Indexes as Go map object, converting to array');
-          const indexesArray = Object.entries(data.Indexes).map(([key, indexData]: [string, any]) => ({
+          const indexesArray = Object.entries(bundleData.Indexes).map(([key, indexData]: [string, any]) => ({
             IndexName: indexData.IndexName || key, // Use the key as fallback
             IndexType: indexData.IndexType?.toLowerCase() || 'unknown', // Normalize to lowercase: "hash" or "b-tree"
             // Include the original key for reference
@@ -548,9 +560,9 @@ export class ConnectionManager {
           }));
           bundleDetails.indexes = indexesArray;
           console.log('📑 Converted indexes map to array:', indexesArray);
-        } else if (data.Indexes && Array.isArray(data.Indexes)) {
-          console.log('📑 Found Indexes as array (unexpected but handling):', data.Indexes);
-          bundleDetails.indexes = data.Indexes;
+        } else if (bundleData.Indexes && Array.isArray(bundleData.Indexes)) {
+          console.log('📑 Found Indexes as array (unexpected but handling):', bundleData.Indexes);
+          bundleDetails.indexes = bundleData.Indexes;
         } else {
           console.log('❌ No Indexes found in data');
         }

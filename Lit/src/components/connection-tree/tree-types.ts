@@ -59,6 +59,9 @@ export const NODE_TYPES = {
 // Context menu actions
 export const CONTEXT_MENU_ACTIONS = {
   TEST: 'test',
+  EDIT_CONNECTION: 'edit-connection',
+  DELETE_CONNECTION: 'delete-connection',
+  REFRESH: 'refresh',
   QUERY: 'query',
   ADD_USER: 'add-user',
   EDIT_USER: 'edit-user',

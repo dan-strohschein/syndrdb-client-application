@@ -12,6 +12,7 @@ interface SyndrConnection {
   messageHandlers: Map<string, (response: any) => void>;
   messageId: number;
   authenticationComplete: boolean;
+  messageBuffer: string; // Buffer for incomplete JSON messages
 }
 
 export class SyndrDBMainService extends EventEmitter {
@@ -35,7 +36,8 @@ export class SyndrDBMainService extends EventEmitter {
       status: 'connecting',
       messageHandlers: new Map(),
       messageId: 0,
-      authenticationComplete: false
+      authenticationComplete: false,
+      messageBuffer: '' // Initialize empty message buffer
     };
 
     this.connections.set(connectionId, connection);
@@ -73,84 +75,16 @@ export class SyndrDBMainService extends EventEmitter {
 
         socket.on('data', (data) => {
           try {
-            const message = data.toString().trim();
-            console.log('Received from SyndrDB:', message);
-            console.log('Current connection status:', connection.status);
-
-            // Try to parse as JSON
-            let response;
-            try {
-              response = JSON.parse(message);
-              console.log('Parsed as JSON:', response);
-            } catch {
-              // If not JSON, treat as simple string response
-              response = { message };
-              console.log('Treated as string message:', response);
-            }
-
-            // Handle authentication flow
+            // Use different handling based on connection status
             if (connection.status === 'connecting' || connection.status === 'authenticating') {
-              console.log('🔐 Processing authentication response...');
-              
-              // Handle welcome message (step 2)
-              if (connection.status === 'connecting' && 
-                  response.message && 
-                  response.message.includes('Welcome to SyndrDB')) {
-                console.log('📩 Received welcome message, sending connection string...');
-                console.log('🔐 Connection string to send:', connectionString);
-                // Send the connection string for authentication (step 3)
-                socket.write(connectionString + ';\n');
-                console.log('🔐 Connection string sent, waiting for authentication response...');
-                connection.status = 'authenticating';
-                return;
-              }
-
-              // Handle authentication response (step 4)
-              if (connection.status === 'authenticating' && 
-                  response.message && 
-                  response.message.includes('Authentication successful - Session:') &&
-                  response.status === 'success') {
-                console.log('🎉 Authentication successful!', response.message);
-                connection.status = 'connected';
-                connection.authenticationComplete = true;
-                
-                // Remove connection timeout after successful authentication
-                socket.setTimeout(0);
-                console.log('✅ Socket timeout removed after authentication');
-                
-                this.emitConnectionStatus(connectionId, 'connected');
-                console.log('✅ SyndrDB authentication fully complete - ready for queries');
-                resolve({ success: true, connectionId });
-                return;
-              }
-
-              // Handle authentication failure
-              if (connection.status === 'authenticating' && 
-                  ((response.status && response.status !== 'success') || 
-                   (response.error))) {
-                console.log('❌ Authentication failed:', response);
-                connection.status = 'error';
-                connection.lastError = response.message || response.error || 'Authentication failed';
-                this.emitConnectionStatus(connectionId, 'error', connection.lastError);
-                resolve({ success: false, error: connection.lastError });
-                return;
-              }
-            } 
-            
-            // Handle query responses (only after authentication is complete)
-            else if (connection.status === 'connected' && connection.authenticationComplete) {
-              console.log('🔍 Processing query response. Connection status:', connection.status);
-              console.log('🔍 Response content:', response);
-              console.log('🔍 Active message handlers:', Array.from(connection.messageHandlers.keys()));
-              
-              this.handleMessage(connectionId, response);
-            } 
-            
-            // Log unexpected responses
-            else {
-              console.log('⚠️ Received unexpected response in status:', connection.status, 'Response:', response);
+              // Simple handling for authentication - use original approach
+              this.handleAuthenticationData(data, connection, resolve, reject, connectionString);
+            } else if (connection.status === 'connected' && connection.authenticationComplete) {
+              // Buffered handling for query responses
+              this.handleQueryData(data, connection);
+            } else {
+              console.log('⚠️ Received data in unexpected status:', connection.status);
             }
-            
           } catch (error) {
             console.error('Error processing SyndrDB response:', error);
           }
@@ -243,58 +177,57 @@ export class SyndrDBMainService extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       // Store the handler for this specific message
-      connection.messageHandlers.set(messageId, (response) => {
-        console.log('📨 Received response for query:', { messageId, response });
-        const executionTime = Date.now() - startTime;
-        
-        if (response.success !== false && !response.error) {
-          // Handle SyndrDB response format: { "Result": [...], "ResultCount": n }
-          let data;
-          let documentCount = 0;
-          let resultCount = 0;
-          if (response.Result && response.ResultCount > 0) {
-            // SyndrDB format
-            data = response.Result;
-            documentCount = response.ResultCount || data.length;
-            resultCount = response.ResultCount || data.length;
-          } else if (response.Result == null && response.ResultCount == 0) {
-            data = null;
-            documentCount = 0;
-            resultCount = 0;
-          } else if (response.data) {
-            // Fallback format
-            data = response.data;
-            documentCount = data.length;
-            resultCount = data.length;
-          } else if (response.results) {
-            // Alternative fallback format  
-            data = response.results;
-            documentCount = data.length;
-            resultCount = data.length;
-          } else {
-            // Single response format
-            data = [response];
-            documentCount = 1;
-            resultCount = 1;
-          }
+        connection.messageHandlers.set(messageId, (response) => {
+          console.log('📨 Received raw response for query:', { messageId, response });
+          const executionTime = Date.now() - startTime;
           
-          resolve({
-            success: true,
-            data: data,
-            executionTime,
-            documentCount,
-            ResultCount: resultCount,
-          });
-        } else {
-          resolve({
-            success: false,
-            error: response.error || 'Query execution failed',
-            executionTime
-          });
-        }
-      });
-
-      // Send the query as plain text (SyndrDB expects this format)
+          if (response.success !== false && !response.error) {
+            // Use the raw server response directly - no modification
+            let data;
+            let documentCount = 0;
+            let resultCount = 0;
+            
+            if (response.Result && response.ResultCount >= 0) {
+              // SyndrDB format
+              data = response.Result;
+              documentCount = response.ResultCount || data?.length || 0;
+              resultCount = response.ResultCount || data?.length || 0;
+            } else if (response.Result === null && response.ResultCount === 0) {
+              data = null;
+              documentCount = 0;
+              resultCount = 0;
+            } else if (response.data) {
+              // Fallback format
+              data = response.data;
+              documentCount = data?.length || 0;
+              resultCount = data?.length || 0;
+            } else if (response.results) {
+              // Alternative fallback format  
+              data = response.results;
+              documentCount = data?.length || 0;
+              resultCount = data?.length || 0;
+            } else {
+              // Single response format
+              data = [response];
+              documentCount = 1;
+              resultCount = 1;
+            }
+            
+            resolve({
+              success: true,
+              data: data,
+              executionTime,
+              documentCount,
+              ResultCount: resultCount,
+            });
+          } else {
+            resolve({
+              success: false,
+              error: response.error || 'Query execution failed',
+              executionTime
+            });
+          }
+        });      // Send the query as plain text (SyndrDB expects this format)
       console.log('🔥 Sending query to SyndrDB TCP socket:', query);
       console.log('🔥 Socket state:', { 
         socketExists: !!connection.socket, 
@@ -344,8 +277,165 @@ export class SyndrDBMainService extends EventEmitter {
 
     connection.status = 'disconnected';
     connection.messageHandlers.clear();
+    connection.messageBuffer = ''; // Clear message buffer
     this.connections.delete(connectionId);
     this.emitConnectionStatus(connectionId, 'disconnected');
+  }
+
+  /**
+   * Handle authentication data using the original simple approach
+   */
+  private handleAuthenticationData(
+    data: Buffer, 
+    connection: SyndrConnection, 
+    resolve: (value: { success: boolean; connectionId?: string; error?: string }) => void,
+    reject: (reason?: any) => void,
+    connectionString: string
+  ) {
+    const message = data.toString().trim();
+    console.log('🔐 Authentication data received:', message);
+    console.log('🔐 Current connection status:', connection.status);
+
+    // Try to parse as JSON first
+    let response;
+    try {
+      response = JSON.parse(message);
+      console.log('🔐 Parsed as JSON object:', response);
+    } catch (parseError) {
+      // If not JSON, wrap as message object for authentication flow
+      response = { message };
+      console.log('🔐 Non-JSON response, wrapped as message object');
+    }
+
+    // Handle welcome message (step 2)
+    if (connection.status === 'connecting' && 
+        response.message && 
+        response.message.includes('Welcome to SyndrDB')) {
+      console.log('📩 Received welcome message, sending connection string...');
+      console.log('🔐 Connection string to send:', connectionString);
+      // Send the connection string for authentication (step 3)
+      connection.socket?.write(connectionString + ';\n');
+      console.log('🔐 Connection string sent, waiting for authentication response...');
+      connection.status = 'authenticating';
+      return;
+    }
+
+    // Handle authentication response (step 4)
+    if (connection.status === 'authenticating' && 
+        response.message && 
+        response.message.includes('Authentication successful - Session:') &&
+        response.status === 'success') {
+      console.log('🎉 Authentication successful!', response.message);
+      connection.status = 'connected';
+      connection.authenticationComplete = true;
+      
+      // Remove connection timeout after successful authentication
+      connection.socket?.setTimeout(0);
+      console.log('✅ Socket timeout removed after authentication');
+      
+      this.emitConnectionStatus(connection.id, 'connected');
+      console.log('✅ SyndrDB authentication fully complete - ready for queries');
+      
+      resolve({ success: true, connectionId: connection.id });
+      return;
+    }
+
+    // Handle authentication failure
+    if (connection.status === 'authenticating' && 
+        ((response.status && response.status !== 'success') || 
+         (response.error))) {
+      console.log('❌ Authentication failed:', response);
+      connection.status = 'error';
+      connection.lastError = response.message || response.error || 'Authentication failed';
+      this.emitConnectionStatus(connection.id, 'error', connection.lastError);
+      
+      resolve({ success: false, error: connection.lastError });
+      return;
+    }
+  }
+
+  /**
+   * Handle query data using buffered approach for large responses
+   */
+  private handleQueryData(data: Buffer, connection: SyndrConnection) {
+    const chunk = data.toString();
+    console.log('📊 Query chunk received:', chunk.length, 'bytes');
+    
+    // Add chunk to message buffer
+    connection.messageBuffer += chunk;
+    
+    // Try to extract complete JSON messages from buffer
+    let completeMessages: string[] = [];
+    let remainingBuffer = connection.messageBuffer;
+    
+    // Look for complete JSON objects by counting braces
+    let braceCount = 0;
+    let messageStart = 0;
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < remainingBuffer.length; i++) {
+      const char = remainingBuffer[i];
+      
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      
+      if (!inString) {
+        if (char === '{') {
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          
+          // Found complete JSON object
+          if (braceCount === 0) {
+            const completeMessage = remainingBuffer.substring(messageStart, i + 1).trim();
+            if (completeMessage) {
+              completeMessages.push(completeMessage);
+            }
+            messageStart = i + 1;
+          }
+        }
+      }
+    }
+    
+    // Update buffer with remaining incomplete data
+    connection.messageBuffer = remainingBuffer.substring(messageStart);
+    
+    console.log('📊 Extracted', completeMessages.length, 'complete messages, buffer remaining:', connection.messageBuffer.length, 'bytes');
+    
+    // Process each complete message
+    for (const messageText of completeMessages) {
+      console.log('📊 Processing complete query response:', messageText.substring(0, 200) + (messageText.length > 200 ? '...' : ''));
+      
+      // Parse as JSON for query responses
+      try {
+        const response = JSON.parse(messageText);
+        console.log('📊 Parsed query JSON:', {
+          hasResult: 'Result' in response,
+          hasResultCount: 'ResultCount' in response,
+          resultCount: response.ResultCount,
+          dataSize: response.Result?.length || 0
+        });
+        
+        // Route to query handler
+        this.handleMessage(connection.id, response);
+      } catch (parseError) {
+        console.error('📊 Failed to parse query response as JSON:', parseError);
+        console.log('📊 Raw message that failed:', messageText);
+      }
+    }
   }
 
   /**
