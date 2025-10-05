@@ -188,7 +188,13 @@ export class CodeEditor extends LitElement {
             punctuation: '#D4D4D4',
             number: '#B5CEA8',
             placeholder: '#B5CEA8',
-            unknown: '#B5CEA8'
+            unknown: '#B5CEA8',
+             errorUnderline: {
+                color: '#ff0000',     // Red color
+                thickness: 1,         // Line thickness
+                amplitude: 1,         // Height of squiggles  
+                frequency: 4          // Pixels per wave
+            }
         }
     });
     this.syntaxHighlighter.initialize(this.context, fontMetrics);

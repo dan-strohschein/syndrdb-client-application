@@ -68,6 +68,22 @@
  *     }
  *   }
  * }
+ * 
+ * // SYNTAX ERROR HIGHLIGHTING:
+ * // The syntax highlighter automatically adds red squiggly underlines 
+ * // for unrecognized tokens (TokenType.UNKNOWN). You can customize
+ * // the error styling through the theme:
+ * this.syntaxHighlighter = createSyndrQLHighlighter({
+ *   theme: {
+ *     // ... other theme colors
+ *     errorUnderline: {
+ *       color: '#ff0000',     // Red color
+ *       thickness: 1,         // Line thickness
+ *       amplitude: 1,         // Height of squiggles
+ *       frequency: 4          // Pixels per wave
+ *     }
+ *   }
+ * });
  * ```
  * 
  * 6. Clear cache when document changes significantly:
@@ -168,10 +184,18 @@ public updateSyntaxTheme(theme: Partial<SyntaxTheme>): void {
  * 3. Clear cache when document changes to avoid stale highlighting
  * 4. Consider debouncing cache clearing for rapid typing
  * 
+ * FEATURES:
+ * 
+ * 1. ✅ Syntax highlighting for SyndrQL keywords, operators, and literals
+ * 2. ✅ Configurable color themes  
+ * 3. ✅ Performance-optimized with caching
+ * 4. ✅ Error highlighting with red squiggly underlines for unknown tokens
+ * 5. ✅ Customizable error styling (color, thickness, wave properties)
+ * 
  * FUTURE ENHANCEMENTS:
  * 
  * 1. Incremental tokenization for large documents
- * 2. Syntax error highlighting
+ * 2. Advanced syntax error detection and reporting
  * 3. Semantic highlighting (variable references, etc.)
  * 4. Code folding support
  * 5. Auto-completion integration

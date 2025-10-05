@@ -373,7 +373,7 @@ export class SyndrQLTokenizer implements ITokenizer {
       return TokenType.PUNCTUATION;
     }
 
-    // Handle keywords
+    // Handle keywords - ONLY classify as KEYWORD if it's a recognized SyndrQL keyword
     if (isSyndrQLKeyword(value)) {
       return TokenType.KEYWORD;
     }
@@ -383,8 +383,37 @@ export class SyndrQLTokenizer implements ITokenizer {
       return TokenType.PLACEHOLDER;
     }
 
-    // Default to identifier
-    return TokenType.IDENTIFIER;
+    // Check if it's a syntactically valid identifier
+    if (this.isValidIdentifier(value)) {
+      // Valid identifier syntax, but not a recognized keyword = UNKNOWN (should get red squiggly)
+      return TokenType.UNKNOWN;
+    }
+
+    // Invalid syntax entirely = UNKNOWN
+    return TokenType.UNKNOWN;
+  }
+  
+  /**
+   * Check if a value is a valid identifier
+   */
+  private isValidIdentifier(value: string): boolean {
+    if (value.length === 0) {
+      return false;
+    }
+    
+    // Must start with valid identifier start character
+    if (!this.isIdentifierStart(value[0])) {
+      return false;
+    }
+    
+    // All remaining characters must be valid identifier parts
+    for (let i = 1; i < value.length; i++) {
+      if (!this.isIdentifierPart(value[i])) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   /**

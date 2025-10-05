@@ -54,7 +54,14 @@ export interface SyntaxTheme {
   number: string;
   placeholder: string;
   unknown: string;
-  // TODO: Add theme variants (dark/light mode support)
+  
+  // Error styling configuration
+  errorUnderline?: {
+    color: string;
+    thickness: number;
+    amplitude: number;
+    frequency: number;
+  };
 }
 
 /**
@@ -70,7 +77,15 @@ export const DEFAULT_SYNDRQL_THEME: SyntaxTheme = {
   string: '#CE9178',       // Orange
   number: '#B5CEA8',       // Light green
   placeholder: '#4EC9B0',  // Cyan
-  unknown: '#D4D4D4'       // Light gray
+  unknown: '#D4D4D4',      // Light gray
+  
+  // Default error underline styling
+  errorUnderline: {
+    color: '#ff0000',      // Red
+    thickness: 1,
+    amplitude: 1,
+    frequency: 4
+  }
 };
 
 /**

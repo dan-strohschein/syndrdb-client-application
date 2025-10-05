@@ -61,6 +61,49 @@ export class CanvasSyntaxRenderer implements ISyntaxRenderer {
     
     // Render the token text
     this.context.fillText(token.value, position.x, position.y);
+    
+    // Add squiggly underline for unknown tokens
+    if (token.type === TokenType.UNKNOWN) {
+      this.renderErrorUnderline(token, position);
+    }
+  }
+  
+  /**
+   * Render a squiggly red underline for syntax errors
+   */
+  private renderErrorUnderline(token: SyntaxToken, position: { x: number; y: number }): void {
+    const errorStyle = this.theme.errorUnderline || {
+      color: '#ff0000',
+      thickness: 1,
+      amplitude: 1,
+      frequency: 4
+    };
+    
+    // Position the underline well below the text
+    // Use descent plus additional padding to ensure it's clearly below
+    const underlineY = position.y + this.fontMetrics.descent + 12; // Increased to put it clearly below
+    const width = token.value.length * this.fontMetrics.characterWidth;
+    
+    this.context.save();
+    this.context.strokeStyle = errorStyle.color;
+    this.context.lineWidth = errorStyle.thickness;
+    this.context.beginPath();
+    
+    // Draw squiggly line
+    let currentX = position.x;
+    let isUp = true;
+    
+    this.context.moveTo(currentX, underlineY);
+    
+    while (currentX < position.x + width) {
+      currentX += errorStyle.frequency;
+      const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
+      this.context.lineTo(Math.min(currentX, position.x + width), nextY);
+      isUp = !isUp;
+    }
+    
+    this.context.stroke();
+    this.context.restore();
   }
 
   /**
@@ -168,12 +211,68 @@ export function renderSyntaxHighlightedLine(
       const color = getTokenColorFromTheme(token.type, theme);
       context.fillStyle = color;
       context.fillText(token.value, currentX, lineY);
+      
+      // Add squiggly underline for unknown tokens
+      if (token.type === TokenType.UNKNOWN) {
+        renderSyntaxErrorUnderline(
+          context,
+          currentX,
+          lineY,
+          token.value.length * fontMetrics.characterWidth,
+          fontMetrics,
+          theme
+        );
+      }
     }
 
     // Advance position
     currentX += token.value.length * fontMetrics.characterWidth;
     lastColumn = token.column + token.value.length;
   }
+}
+
+/**
+ * Render a squiggly red underline for syntax errors
+ */
+function renderSyntaxErrorUnderline(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  fontMetrics: FontMetrics,
+  theme: SyntaxTheme
+): void {
+  const errorStyle = theme.errorUnderline || {
+    color: '#ff0000',
+    thickness: 1,
+    amplitude: 1,
+    frequency: 4
+  };
+  
+  // Position the underline below the text
+  // y is baseline, descent is how far text goes below baseline, +12 for clear separation
+  const underlineY = y + fontMetrics.descent + 12;
+  
+  context.save();
+  context.strokeStyle = errorStyle.color;
+  context.lineWidth = errorStyle.thickness;
+  context.beginPath();
+  
+  // Draw squiggly line
+  let currentX = x;
+  let isUp = true;
+  
+  context.moveTo(currentX, underlineY);
+  
+  while (currentX < x + width) {
+    currentX += errorStyle.frequency;
+    const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
+    context.lineTo(Math.min(currentX, x + width), nextY);
+    isUp = !isUp;
+  }
+  
+  context.stroke();
+  context.restore();
 }
 
 /**
@@ -204,7 +303,7 @@ function getTokenColorFromTheme(tokenType: TokenType, theme: SyntaxTheme): strin
   }
 }
 
-// TODO: Add support for syntax error highlighting
 // TODO: Add support for semantic highlighting (variable references, etc.)
 // TODO: Add performance optimizations for large documents
 // TODO: Add support for background highlighting (selection, current line, etc.)
+// TODO: Add configuration options for error underline styling (color, thickness, etc.)
