@@ -85,7 +85,10 @@ export class MainPanel extends LitElement {
   firstUpdated() {
     // Initialize with default editor if none exist
     if (this.queryEditors.length === 0) {
-      this.queryEditors = [{name: "Default Query Editor"}];
+      this.queryEditors = [
+        {name: "Default Query Editor"},
+        {name: "Drag & Drop Demo"} // Demo tab
+      ];
     }
     
     // Add event listener for add-query-editor events
@@ -178,15 +181,19 @@ export class MainPanel extends LitElement {
             // Always render all tabs but use visibility to control display
             return html`
               <div class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'visible z-10' : 'invisible z-0'}">
-                <query-editor-container 
-                  class="w-full h-full }" 
-                  .tabName=${editor.name} 
-                  .initialQuery=${editor.queryState || editor.initialQuery || ''} 
-                  .databaseName=${editor.databaseName || ''}
-                  .connectionId=${editor.connectionId || ''}
-                  .isActive=${this.activeTabIndex === index}
-                  @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}>
-                </query-editor-container>
+                ${editor.name === "Drag & Drop Demo" ? html`
+                  <draggable-demo class="w-full h-full"></draggable-demo>
+                ` : html`
+                  <query-editor-container 
+                    class="w-full h-full }" 
+                    .tabName=${editor.name} 
+                    .initialQuery=${editor.queryState || editor.initialQuery || ''} 
+                    .databaseName=${editor.databaseName || ''}
+                    .connectionId=${editor.connectionId || ''}
+                    .isActive=${this.activeTabIndex === index}
+                    @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}>
+                  </query-editor-container>
+                `}
               </div>
             `;
           })}

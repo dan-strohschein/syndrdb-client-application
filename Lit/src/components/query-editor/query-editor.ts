@@ -8,7 +8,9 @@ import {
   generateSyntaxHighlighting 
 } from './syndrQL-language-service/syndrql-tokenizer';
 import './suggestion-complete/suggestion-dropdown';
-
+import '../dragndrop/droppable';
+import { TextPositionCalculator } from './text-position-calculator';
+import { text } from 'stream/consumers';
 
 @customElement('query-editor')
 export class QueryEditor extends LitElement {
@@ -108,7 +110,7 @@ export class QueryEditor extends LitElement {
   }
     
   @property({ type: String })
-  public activeTab: 'syndrql' | 'graphql' = 'syndrql';
+  public activeTab: 'syndrql' | 'graphql' | 'new-editor' = 'syndrql';
   
   @property({ type: String })
   public databaseName: string = '';
@@ -1343,7 +1345,7 @@ export class QueryEditor extends LitElement {
     this.hideSuggestions();
   }
 
-  private handleTabClick(tab: 'syndrql' | 'graphql') {
+  private handleTabClick(tab: 'syndrql' | 'graphql' | 'new-editor') {
     if (this.activeTab !== tab) {
       // Save current tab's content before switching
       if (this.activeTab === 'syndrql') {
@@ -1394,14 +1396,56 @@ export class QueryEditor extends LitElement {
     }
   }
 
+  private handleTextDrop = (event: CustomEvent) => {
+    const { dropData, dropX, dropY } = event.detail;
+    
+    // Insert the dropped text at the mouse cursor position with intelligent padding
+    const textarea = this.querySelector('.custom-editor[data-placeholder*="SyndrQL"]') as HTMLDivElement;
+    if (textarea) {
+      console.log('🎯 Handling text drop:', { dropData, dropX, dropY });
+      
+      // Use the TextPositionCalculator for intelligent positioning
+      const calculator = new TextPositionCalculator(textarea);
+      const { updatedTextContent, updatedHTMLContent, caretPosition } = calculator.calculateDropPosition(dropX, dropY, dropData);
+      
+      console.log('🎯 Calculator updated content and caret position:', { 
+        contentLength: updatedTextContent.length, 
+        caretPosition 
+      });
+      
+      // The calculator has already updated the textarea content
+      // Now we just need to update our state and set the caret position
+     
+      //textarea.textContent = updatedTextContent;
+      textarea.innerHTML = updatedHTMLContent;
+      this.queryText = updatedTextContent;
+      this.currentCursorPosition = caretPosition;
+
+      // Set cursor to the calculated position
+      this.setCursorPosition(caretPosition);
+      textarea.focus();
+      
+      // Apply syntax highlighting after drop
+      if (this.activeTab === 'syndrql') {
+        setTimeout(() => {
+          if (this.editorRef && !this.showSuggestions) {
+            this.scheduleHighlighting(this.editorRef);
+          }
+        }, 100);
+      }
+    }
+  }
+
   render() {
     return html`
       <div class="h-full flex flex-col relative">
         <!-- Tab Content -->
         <div class="flex-1 relative">
           <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'syndrql' ? 'visible z-10' : 'invisible z-0'}">
+             <droppable-component @drop-completed=${this.handleTextDrop}>
             <div 
               class="custom-editor w-full h-full font-mono resize-none"
+              style="white-space: pre-wrap; overflow-wrap: break-word;"
               contenteditable="true"
               data-placeholder="Enter your SyndrQL query..."
               @input=${this.handleQueryChange}
@@ -1415,6 +1459,7 @@ export class QueryEditor extends LitElement {
                 this.editorRef = e.target as HTMLElement;
               }}
             ></div>
+            </droppable-component>
           </div>
           <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'graphql' ? 'visible z-10' : 'invisible z-0'}">
             <div 
@@ -1423,6 +1468,10 @@ export class QueryEditor extends LitElement {
               data-placeholder="Enter your GraphQL query..."
               @input=${this.handleQueryChange}
             ></div>
+          </div>
+
+          <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'new-editor' ? 'visible z-10' : 'invisible z-0'}">
+           <code-editor></code-editor>
           </div>
         </div>
         
@@ -1457,8 +1506,18 @@ export class QueryEditor extends LitElement {
             @click=${() => this.handleTabClick('graphql')}
           >
             <i class="fa-solid fa-diagram-project mr-1"></i>GraphQL
+         
           </button>
-        </div>
+          <button
+          class="px-3 py-2 border-t-2 font-medium text-xs transition-colors duration-200 
+          ${
+              this.activeTab === 'graphql' 
+                ? 'border-primary text-base-content bg-base-100' 
+                : 'border-transparent text-base-content opacity-30 hover:text-base-content hover:opacity-100 hover:bg-base-100'
+            }"
+          @click=${() => this.handleTabClick('new-editor')}
+          >
+          New Editor
           </button>
         </div>
       </div>

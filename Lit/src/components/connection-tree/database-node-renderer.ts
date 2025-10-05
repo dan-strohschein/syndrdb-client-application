@@ -275,10 +275,15 @@ export class DatabaseNodeRenderer {
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
-        <span class="mr-2">
-          <i class="${getNodeIcon('bundle')}"></i>
-        </span>
-        <span>${bundleName}</span>
+        <draggable-component class="mr-2 cursor-move" 
+        .getDropDataHandler=${() => bundleName}
+        .dragData=${bundleName}
+        title="Drag to create a query">
+          <span class="mr-2">
+            <i class="${getNodeIcon('bundle')}"></i>
+          </span>
+          <span>${bundleName}</span>
+        </draggable-component>
       </div>
 
       <!-- Bundle Children (when expanded) -->

@@ -18,9 +18,14 @@ import './components/bundle-modal/bundle-modal';
 import './components/bundle-modal/fields-tab';
 import './components/bundle-modal/indexes-tab';
 import './components/bundle-modal/field-definition-editor';
+import './components/code-editor/code-editor';
 import './components/error-modal';
 import './components/status-bar';
 import './components/status-bar';
+import './components/dragndrop/draggable-demo';
+import './components/dragndrop/draggable';
+import './components/dragndrop/droppable';
+import './components/code-editor/code-editor';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
