@@ -508,17 +508,34 @@ export function getSupportedStatementTypes(): string[] {
  */
 export function findMatchingGrammarRules(statement: string): GrammarRule[] {
   const upperStatement = statement.trim().toUpperCase();
+  const statementWords = upperStatement.split(/\s+/);
   const matchingRules: GrammarRule[] = [];
   
   for (const rule of Object.values(SYNDRQL_GRAMMAR_RULES)) {
-    // Check if the statement starts with the expected pattern
-    const firstKeywords = rule.pattern
+    // Get the keyword sequence from the rule pattern
+    const ruleKeywords = rule.pattern
       .filter(element => element.type === TokenType.KEYWORD && element.value)
-      .slice(0, 3) // Check first few keywords for pattern matching
-      .map(element => element.value)
-      .join(' ');
+      .map(element => element.value);
     
-    if (upperStatement.startsWith(firstKeywords)) {
+    if (ruleKeywords.length === 0) continue;
+    
+    // Check if the statement contains the rule keywords in order
+    // Ignore non-keyword tokens like strings, identifiers, punctuation
+    let ruleIndex = 0;
+    let statementIndex = 0;
+    
+    while (ruleIndex < ruleKeywords.length && statementIndex < statementWords.length) {
+      const statementWord = statementWords[statementIndex];
+      const expectedKeyword = ruleKeywords[ruleIndex];
+      
+      if (statementWord === expectedKeyword) {
+        ruleIndex++; // Found expected keyword, move to next
+      }
+      statementIndex++; // Always advance statement position
+    }
+    
+    // If we found all required keywords in order, it's a match
+    if (ruleIndex === ruleKeywords.length) {
       matchingRules.push(rule);
     }
   }

@@ -140,3 +140,23 @@ export interface SyntaxError {
   endPosition: number;
   severity: 'error' | 'warning' | 'info';
 }
+
+
+
+/**
+ * Holds the cache of the code in memory so that the syntax validator can parse efficiently
+ * 
+ */
+
+export interface CodeStatement {
+    code: string;
+    lineStart: number;
+    lineEnd: number;
+    isValid: boolean;
+    isDirty: boolean;
+    tokens: SyntaxToken[];
+}
+
+export interface CodeCache {
+    statements: CodeStatement[];
+}

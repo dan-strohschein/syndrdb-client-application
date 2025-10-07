@@ -29,11 +29,16 @@ export class CanvasSyntaxRenderer implements ISyntaxRenderer {
   /**
    * Render syntax-highlighted tokens on canvas
    */
-  render(tokens: SyntaxToken[], theme: SyntaxTheme): void {
+  render(tokens: SyntaxToken[], theme: SyntaxTheme, invalidLines?: Set<number>): void {
     this.theme = theme;
     
     for (const token of tokens) {
       this.renderToken(token);
+    }
+    
+    // Render line-level error underlines if provided
+    if (invalidLines && invalidLines.size > 0) {
+      this.renderLineErrorUnderlines(tokens, invalidLines);
     }
   }
 
@@ -99,6 +104,81 @@ export class CanvasSyntaxRenderer implements ISyntaxRenderer {
       currentX += errorStyle.frequency;
       const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
       this.context.lineTo(Math.min(currentX, position.x + width), nextY);
+      isUp = !isUp;
+    }
+    
+    this.context.stroke();
+    this.context.restore();
+  }
+
+  /**
+   * Render squiggly red underlines for entire lines with grammar errors
+   */
+  private renderLineErrorUnderlines(tokens: SyntaxToken[], invalidLines: Set<number>): void {
+    const errorStyle = this.theme.errorUnderline || {
+      color: '#ff0000',
+      thickness: 2, // Slightly thicker for line errors
+      amplitude: 2,
+      frequency: 6
+    };
+    
+    // Group tokens by line
+    const tokensByLine = new Map<number, SyntaxToken[]>();
+    tokens.forEach(token => {
+      if (!tokensByLine.has(token.line)) {
+        tokensByLine.set(token.line, []);
+      }
+      tokensByLine.get(token.line)!.push(token);
+    });
+    
+    // Render underlines for invalid lines
+    invalidLines.forEach(lineNumber => {
+      const lineTokens = tokensByLine.get(lineNumber);
+      if (lineTokens && lineTokens.length > 0) {
+        this.renderLineUnderline(lineTokens, errorStyle);
+      }
+    });
+  }
+  
+  /**
+   * Render an underline spanning an entire line of tokens
+   */
+  private renderLineUnderline(lineTokens: SyntaxToken[], errorStyle: any): void {
+    // Find the bounds of the line content
+    const significantTokens = lineTokens.filter(token => 
+      token.type !== TokenType.WHITESPACE && 
+      token.type !== TokenType.NEWLINE &&
+      token.value.trim().length > 0
+    );
+    
+    if (significantTokens.length === 0) return;
+    
+    const firstToken = significantTokens[0];
+    const lastToken = significantTokens[significantTokens.length - 1];
+    
+    const startPosition = this.calculateTokenPosition(firstToken);
+    const endPosition = this.calculateTokenPosition(lastToken);
+    const endX = endPosition.x + (lastToken.value.length * this.fontMetrics.characterWidth);
+    
+    // Position the underline below the text line
+    const underlineY = startPosition.y + this.fontMetrics.descent + 14;
+    const lineWidth = endX - startPosition.x;
+    
+    this.context.save();
+    this.context.strokeStyle = errorStyle.color;
+    this.context.lineWidth = errorStyle.thickness;
+    this.context.beginPath();
+    
+    // Draw squiggly line spanning the entire line content
+    let currentX = startPosition.x;
+    let isUp = true;
+    
+    this.context.moveTo(currentX, underlineY);
+    
+    while (currentX < endX) {
+      currentX += errorStyle.frequency;
+      const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
+      this.context.lineTo(Math.min(currentX, endX), nextY);
       isUp = !isUp;
     }
     

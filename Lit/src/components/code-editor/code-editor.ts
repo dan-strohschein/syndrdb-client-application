@@ -10,7 +10,9 @@ import { VirtualDocumentModel } from './virtual-dom.js';
 import { MonospaceCoordinateSystem, FontMeasurer } from './font-metrics.js';
 import { ViewportManager } from './viewport-manager.js';
 import { Position, FontMetrics, KeyCommand, EditorTheme, ScrollOffset, ScrollbarDragState, Coordinates, MouseEventData, CharacterPosition } from './types.js';
-import { createSyndrQLHighlighter, SyndrQLSyntaxHighlighter, SyntaxTheme } from './syndrQL-language-service/index.js';
+import { createSyndrQLHighlighter, SyndrQLSyntaxHighlighter, SyntaxTheme, SyntaxToken, CodeStatement, CodeCache } from './syndrQL-language-service/index.js';
+import { StatementParser } from './syndrQL-language-service/statement-parser.js';
+import { SyndrQLGrammarValidator } from './syndrQL-language-service/grammar-validator.js';
 
 @customElement('code-editor')
 export class CodeEditor extends LitElement {
@@ -88,6 +90,13 @@ export class CodeEditor extends LitElement {
   
   // Syntax highlighter
   private syntaxHighlighter!: SyndrQLSyntaxHighlighter;
+  
+  // Statement cache for granular validation
+  private statementParser!: StatementParser;
+  private grammarValidator!: SyndrQLGrammarValidator;
+  private codeCache: CodeCache = { statements: [] };
+  private statementValidationTimeout: number | null = null;
+  private readonly STATEMENT_VALIDATION_DELAY = 200;
 
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -199,6 +208,20 @@ export class CodeEditor extends LitElement {
     });
     this.syntaxHighlighter.initialize(this.context, fontMetrics);
 
+    // Initialize statement parser for granular validation
+    this.statementParser = new StatementParser();
+    this.grammarValidator = new SyndrQLGrammarValidator();
+
+    // Set up grammar validation callback to re-render when validation completes
+    this.syntaxHighlighter.setGrammarValidationCallback((code: string, tokens: SyntaxToken[]) => {
+      // Re-render the editor when grammar validation completes
+      this.renderEditor();
+    });
+
+    // Initialize document context and statement cache
+    this.updateStatementCache();
+    this.updateSyntaxHighlighterContext();
+
     } catch (error) {
       console.error('Failed to initialize code editor:', error);
     }
@@ -207,6 +230,117 @@ export class CodeEditor extends LitElement {
   /**
    * Sets up canvas sizing to fill parent container and handle resize events.
    */
+  /**
+   * Update syntax highlighter with current document context for grammar validation
+   */
+  private updateSyntaxHighlighterContext(): void {
+    if (this.syntaxHighlighter && this.documentModel) {
+      const lines = this.documentModel.getLines();
+      const fullText = lines.join('\n');
+      this.syntaxHighlighter.updateDocumentContext(fullText);
+    }
+  }
+
+  /**
+   * Update statement cache by parsing the current document
+   */
+  private updateStatementCache(): void {
+    if (this.documentModel && this.statementParser) {
+      const lines = this.documentModel.getLines();
+      const fullText = lines.join('\n');
+      
+      // Parse document into statements
+      const statements = this.statementParser.parseStatements(fullText);
+      this.codeCache = { statements };
+      
+      console.log('🔥 Statement cache updated:', statements.length, 'statements');
+    }
+  }
+
+  /**
+   * Find which statement contains the current cursor position
+   */
+  private getCurrentStatement(): CodeStatement | null {
+    if (!this.documentModel || this.codeCache.statements.length === 0) {
+      return null;
+    }
+    
+    const cursorPosition = this.documentModel.getCursorPosition();
+    return this.statementParser.findStatementAtPosition(
+      this.codeCache.statements,
+      cursorPosition.line,
+      cursorPosition.column
+    );
+  }
+
+  /**
+   * Mark the current statement as dirty and schedule validation
+   */
+  private markCurrentStatementDirty(): void {
+    const currentStatement = this.getCurrentStatement();
+    if (currentStatement) {
+      // Mark statement as dirty if not already dirty
+      if (!currentStatement.isDirty) {
+        this.codeCache.statements = this.statementParser.markStatementDirty(
+          this.codeCache.statements,
+          currentStatement
+        );
+        console.log('🔥 Statement marked dirty:', currentStatement.code.substring(0, 50) + '...');
+      }
+      
+      // Always schedule validation (debounced) - this reschedules on each keystroke
+      this.scheduleStatementValidation(currentStatement);
+    }
+  }
+
+  /**
+   * Schedule validation for a specific statement with debounce
+   */
+  private scheduleStatementValidation(statement: CodeStatement): void {
+    // Clear existing timeout
+    if (this.statementValidationTimeout) {
+      clearTimeout(this.statementValidationTimeout);
+    }
+    
+    // Schedule new validation
+    this.statementValidationTimeout = window.setTimeout(() => {
+      this.validateStatement(statement);
+    }, this.STATEMENT_VALIDATION_DELAY);
+  }
+
+  /**
+   * Validate a specific statement and update cache
+   */
+  private validateStatement(statement: CodeStatement): void {
+    // Find the current version of this statement in the cache
+    // (content may have changed since validation was scheduled)
+    const currentStatement = this.codeCache.statements.find(s => 
+      s.lineStart === statement.lineStart && s.lineEnd === statement.lineEnd
+    );
+    
+    if (!currentStatement || !currentStatement.isDirty) {
+      return; // Statement not found or already clean
+    }
+    
+    console.log('🔥 VALIDATING STATEMENT:', currentStatement.code);
+    
+    // Use the grammar validator directly to validate this statement
+    const validationResult = this.grammarValidator.validate(currentStatement.tokens);
+    const isValid = validationResult.isValid;
+    
+    console.log('🔥 VALIDATION RESULT:', 'Valid:', isValid, 'InvalidTokens:', Array.from(validationResult.invalidTokens));
+    
+    // Mark statement as clean with validation result
+    this.codeCache.statements = this.statementParser.markStatementClean(
+      this.codeCache.statements,
+      currentStatement,
+      isValid
+    );
+    
+    // Re-render to show validation results
+    this.renderEditor();
+  }
+
   private setupCanvasSizing(): void {
     const container = this.canvas.parentElement;
     if (!container) {
@@ -256,9 +390,15 @@ export class CodeEditor extends LitElement {
       // Process text input using InputProcessor
       this.inputProcessor.processTextInput(text, this.documentModel);
       
-      // Clear syntax highlighting cache since document changed
+      // Update statement cache and mark current statement as dirty
+      this.updateStatementCache();
+      this.markCurrentStatementDirty();
+      
+      // Keep the old syntax highlighter system for now (will be replaced later)
       if (this.syntaxHighlighter) {
+        this.syntaxHighlighter.markDirty();
         this.syntaxHighlighter.clearCache();
+        this.updateSyntaxHighlighterContext();
       }
       
       // Ensure cursor remains visible
@@ -274,9 +414,17 @@ export class CodeEditor extends LitElement {
       // Process key command using InputProcessor
       this.inputProcessor.processKeyCommand(command, this.documentModel);
       
-      // Clear syntax highlighting cache for content-modifying commands
+      // Update statement cache and mark current statement as dirty for content-modifying commands
+      if (this.isContentModifyingCommand(command.key)) {
+        this.updateStatementCache();
+        this.markCurrentStatementDirty();
+      }
+      
+      // Keep the old syntax highlighter system for now (will be replaced later)
       if (this.syntaxHighlighter && this.isContentModifyingCommand(command.key)) {
+        this.syntaxHighlighter.markDirty();
         this.syntaxHighlighter.clearCache();
+        this.updateSyntaxHighlighterContext();
       }
       
       // Ensure cursor remains visible after navigation
@@ -767,15 +915,29 @@ export class CodeEditor extends LitElement {
       // No selection - render normally
       // Render with syntax highlighting instead of plain text
       if (this.enableSyntaxHighlighting && this.syntaxHighlighter) {
-        // Render with syntax highlighting
+        // Get full document text for grammar validation context
+        const lines = this.documentModel.getLines();
+        const fullText = lines.join('\n');
+        
+        // Find which statement this line belongs to
+        const statement = this.statementParser.findStatementAtLine(this.codeCache.statements, lineIndex);
+        const hasStatementError = statement && !statement.isValid && !statement.isDirty;
+        
+        // Render with syntax highlighting and statement-level error information
         this.syntaxHighlighter.renderLine(
             this.context,
             lineText,
             lineIndex + 1,
             y,
             fontMetrics,
-            this.viewportManager.getScrollOffset()
+            this.viewportManager.getScrollOffset(),
+            fullText
         );
+        
+        // Render statement-level error underlines if needed
+        if (hasStatementError) {
+          this.renderStatementErrorUnderline(lineText, lineIndex, y, fontMetrics);
+        }
         } else {
         // Fallback to plain text rendering
         this.context.fillStyle = this.getThemeColor(this.textColor);
@@ -983,6 +1145,65 @@ export class CodeEditor extends LitElement {
         fontMetrics.lineHeight
       );
     }
+  }
+  
+  /**
+   * Render error underline for a statement that failed validation
+   */
+  private renderStatementErrorUnderline(lineText: string, lineIndex: number, y: number, fontMetrics: FontMetrics): void {
+    if (!this.context) return;
+    
+    const scrollOffset = this.viewportManager.getScrollOffset();
+    
+    // Error underline style
+    const errorStyle = {
+      color: '#ff0000',     // Red color
+      thickness: 2,         // Line thickness
+      amplitude: 2,         // Height of squiggles  
+      frequency: 6          // Pixels per wave
+    };
+
+    // Find significant content (non-whitespace) on this line
+    const trimmedLine = lineText.trim();
+    if (trimmedLine.length === 0) {
+      return; // Don't render underlines on empty lines
+    }
+    
+    // Calculate the position of the first and last non-whitespace characters
+    const firstNonWhitespace = lineText.search(/\S/);
+    const lastNonWhitespace = lineText.search(/\S\s*$/);
+    
+    if (firstNonWhitespace === -1) {
+      return; // No content to underline
+    }
+    
+    // Calculate start and end positions
+    const startX = (firstNonWhitespace * fontMetrics.characterWidth) - scrollOffset.x;
+    const endX = ((lastNonWhitespace + 1) * fontMetrics.characterWidth) - scrollOffset.x;
+    
+    // Position the underline below the text
+    const underlineY = y + fontMetrics.descent + fontMetrics.lineHeight - 4;
+
+    this.context.save();
+    this.context.strokeStyle = errorStyle.color;
+    this.context.lineWidth = errorStyle.thickness;
+    this.context.beginPath();
+
+    // Draw squiggly line
+    let currentX = startX;
+    let isUp = true;
+
+    this.context.moveTo(currentX, underlineY);
+
+    while (currentX < endX) {
+      currentX += errorStyle.frequency;
+      const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
+      this.context.lineTo(Math.min(currentX, endX), nextY);
+      isUp = !isUp;
+    }
+
+    this.context.stroke();
+    this.context.restore();
   }
   
   /**

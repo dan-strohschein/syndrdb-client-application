@@ -4,10 +4,11 @@
  * Main entry point for syntax highlighting functionality
  */
 
-import { SyntaxToken, SyntaxTheme, SyntaxHighlightConfig, DEFAULT_SYNDRQL_THEME } from './types.js';
+import { SyntaxToken, SyntaxTheme, SyntaxHighlightConfig, DEFAULT_SYNDRQL_THEME, TokenType } from './types.js';
 import { SyndrQLTokenizer } from './tokenizer.js';
 import { CanvasSyntaxRenderer, organizeTokensByLine, renderSyntaxHighlightedLine } from './renderer.js';
 import { FontMetrics } from '../types.js';
+import { GrammarValidationResult } from './grammar-validator.js';
 
 /**
  * Main syntax highlighting service for SyndrQL
@@ -18,6 +19,10 @@ export class SyndrQLSyntaxHighlighter {
   private renderer: CanvasSyntaxRenderer | null = null;
   private config: SyntaxHighlightConfig;
   private cachedTokens: Map<string, SyntaxToken[]> = new Map();
+  private grammarValidatedTokens: Map<string, SyntaxToken[]> = new Map();
+  private grammarValidationResults: Map<string, GrammarValidationResult> = new Map();
+  private onGrammarValidationCallback?: (code: string, tokens: SyntaxToken[]) => void;
+  private isDirty: boolean = false; // Track if content has changed
 
   constructor(config?: Partial<SyntaxHighlightConfig>) {
     this.tokenizer = new SyndrQLTokenizer();
@@ -39,18 +44,73 @@ export class SyndrQLSyntaxHighlighter {
    * Tokenize SyndrQL code and return syntax tokens
    */
   tokenize(code: string): SyntaxToken[] {
-    // Check cache first for performance
+    if (this.isDirty === false) {
+      return this.cachedTokens.get(code) || [];
+    }
+
+    // Check grammar-validated cache first
+    if (this.grammarValidatedTokens.has(code)) {
+      return this.grammarValidatedTokens.get(code)!;
+    }
+
+    // Check basic token cache
     if (this.cachedTokens.has(code)) {
       return this.cachedTokens.get(code)!;
     }
 
+    // Tokenize without grammar validation (returns immediately)
     const tokens = this.tokenizer.tokenize(code);
     
-    // Cache tokens for repeated rendering
-    // TODO: Implement cache eviction strategy for memory management
+    // Cache basic tokens
     this.cachedTokens.set(code, tokens);
     
     return tokens;
+  }
+
+  /**
+   * Handle completion of grammar validation
+   */
+  private handleGrammarValidationComplete(validatedTokens: SyntaxToken[], result: GrammarValidationResult): void {
+    // console.log('🔥 handleGrammarValidationComplete called - invalidLines:', Array.from(result.invalidLines));
+    
+    // Find the code that corresponds to these tokens by comparing token content
+    const tokenContent = validatedTokens
+      .map(token => token.value)
+      .join('');
+    
+    // console.log('🔥 Caching validation result for content:', tokenContent);
+    
+    // Cache the grammar-validated tokens and results
+    this.grammarValidatedTokens.set(tokenContent, validatedTokens);
+    this.grammarValidationResults.set(tokenContent, result);
+    
+    // Clear the basic token cache for this content since we now have validated tokens
+    this.cachedTokens.delete(tokenContent);
+    
+    // Reset dirty flag - content has been validated
+    this.isDirty = false;
+    console.log('🔥 Validation complete - isDirty reset to false');
+    
+    // Notify external callback if set
+    if (this.onGrammarValidationCallback) {
+      this.onGrammarValidationCallback(tokenContent, validatedTokens);
+    }
+  }
+
+  /**
+   * Set callback for when grammar validation completes
+   */
+  setGrammarValidationCallback(callback: (code: string, tokens: SyntaxToken[]) => void): void {
+    this.onGrammarValidationCallback = callback;
+  }
+
+  /**
+   * Force immediate grammar validation for a code string
+   * Note: Actual validation is now handled by CodeEditor statement system
+   */
+  forceGrammarValidation(code: string): SyntaxToken[] {
+    // Just tokenize and return tokens - validation happens in CodeEditor
+    return this.tokenizer.tokenize(code);
   }
 
   /**
@@ -62,8 +122,44 @@ export class SyndrQLSyntaxHighlighter {
       return;
     }
 
-    const tokens = this.tokenize(code);
-    this.renderer.render(tokens, this.config.theme);
+
+        const tokens = this.tokenize(code);
+        const validationResult = this.grammarValidationResults.get(code);
+   
+        this.renderer.render(tokens, this.config.theme);
+     
+  }
+
+  /**
+   * Mark content as dirty (should be called on alphanumeric/symbol keypresses)
+   */
+  markDirty(): void {
+    this.isDirty = true;
+    console.log('🔥 Content marked as dirty');
+  }
+
+  /**
+   * Check if content is dirty
+   */
+  isDirtyContent(): boolean {
+    return this.isDirty;
+  }
+
+  /**
+   * Update the full document context for grammar validation
+   * This should be called whenever the document changes
+   */
+  updateDocumentContext(fullText: string): void {
+    // Trigger tokenization with grammar validation
+    
+    this.tokenize(fullText);
+  }
+
+  /**
+   * Get grammar validation result for current document
+   */
+  getGrammarValidationResult(code: string): GrammarValidationResult | undefined {
+    return this.grammarValidationResults.get(code);
   }
 
   /**
@@ -75,9 +171,17 @@ export class SyndrQLSyntaxHighlighter {
     lineNumber: number,
     lineY: number,
     fontMetrics: FontMetrics,
-    scrollOffset: { x: number; y: number }
+    scrollOffset: { x: number; y: number },
+    fullDocumentText?: string
   ): void {
-    // Tokenize just this line for efficiency
+    // If we have full document text, check for grammar validation results
+    let hasErrors = false;
+    if (fullDocumentText) {
+      const validationResult = this.grammarValidationResults.get(fullDocumentText);
+      hasErrors = validationResult ? !validationResult.isValid : false;
+    }
+
+    // Tokenize just this line for syntax highlighting
     const tokens = this.tokenizer.tokenize(lineContent);
     
     // Adjust token positions to match the line number
@@ -86,6 +190,7 @@ export class SyndrQLSyntaxHighlighter {
       line: lineNumber
     }));
 
+    // Render the line with syntax highlighting
     renderSyntaxHighlightedLine(
       context,
       adjustedTokens,
@@ -94,12 +199,85 @@ export class SyndrQLSyntaxHighlighter {
       this.config.theme,
       scrollOffset
     );
+
+    // If this line has grammar errors, render line-level error underlines
+    if (hasErrors) {
+      this.renderLineErrorUnderline(
+        context,
+        adjustedTokens,
+        lineY,
+        fontMetrics,
+        scrollOffset
+      );
+    }
+  }
+
+  /**
+   * Render error underline for an entire line
+   */
+  private renderLineErrorUnderline(
+    context: CanvasRenderingContext2D,
+    tokens: SyntaxToken[],
+    lineY: number,
+    fontMetrics: FontMetrics,
+    scrollOffset: { x: number; y: number }
+  ): void {
+    const errorStyle = this.config.theme.errorUnderline || {
+      color: '#ff0000',
+      thickness: 2,
+      amplitude: 2,
+      frequency: 6
+    };
+
+    // Find significant tokens (non-whitespace)
+    const significantTokens = tokens.filter(token => 
+      token.type !== TokenType.WHITESPACE && 
+      token.type !== TokenType.NEWLINE &&
+      token.value.trim().length > 0
+    );
+
+    if (significantTokens.length === 0) return;
+
+    // Calculate line bounds
+    const startX = -scrollOffset.x; // Start from beginning of line
+    let endX = startX;
+    
+    // Find the end of the last significant token
+    significantTokens.forEach(token => {
+      const tokenEndX = (token.column - 1 + token.value.length) * fontMetrics.characterWidth - scrollOffset.x;
+      endX = Math.max(endX, tokenEndX);
+    });
+
+    // Position the underline below the text
+    const underlineY = lineY + fontMetrics.descent + 14;
+
+    context.save();
+    context.strokeStyle = errorStyle.color;
+    context.lineWidth = errorStyle.thickness;
+    context.beginPath();
+
+    // Draw squiggly line spanning the line content
+    let currentX = startX;
+    let isUp = true;
+
+    context.moveTo(currentX, underlineY);
+
+    while (currentX < endX) {
+      currentX += errorStyle.frequency;
+      const nextY = isUp ? underlineY - errorStyle.amplitude : underlineY + errorStyle.amplitude;
+      context.lineTo(Math.min(currentX, endX), nextY);
+      isUp = !isUp;
+    }
+
+    context.stroke();
+    context.restore();
   }
 
   /**
    * Get tokens organized by line for efficient rendering
    */
   getTokensByLine(code: string): Map<number, SyntaxToken[]> {
+
     const tokens = this.tokenize(code);
     return organizeTokensByLine(tokens);
   }
@@ -146,7 +324,10 @@ export class SyndrQLSyntaxHighlighter {
    * Clear token cache (call when document changes significantly)
    */
   clearCache(): void {
+    // console.log('🔥 Clearing all caches (tokens and validation results)');
     this.cachedTokens.clear();
+    this.grammarValidatedTokens.clear();
+    this.grammarValidationResults.clear();
   }
 
   /**

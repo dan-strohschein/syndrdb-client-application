@@ -21,6 +21,14 @@ export class SyndrQLTokenizer implements ITokenizer {
   private position: number = 0;
   private line: number = 1;
   private column: number = 1;
+  private lastTokens: SyntaxToken[] = [];
+
+    // Cache of code statements for incremental validation
+//    private codeCache: CodeStatement[] = [];
+
+  constructor() {
+    // Tokenizer is now focused only on tokenization
+  }
 
   /**
    * Tokenize SyndrQL input text into syntax tokens
@@ -40,10 +48,11 @@ export class SyndrQLTokenizer implements ITokenizer {
       }
     }
 
-    return tokens;
-  }
+    // Store tokens for potential use by external systems
+    this.lastTokens = tokens;
 
-  /**
+    return tokens;
+  }  /**
    * Extract the next token from input
    */
   private nextToken(): SyntaxToken | null {
@@ -458,6 +467,32 @@ export class SyndrQLTokenizer implements ITokenizer {
       return '';
     }
     return this.input[this.position + 1];
+  }
+
+  /**
+   * Check if tokens end with a completion semicolon (semicolon outside of strings)
+   */
+  private hasCompletionSemicolon(tokens: SyntaxToken[]): boolean {
+    if (tokens.length === 0) {
+      return false;
+    }
+
+    // Find the last significant token (not whitespace or comment)
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const token = tokens[i];
+      
+      // Skip whitespace, comments, and newlines
+      if (token.type === TokenType.WHITESPACE || 
+          token.type === TokenType.COMMENT || 
+          token.type === TokenType.NEWLINE) {
+        continue;
+      }
+      
+      // Check if it's a semicolon punctuation (not inside a string)
+      return token.type === TokenType.PUNCTUATION && token.value === ';';
+    }
+    
+    return false;
   }
 }
 

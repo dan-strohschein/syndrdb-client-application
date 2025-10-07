@@ -131,6 +131,7 @@ export class MonospaceCoordinateSystem implements ICoordinateSystem {
     };
   }
   
+
   /**
    * CharacterGrid implementation methods
    */

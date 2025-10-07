@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Grammar Validation Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .test-case { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .input { background: #f0f0f0; padding: 5px; margin: 5px 0; }
+        .output { background: #e0e0e0; padding: 5px; margin: 5px 0; }
+        .invalid { color: red; }
+        .valid { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Grammar Validation Test</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        // Simple test function to check our grammar matching
+        function testGrammarMatching() {
+            const testCases = [
+                'SELECT',
+                'SELECT DOCUMENTS', 
+                'SELECT DOCUMENTS FROM WHERE',
+                'CREATE DATABASE',
+                'INVALID COMMAND'
+            ];
+            
+            // Simulate the new grammar matching logic
+            function findMatchingGrammarRules(statement) {
+                const upperStatement = statement.trim().toUpperCase();
+                const statementWords = upperStatement.split(/\s+/);
+                const matchingRules = [];
+                
+                // Sample rules for testing
+                const rules = [
+                    { name: 'SELECT_DOCUMENTS', keywords: ['SELECT', 'DOCUMENTS', 'FROM'] },
+                    { name: 'SELECT_DOCUMENTS_WHERE', keywords: ['SELECT', 'DOCUMENTS', 'FROM', 'WHERE'] },
+                    { name: 'SELECT_ALL', keywords: ['SELECT', '*', 'FROM'] },
+                    { name: 'CREATE_DATABASE', keywords: ['CREATE', 'DATABASE'] },
+                    { name: 'SHOW_DATABASES', keywords: ['SHOW', 'DATABASES'] }
+                ];
+                
+                for (const rule of rules) {
+                    // Check if the statement is a prefix of the rule keywords
+                    let isPrefix = true;
+                    for (let i = 0; i < statementWords.length; i++) {
+                        if (i >= rule.keywords.length || statementWords[i] !== rule.keywords[i]) {
+                            isPrefix = false;
+                            break;
+                        }
+                    }
+                    
+                    if (isPrefix) {
+                        matchingRules.push(rule);
+                    }
+                }
+                
+                return matchingRules;
+            }
+            
+            const resultsDiv = document.getElementById('results');
+            
+            testCases.forEach((testCase, index) => {
+                const div = document.createElement('div');
+                div.className = 'test-case';
+                
+                const matchingRules = findMatchingGrammarRules(testCase);
+                const hasMatches = matchingRules.length > 0;
+                
+                div.innerHTML = `
+                    <div class="input">Input: "${testCase}"</div>
+                    <div class="output">
+                        Matching rules: ${matchingRules.map(r => r.name).join(', ') || 'None'}
+                        <br>
+                        Should be <span class="${hasMatches ? 'invalid' : 'valid'}">
+                            ${hasMatches ? 'INVALID (incomplete)' : 'INVALID (no match)'}
+                        </span>
+                    </div>
+                `;
+                
+                resultsDiv.appendChild(div);
+            });
+        }
+        
+        testGrammarMatching();
+    </script>
+</body>
+</html>
