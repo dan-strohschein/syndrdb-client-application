@@ -135,7 +135,7 @@ export class SyndrQLSyntaxHighlighter {
    */
   markDirty(): void {
     this.isDirty = true;
-    console.log('🔥 Content marked as dirty');
+    //console.log('🔥 Content marked as dirty');
   }
 
   /**

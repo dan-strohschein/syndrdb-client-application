@@ -274,7 +274,7 @@ export class CodeEditor extends LitElement {
       const statements = this.statementParser.parseStatements(fullText);
       this.codeCache = { statements };
       
-      console.log('🔥 Statement cache updated:', statements.length, 'statements');
+     // console.log('🔥 Statement cache updated:', statements.length, 'statements');
     }
   }
 
@@ -458,6 +458,12 @@ export class CodeEditor extends LitElement {
     
     // Handle key commands (arrow keys, tab, enter, etc.)
     this.inputCapture.onKeyCommand((command: KeyCommand) => {
+        
+      // Handle clipboard operations first (Ctrl+C, Ctrl+V, Ctrl+X)
+      if (this.handleClipboardCommand(command)) {
+        return; // Command was handled by clipboard operations
+      }
+      
       // Process key command using InputProcessor
       this.inputProcessor.processKeyCommand(command, this.documentModel);
       
@@ -1440,6 +1446,169 @@ export class CodeEditor extends LitElement {
         this.renderEditor(); // Re-render with new theme
     }
     }
+
+  /**
+   * Handle clipboard commands (Ctrl+C, Ctrl+V, Ctrl+X)
+   * @param command - The key command to check
+   * @returns true if the command was handled, false otherwise
+   */
+  private handleClipboardCommand(command: KeyCommand): boolean {
+
+       
+    // Only handle Ctrl combinations
+    if (!command.modifiers.ctrl && !command.modifiers.meta) {
+        
+      return false;
+    }
+
+
+    switch (command.key.toLowerCase()) {
+      case 'c':
+        // Copy selected text
+        
+        this.copyToClipboard();
+        return true;
+        
+      case 'v':
+        
+        // Paste from clipboard
+        this.pasteFromClipboard();
+        return true;
+        
+      case 'x':
+        
+        // Cut selected text
+        this.cutToClipboard();
+        return true;
+        
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Copy selected text to clipboard
+   */
+  private async copyToClipboard(): Promise<void> {
+    if (!this.documentModel.hasSelection()) {
+      return; // Nothing to copy
+    }
+
+    const selectedText = this.documentModel.getSelectedText();
+    
+    try {
+      await navigator.clipboard.writeText(selectedText);
+      console.log('📋 Copied to clipboard:', selectedText);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      // Fallback for browsers that don't support clipboard API
+      this.fallbackCopyToClipboard(selectedText);
+    }
+  }
+
+  /**
+   * Paste text from clipboard at cursor position
+   */
+  private async pasteFromClipboard(): Promise<void> {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      
+      if (clipboardText) {
+        // If there's a selection, replace it; otherwise insert at cursor
+        if (this.documentModel.hasSelection()) {
+          const selection = this.documentModel.getCurrentSelection();
+          if (selection) {
+            // Delete selected text first
+            this.documentModel.deleteText(selection.start, selection.end);
+            // Insert clipboard text at the start position
+            this.documentModel.insertText(selection.start, clipboardText);
+            // Clear selection
+            this.documentModel.clearSelections();
+          }
+        } else {
+          // Insert at cursor position
+          const cursorPosition = this.documentModel.getCursorPosition();
+          this.documentModel.insertText(cursorPosition, clipboardText);
+        }
+        
+        // Update editor state
+        this.updateStatementCache();
+        this.markCurrentStatementDirty();
+        this.updateSyntaxHighlighterContext();
+        this.renderEditor();
+        
+        console.log('📋 Pasted from clipboard:', clipboardText);
+      }
+    } catch (err) {
+      console.error('Failed to read from clipboard:', err);
+    }
+  }
+
+  /**
+   * Cut selected text to clipboard and delete from editor
+   */
+  private async cutToClipboard(): Promise<void> {
+    if (!this.documentModel.hasSelection()) {
+      return; // Nothing to cut
+    }
+
+    const selectedText = this.documentModel.getSelectedText();
+    const selection = this.documentModel.getCurrentSelection();
+    
+    if (!selection) {
+      return;
+    }
+
+    try {
+      // Copy to clipboard first
+      await navigator.clipboard.writeText(selectedText);
+      
+      // Delete the selected text
+      this.documentModel.deleteText(selection.start, selection.end);
+      
+      // Clear selection
+      this.documentModel.clearSelections();
+      
+      // Update editor state
+      this.updateStatementCache();
+      this.markCurrentStatementDirty();
+      this.updateSyntaxHighlighterContext();
+      this.renderEditor();
+      
+      console.log('✂️ Cut to clipboard:', selectedText);
+    } catch (err) {
+      console.error('Failed to cut to clipboard:', err);
+      // Fallback for browsers that don't support clipboard API
+      this.fallbackCopyToClipboard(selectedText);
+    }
+  }
+
+  /**
+   * Fallback copy method for browsers without clipboard API support
+   */
+  private fallbackCopyToClipboard(text: string): void {
+    // Create a temporary textarea element
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    
+    // Select and copy
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      document.execCommand('copy');
+      console.log('📋 Copied to clipboard (fallback):', text);
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+    }
+    
+    // Clean up
+    document.body.removeChild(textArea);
+  }
 
   /**
    * Update line numbers display data

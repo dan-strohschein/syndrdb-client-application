@@ -149,8 +149,17 @@ export class InputCapture implements IInputCapture {
     this.hiddenTextArea.addEventListener('keydown', (e) => {
       this.currentKeyEvent = e;
       
+      console.log('🔑 KEY EVENT:', {
+        key: e.key,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        isSpecialKey: this.isSpecialKey(e.key),
+        isModifierCombo: this.isModifierKeyCombo(e)
+      });
+      
       // Check if this is a special key we want to handle
-      if (this.isSpecialKey(e.key)) {
+      if (this.isSpecialKey(e.key) || this.isModifierKeyCombo(e)) {
+        console.log('🎯 HANDLING KEY COMMAND');
         e.preventDefault(); // Prevent default browser behavior
         
         const command = this.createKeyCommand(e);
@@ -186,6 +195,23 @@ export class InputCapture implements IInputCapture {
     ];
     
     return specialKeys.includes(key);
+  }
+
+  /**
+   * Checks if this is a modifier key combination we want to handle (like Ctrl+C, Cmd+V, etc.)
+   */
+  private isModifierKeyCombo(event: KeyboardEvent): boolean {
+    // Check if Ctrl or Cmd (Meta) is pressed
+    const hasModifier = event.ctrlKey || event.metaKey;
+    
+    if (!hasModifier) {
+      return false;
+    }
+    
+    // Define keys that we handle when combined with modifiers
+    const modifierKeys = ['c', 'v', 'x', 'a', 'z', 'y']; // clipboard + select all + undo/redo
+    
+    return modifierKeys.includes(event.key.toLowerCase());
   }
   
   /**
