@@ -14,6 +14,7 @@ import { createSyndrQLHighlighter, SyndrQLSyntaxHighlighter, SyntaxTheme, Syntax
 import { StatementParser } from './syndrQL-language-service/statement-parser.js';
 import { SyndrQLGrammarValidator } from './syndrQL-language-service/grammar-validator.js';
 import './error-pop-up/error-pop-up.js';
+import './line-numbers/line-numbers.js';
 
 @customElement('code-editor')
 export class CodeEditor extends LitElement {
@@ -107,6 +108,16 @@ export class CodeEditor extends LitElement {
   private currentHoveredToken: { line: number, column: number, statement: any } | null = null;
   private isPopoverVisible: boolean = false;
   private isMouseOverPopover: boolean = false;
+
+  // Line numbers tracking
+  @state()
+  private lineCount: number = 1;
+  
+  @state()
+  private editorScrollTop: number = 0;
+  
+  @state()
+  private editorHeight: number = 400;
 
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -1431,10 +1442,24 @@ export class CodeEditor extends LitElement {
     }
 
   /**
+   * Update line numbers display data
+   */
+  private updateLineNumbersData(): void {
+    if (this.documentModel && this.canvas) {
+      this.lineCount = this.documentModel.getLines().length;
+      this.editorScrollTop = this.scrollOffset.y;
+      this.editorHeight = this.canvas.clientHeight;
+    }
+  }
+
+  /**
    * Basic rendering with selection support.
    */
   private renderEditor(): void {
     if (!this.context) return;
+    
+    // Update line numbers data for synchronization
+    this.updateLineNumbersData();
     
     // Update viewport dimensions
     this.updateViewport();
@@ -1979,19 +2004,31 @@ export class CodeEditor extends LitElement {
   render() {
     return html`
     <droppable-component @drop-completed=${this.handleTextDrop}>
-      <div class="border border-gray-600 rounded-lg bg-gray-900 relative h-full w-full">
-        <canvas 
-          class="block cursor-text w-full h-full bg-info-content"
-          style="font-family: ${this.fontFamily}; font-size: ${this.fontSize}px;"
-        ></canvas>
-        ${!this.isInitialized ? html`
-          <div class="absolute inset-0 flex items-center justify-center text-gray-400">
-            Initializing editor...
-          </div>
-        ` : ''}
+      <div class="border border-gray-600 rounded-lg bg-gray-900 relative h-full w-full flex">
+        <!-- Line Numbers Column -->
+        <line-numbers
+          .totalLines=${this.lineCount}
+          .lineHeight=${this.coordinateSystem?.getFontMetrics()?.lineHeight || 20}
+          .scrollTop=${this.editorScrollTop}
+          .visibleHeight=${this.editorHeight}
+          .fontSize=${this.fontSize}
+        ></line-numbers>
         
-        <!-- Error popover for invalid tokens/statements -->
-        <error-pop-up></error-pop-up>
+        <!-- Code Editor Canvas -->
+        <div class="flex-1 relative">
+          <canvas 
+            class="block cursor-text w-full h-full bg-info-content"
+            style="font-family: ${this.fontFamily}; font-size: ${this.fontSize}px;"
+          ></canvas>
+          ${!this.isInitialized ? html`
+            <div class="absolute inset-0 flex items-center justify-center text-gray-400">
+              Initializing editor...
+            </div>
+          ` : ''}
+          
+          <!-- Error popover for invalid tokens/statements -->
+          <error-pop-up></error-pop-up>
+        </div>
       </div>
       </droppable-component>
     `;
