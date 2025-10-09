@@ -13,6 +13,7 @@ import { Position, FontMetrics, KeyCommand, EditorTheme, ScrollOffset, Scrollbar
 import { createSyndrQLHighlighter, SyndrQLSyntaxHighlighter, SyntaxTheme, SyntaxToken, CodeStatement, CodeCache } from './syndrQL-language-service/index.js';
 import { StatementParser } from './syndrQL-language-service/statement-parser.js';
 import { SyndrQLGrammarValidator } from './syndrQL-language-service/grammar-validator.js';
+import './error-pop-up/error-pop-up.js';
 
 @customElement('code-editor')
 export class CodeEditor extends LitElement {
@@ -95,8 +96,17 @@ export class CodeEditor extends LitElement {
   private statementParser!: StatementParser;
   private grammarValidator!: SyndrQLGrammarValidator;
   private codeCache: CodeCache = { statements: [] };
+  private validationResults = new Map<string, any>(); // Store validation results by statement key
   private statementValidationTimeout: number | null = null;
   private readonly STATEMENT_VALIDATION_DELAY = 200;
+  
+  // Error popover for invalid token/statement details
+  private errorPopup!: HTMLElement;
+  private hoveredInvalidElement: { type: 'token' | 'statement', data: any } | null = null;
+  private popoverHideTimeout: number | null = null;
+  private currentHoveredToken: { line: number, column: number, statement: any } | null = null;
+  private isPopoverVisible: boolean = false;
+  private isMouseOverPopover: boolean = false;
 
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -310,6 +320,7 @@ export class CodeEditor extends LitElement {
 
   /**
    * Validate a specific statement and update cache
+   * Enhanced with comprehensive error analysis and detailed logging
    */
   private validateStatement(statement: CodeStatement): void {
     // Find the current version of this statement in the cache
@@ -321,14 +332,35 @@ export class CodeEditor extends LitElement {
     if (!currentStatement || !currentStatement.isDirty) {
       return; // Statement not found or already clean
     }
-    
-    console.log('🔥 VALIDATING STATEMENT:', currentStatement.code);
-    
-    // Use the grammar validator directly to validate this statement
-    const validationResult = this.grammarValidator.validate(currentStatement.tokens);
+
+    // console.log('🔥 VALIDATING STATEMENT:', currentStatement.code);
+
+    // Use the grammar validator with statement line offset for accurate error reporting
+    const validationResult = this.grammarValidator.validate(
+      currentStatement.tokens, 
+      currentStatement.lineStart
+    );
     const isValid = validationResult.isValid;
     
-    console.log('🔥 VALIDATION RESULT:', 'Valid:', isValid, 'InvalidTokens:', Array.from(validationResult.invalidTokens));
+    // console.log('🔥 VALIDATION RESULT:', {
+    //   valid: isValid, 
+    //   invalidTokens: Array.from(validationResult.invalidTokens),
+    //   errorCount: validationResult.errorDetails?.length || 0
+    // });
+    
+    // Log detailed error information for debugging and future UI implementation
+    if (validationResult.errorDetails && validationResult.errorDetails.length > 0) {
+      //console.log('🔥 DETAILED ERRORS:');
+      validationResult.errorDetails.forEach((error, index) => {
+        // console.log(`  ${index + 1}. [${error.code}] ${error.message}`);
+        // console.log(`     Location: Line ${error.line + 1}, Column ${error.column + 1}`);
+        // console.log(`     Source: "${error.source}"`);
+        // if (error.suggestion) {
+        //   console.log(`     Suggestion: ${error.suggestion}`);
+        // }
+        // console.log('');
+      });
+    }
     
     // Mark statement as clean with validation result
     this.codeCache.statements = this.statementParser.markStatementClean(
@@ -336,6 +368,10 @@ export class CodeEditor extends LitElement {
       currentStatement,
       isValid
     );
+    
+    // Store validation results for hover error display
+    const statementKey = `${currentStatement.lineStart}-${currentStatement.lineEnd}`;
+    this.validationResults.set(statementKey, validationResult);
     
     // Re-render to show validation results
     this.renderEditor();
@@ -455,7 +491,54 @@ export class CodeEditor extends LitElement {
       }
       
       this.inputProcessor.processMouseMove(event, this.documentModel);
+      
+      // Check for hover over invalid tokens/statements for error popover
+      this.handleErrorHoverAlternative(event);
+      
       this.renderEditor();
+    });
+
+    // Listen for popover hover events
+    this.addEventListener('popover-mouse-enter', () => {
+     // console.log('🖱️ Mouse entered popover');
+      this.isMouseOverPopover = true;
+      
+      // Cancel any pending hide timeout when mouse enters popover
+      if (this.popoverHideTimeout) {
+        clearTimeout(this.popoverHideTimeout);
+        this.popoverHideTimeout = null;
+        console.log('✅ Cancelled popover hide timeout due to mouse enter');
+      }
+    });
+
+    this.addEventListener('popover-mouse-leave', () => {
+     // console.log('🖱️ Mouse left popover');
+      this.isMouseOverPopover = false;
+      
+      // Hide popover when mouse leaves it (with small delay)
+      this.hideErrorPopover();
+    });
+
+    // Listen for popover dismissed by escape key
+    this.addEventListener('popover-dismissed', () => {
+      console.log('⌨️ Popover dismissed by escape key');
+      this.isPopoverVisible = false;
+      this.isMouseOverPopover = false;
+      this.currentHoveredToken = null;
+      
+      // Clear any pending hide timeout
+      if (this.popoverHideTimeout) {
+        clearTimeout(this.popoverHideTimeout);
+        this.popoverHideTimeout = null;
+      }
+    });
+
+    // Handle mouse leaving the entire editor area
+    this.canvas.addEventListener('mouseleave', () => {
+        this.canvas.style.cursor = 'text';
+      // Hide popover when mouse leaves the editor completely
+    
+      this.hideErrorPopoverImmediate();
     });
     
     this.inputCapture.onMouseUp((event) => {
@@ -468,9 +551,9 @@ export class CodeEditor extends LitElement {
     });
     
     // Add mouse leave handler to reset cursor
-    this.canvas.addEventListener('mouseleave', () => {
-      this.canvas.style.cursor = 'text';
-    });
+    // this.canvas.addEventListener('mouseleave', () => {
+     
+    // });
     
     // Handle mouse wheel for scrolling
     this.inputCapture.onWheel((deltaX, deltaY) => {
@@ -649,8 +732,495 @@ export class CodeEditor extends LitElement {
     this.coordinateSystem.setScrollOffset(this.scrollOffset);
     this.requestUpdate();
   }
-  
+
+  /**
+   * Handle mouse hover events for showing error popovers on invalid tokens/statements
+   */
+  private handleErrorHover(event: MouseEventData): void {
+    const canvasRect = this.canvas?.getBoundingClientRect();
+    if (!canvasRect) {
+      return;
+    }
+
+    // Convert mouse coordinates to canvas coordinates
+    const canvasX = event.coordinates.x - canvasRect.left;
+    const canvasY = event.coordinates.y - canvasRect.top;
+
+    // Convert canvas coordinates to document position
+    const position = this.coordinateSystem.screenToPosition({ x: canvasX, y: canvasY });
     
+    // console.log('🖱️ HOVER DEBUG:', {
+    //   mouseScreen: { x: event.coordinates.x, y: event.coordinates.y },
+    //   canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
+    //   canvasCoords: { x: canvasX, y: canvasY },
+    //   documentPosition: position,
+    //   scrollOffset: this.scrollOffset
+    // });
+    
+    // Find the statement at this position
+    const statement = this.statementParser.findStatementAtPosition(
+      this.codeCache.statements,
+      position.line,
+      position.column
+    );
+
+    // console.log('📋 STATEMENT DEBUG:', {
+    //   foundStatement: !!statement,
+    //   statement: statement ? {
+    //     code: statement.code,
+    //     lineStart: statement.lineStart,
+    //     lineEnd: statement.lineEnd,
+    //     isValid: statement.isValid,
+    //     isDirty: statement.isDirty
+    //   } : null,
+    //   allStatements: this.codeCache.statements.map(s => ({
+    //     code: s.code.trim(),
+    //     lines: `${s.lineStart}-${s.lineEnd}`,
+    //     isValid: s.isValid,
+    //     isDirty: s.isDirty
+    //   }))
+    // });
+
+    // Check if we're over a different token than before
+    const currentTokenKey = statement ? `${position.line}-${position.column}-${statement.lineStart}-${statement.lineEnd}` : null;
+    const previousTokenKey = this.currentHoveredToken ? `${this.currentHoveredToken.line}-${this.currentHoveredToken.column}-${this.currentHoveredToken.statement.lineStart}-${this.currentHoveredToken.statement.lineEnd}` : null;
+    
+    // If we're over the same token as before, do nothing
+    if (currentTokenKey === previousTokenKey) {
+      return;
+    }
+    
+    // We've moved to a different token (or no token), hide current popover
+    this.hideErrorPopover();
+    
+    // Update current hovered token
+    this.currentHoveredToken = statement ? { line: position.line, column: position.column, statement } : null;
+    
+    // Check if this new token/statement has validation errors
+    if (statement && !statement.isValid && !statement.isDirty) {
+      console.log('✅ Found invalid statement, showing popover');
+      
+      // Get stored validation results for this statement
+      const statementKey = `${statement.lineStart}-${statement.lineEnd}`;
+      const validationResult = this.validationResults.get(statementKey);
+      
+      let errors = [];
+      if (validationResult && validationResult.errorDetails && validationResult.errorDetails.length > 0) {
+        // Use detailed error information from validation
+        errors = validationResult.errorDetails;
+      } else {
+        // Fallback to generic error message
+        errors = [{
+          message: `Invalid SyndrQL statement detected on lines ${statement.lineStart + 1}-${statement.lineEnd + 1}`,
+          code: 'INVALID_STATEMENT'
+        }];
+      }
+      
+      // Calculate exact token position for popover placement
+      const tokenScreenPos = this.calculateTokenScreenPosition(position);
+      console.log('📍 TOKEN POSITION:', { 
+        calculatedPosition: tokenScreenPos,
+        originalPosition: position 
+      });
+      
+      this.showErrorPopover(tokenScreenPos.x, tokenScreenPos.y, errors);
+    } else {
+      console.log('❌ No invalid statement or statement is valid/dirty');
+    }
+  }
+
+  /**
+   * Alternative hover detection using direct line calculation
+   */
+  private handleErrorHoverAlternative(event: MouseEventData): void {
+    // event.coordinates is already relative to the canvas (from InputCapture.createMouseEventData)
+    const mouseCanvas = event.coordinates;
+    
+    // console.log('� MOUSE CANVAS COORDINATES:', {
+    //   mouseCanvas,
+    //   note: 'These coordinates are already relative to canvas from InputCapture'
+    // });
+
+    // Early exit for negative coordinates (indicates positioning issues)
+    if (mouseCanvas.x < 0 || mouseCanvas.y < 0) {
+      console.log('❌ Negative coordinates detected, skipping hover detection');
+      return;
+    }
+    
+    // Get font metrics
+    const fontMetrics = this.coordinateSystem.getFontMetrics();
+    
+    // Calculate which line we're hovering over using direct math
+    // Account for scroll offset
+    const scrollAdjustedY = mouseCanvas.y + this.scrollOffset.y;
+    const lineIndex = Math.floor(scrollAdjustedY / fontMetrics.lineHeight);
+    
+    // Calculate column (rough estimate)
+    const scrollAdjustedX = mouseCanvas.x + this.scrollOffset.x;
+    const columnIndex = Math.floor(scrollAdjustedX / fontMetrics.characterWidth);
+    
+    // console.log('🔄 ALTERNATIVE HOVER DEBUG:', {
+    //   mouseCanvas,
+    //   scrollOffset: this.scrollOffset,
+    //   scrollAdjusted: { x: scrollAdjustedX, y: scrollAdjustedY },
+    //   calculated: { line: lineIndex, column: columnIndex },
+    //   fontMetrics: { lineHeight: fontMetrics.lineHeight, charWidth: fontMetrics.characterWidth }
+    // });
+    
+    // Find statement at this calculated position
+    const statement = this.statementParser.findStatementAtPosition(
+      this.codeCache.statements,
+      lineIndex,
+      columnIndex
+    );
+    
+    // console.log('📋 ALT STATEMENT DEBUG:', {
+    //   foundStatement: !!statement,
+    //   calculatedLine: lineIndex,
+    //   calculatedColumn: columnIndex,
+    //   statement: statement ? {
+    //     code: statement.code.trim(),
+    //     lines: `${statement.lineStart}-${statement.lineEnd}`,
+    //     isValid: statement.isValid
+    //   } : null
+    // });
+    
+    // Rest of hover logic...
+    if (statement && !statement.isValid && !statement.isDirty) {
+      //console.log('✅ ALT: Found invalid statement');
+      
+      // Find the actual token being hovered over
+      const hoveredTokenPosition = this.findTokenAtPosition(lineIndex, columnIndex);
+      
+      if (hoveredTokenPosition) {
+        // Create a token key for tracking purposes
+        const currentTokenKey = `${hoveredTokenPosition.line}-${hoveredTokenPosition.startColumn}-${statement.lineStart}-${statement.lineEnd}`;
+        const previousTokenKey = this.currentHoveredToken ? `${this.currentHoveredToken.line}-${this.currentHoveredToken.column}-${this.currentHoveredToken.statement.lineStart}-${this.currentHoveredToken.statement.lineEnd}` : null;
+        
+        // console.log('🔄 TOKEN TRACKING:', {
+        //   currentKey: currentTokenKey,
+        //   previousKey: previousTokenKey,
+        //   isNewToken: currentTokenKey !== previousTokenKey
+        // });
+        
+        // If we're over the same token as before, do nothing
+        if (currentTokenKey === previousTokenKey) {
+          return;
+        }
+        
+        // Update current hovered token
+        this.currentHoveredToken = { 
+          line: hoveredTokenPosition.line, 
+          column: hoveredTokenPosition.startColumn, 
+          statement 
+        };
+        
+        // Calculate screen position for the START of the hovered token
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const tokenStartX = canvasRect.left + (hoveredTokenPosition.startColumn * fontMetrics.characterWidth) - this.scrollOffset.x;
+        const tokenStartY = canvasRect.top + (hoveredTokenPosition.line * fontMetrics.lineHeight) - this.scrollOffset.y;
+        
+        // console.log('🎯 TOKEN POSITIONING:', {
+        //   hoveredToken: hoveredTokenPosition,
+        //   screenPosition: { x: tokenStartX, y: tokenStartY },
+        //   calculation: `canvas(${canvasRect.left}) + startCol(${hoveredTokenPosition.startColumn}) * charWidth(${fontMetrics.characterWidth}) - scrollX(${this.scrollOffset.x})`
+        // });
+        
+        const errors = [{
+          message: `Invalid SyndrQL statement detected on lines ${statement.lineStart + 1}-${statement.lineEnd + 1}`,
+          code: 'INVALID_STATEMENT'
+        }];
+        
+        this.showErrorPopover(tokenStartX, tokenStartY, errors);
+      } else {
+       // console.log('❌ Could not find token at position for popover positioning');
+        this.currentHoveredToken = null;
+       
+        //this.hideErrorPopover();
+        
+      }
+    } else {
+      // Not hovering over an invalid token, but don't hide immediately if popover is visible
+      // This allows user to move mouse from token to popover without it disappearing
+      if (this.isPopoverVisible && this.currentHoveredToken) {
+        console.log('⏸️ Not over token but popover is visible, giving time to reach popover');
+        // Only start hide timer if we're not already over the popover
+        if (!this.isMouseOverPopover) {
+          this.hideErrorPopover();
+        }
+      } else {
+        
+        // No popover visible or no previous token, safe to clear state
+       // console.log('❌ Not hovering over invalid token, hiding popover');
+        this.currentHoveredToken = null;
+        this.hideErrorPopover();
+      }
+    }
+  }
+
+  /**
+   * Find the token at a specific line and column position
+   */
+  private findTokenAtPosition(lineIndex: number, columnIndex: number): { line: number, startColumn: number, endColumn: number, text: string } | null {
+    // Get the content of the specified line
+    const lines = this.documentModel.getLines();
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+      return null;
+    }
+    
+    const lineContent = lines[lineIndex];
+    if (columnIndex < 0 || columnIndex >= lineContent.length) {
+      return null;
+    }
+    
+    // Simple tokenization - find word boundaries
+    // This handles basic tokens separated by spaces, punctuation, etc.
+    let startColumn = columnIndex;
+    let endColumn = columnIndex;
+    
+    // Find start of token (move backwards until we hit a delimiter)
+    while (startColumn > 0 && this.isTokenCharacter(lineContent[startColumn - 1])) {
+      startColumn--;
+    }
+    
+    // Find end of token (move forwards until we hit a delimiter)
+    while (endColumn < lineContent.length && this.isTokenCharacter(lineContent[endColumn])) {
+      endColumn++;
+    }
+    
+    // If we didn't find any token characters, try to find the nearest token
+    if (startColumn === endColumn) {
+      // Check if we're hovering over whitespace - find the nearest token
+      // Look forward first
+      let nextTokenStart = columnIndex;
+      while (nextTokenStart < lineContent.length && !this.isTokenCharacter(lineContent[nextTokenStart])) {
+        nextTokenStart++;
+      }
+      
+      if (nextTokenStart < lineContent.length) {
+        startColumn = nextTokenStart;
+        endColumn = nextTokenStart;
+        while (endColumn < lineContent.length && this.isTokenCharacter(lineContent[endColumn])) {
+          endColumn++;
+        }
+      } else {
+        return null; // No token found
+      }
+    }
+    
+    const tokenText = lineContent.substring(startColumn, endColumn);
+    
+    // console.log('🔍 TOKEN DETECTION:', {
+    //   lineIndex,
+    //   columnIndex,
+    //   lineContent: `"${lineContent}"`,
+    //   foundToken: {
+    //     text: `"${tokenText}"`,
+    //     start: startColumn,
+    //     end: endColumn
+    //   }
+    // });
+    
+    return {
+      line: lineIndex,
+      startColumn,
+      endColumn,
+      text: tokenText
+    };
+  }
+
+  /**
+   * Check if a character is part of a token (alphanumeric, underscore, etc.)
+   */
+  private isTokenCharacter(char: string): boolean {
+    return /[a-zA-Z0-9_]/.test(char);
+  }
+
+  private calculateTokenScreenPosition(position: any): { x: number, y: number } {
+    // Get font metrics for accurate positioning
+    const fontMetrics = this.coordinateSystem.getFontMetrics();
+    
+    console.log('🔧 POSITION CALC DEBUG:', {
+      inputPosition: position,
+      fontMetrics: {
+        lineHeight: fontMetrics.lineHeight,
+        ascent: fontMetrics.ascent,
+        descent: fontMetrics.descent,
+        characterWidth: fontMetrics.characterWidth
+      },
+      scrollOffset: this.scrollOffset
+    });
+    
+    // Convert document position to screen coordinates (this gives us the character position)
+    const screenPos = this.coordinateSystem.positionToScreen({
+      line: position.line,
+      column: position.column
+    });
+    
+    console.log('📐 SCREEN POS DEBUG:', {
+      screenPos,
+      beforeCanvasAdjustment: screenPos
+    });
+    
+    // Get canvas rectangle to convert to absolute screen coordinates
+    const canvasRect = this.canvas?.getBoundingClientRect();
+    if (!canvasRect) {
+      return { x: 0, y: 0 };
+    }
+    
+    // Calculate the exact top-left pixel of the token/character
+    // screenPos gives us the baseline position, we need to adjust to top-left
+    const tokenTopLeftX = canvasRect.left + screenPos.x;
+    const tokenTopLeftY = canvasRect.top + screenPos.y - fontMetrics.ascent; // Move up from baseline to top
+    
+    console.log('📍 FINAL POSITION DEBUG:', {
+      canvasRect: { left: canvasRect.left, top: canvasRect.top },
+      tokenTopLeft: { x: tokenTopLeftX, y: tokenTopLeftY },
+      ascentAdjustment: fontMetrics.ascent
+    });
+    
+    return {
+      x: tokenTopLeftX,
+      y: tokenTopLeftY
+    };
+  }
+
+  /**
+   * Show error popover at specified screen coordinates
+   */
+  private showErrorPopover(screenX: number, screenY: number, errors: any[]): void {
+    // Clear any existing timeout
+    if (this.popoverHideTimeout) {
+      clearTimeout(this.popoverHideTimeout);
+      this.popoverHideTimeout = null;
+    }
+
+    // Get the error popup component (CodeEditor uses direct rendering, no shadow DOM)
+    const errorPopup = this.querySelector('error-pop-up') as any;
+    
+    if (errorPopup) {
+      // Format errors for display
+      const errorMessages = errors.map(error => error.message || error.description || 'Unknown error').join('\n');
+      errorPopup.show(screenX, screenY, errorMessages);
+      this.isPopoverVisible = true;
+    }
+  }
+
+  /**
+   * Test method to verify error popover functionality
+   * This method can be called from the browser console for testing
+   */
+  public testErrorPopover(): void {
+    console.log('🧪 Testing error popover functionality...');
+    
+    // Find an invalid statement for testing
+    const invalidStatement = this.codeCache.statements.find(s => !s.isValid && !s.isDirty);
+    
+    if (invalidStatement) {
+      console.log('🔍 Found invalid statement:', invalidStatement);
+      
+      // Get stored validation results
+      const statementKey = `${invalidStatement.lineStart}-${invalidStatement.lineEnd}`;
+      const validationResult = this.validationResults.get(statementKey);
+      
+      let mockErrors = [];
+      if (validationResult && validationResult.errorDetails && validationResult.errorDetails.length > 0) {
+        mockErrors = validationResult.errorDetails;
+        console.log('📋 Using stored validation errors:', mockErrors);
+      } else {
+        // Create mock error data as fallback
+        mockErrors = [{
+          message: `Invalid SyndrQL statement on lines ${invalidStatement.lineStart + 1}-${invalidStatement.lineEnd + 1}`,
+          code: 'INCOMPLETE_STATEMENT',
+          line: invalidStatement.lineStart,
+          column: 0
+        }];
+        console.log('📋 Using fallback mock errors:', mockErrors);
+      }
+      
+      // Calculate position for first character of invalid statement
+      const tokenPosition = this.calculateTokenScreenPosition({
+        line: invalidStatement.lineStart,
+        column: 0
+      });
+      
+      // Show popover at calculated token position
+      this.showErrorPopover(tokenPosition.x, tokenPosition.y, mockErrors);
+      
+      console.log('✅ Error popover displayed at token position:', tokenPosition);
+      
+      // Hide after 3 seconds for testing
+      setTimeout(() => {
+        this.hideErrorPopoverImmediate();
+        console.log('✅ Error popover hidden');
+      }, 3000);
+    } else {
+      console.log('⚠️ No invalid statements found. Try typing an incomplete statement like "SELECT" and then call this method.');
+      
+      // Show available statements for debugging
+    //   console.log('Available statements:', this.codeCache.statements.map(s => ({
+    //     code: s.code,
+    //     isValid: s.isValid,
+    //     isDirty: s.isDirty,
+    //     lines: `${s.lineStart}-${s.lineEnd}`
+    //   })));
+    }
+  }
+
+  /**
+   * Hide error popover with smart logic
+   */
+  private hideErrorPopover(): void {
+    // Don't try to hide if popover is already hidden
+    if (!this.isPopoverVisible) {
+      //console.log('✋ Popover already hidden, skipping hide');
+      return;
+    }
+    
+    // Use a small delay to prevent flickering when moving between invalid tokens
+    if (this.popoverHideTimeout) {
+      clearTimeout(this.popoverHideTimeout);
+    }
+    
+    //console.log('🔄 hideErrorPopover called, isMouseOverPopover:', this.isMouseOverPopover);
+    
+    this.popoverHideTimeout = window.setTimeout(() => {
+     // console.log('🕰️ Hide timeout fired, isMouseOverPopover:', this.isMouseOverPopover);
+      // Only hide if mouse is not over the popover
+      if (!this.isMouseOverPopover) {
+     //   console.log('🫥 Hiding popover - mouse not over popover');
+        const errorPopup = this.querySelector('error-pop-up') as any;
+        if (errorPopup) {
+          errorPopup.hide();
+        }
+        this.isPopoverVisible = false;
+        this.currentHoveredToken = null;
+      } else {
+        console.log('⏸️ NOT hiding popover - mouse is over popover');
+      }
+      this.popoverHideTimeout = null;
+    }, 200); // Increased delay to give more time for mouse to reach popover
+  }
+
+  /**
+   * Immediately hide the popover without delay (used when definitely leaving token area)
+   */
+  private hideErrorPopoverImmediate(): void {
+    if (this.popoverHideTimeout) {
+      clearTimeout(this.popoverHideTimeout);
+      this.popoverHideTimeout = null;
+    }
+    
+    const errorPopup = this.querySelector('error-pop-up') as any;
+    if (errorPopup) {
+      errorPopup.hide();
+    }
+    this.isPopoverVisible = false;
+    this.isMouseOverPopover = false; // Reset popover hover state
+    this.currentHoveredToken = null;
+  }
+    
+      
   
   /**
    * Schedules a smooth scroll update using requestAnimationFrame.
@@ -1419,6 +1989,9 @@ export class CodeEditor extends LitElement {
             Initializing editor...
           </div>
         ` : ''}
+        
+        <!-- Error popover for invalid tokens/statements -->
+        <error-pop-up></error-pop-up>
       </div>
       </droppable-component>
     `;

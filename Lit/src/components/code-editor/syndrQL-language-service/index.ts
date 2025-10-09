@@ -377,6 +377,8 @@ export * from './types.js';
 export * from './keywords.js';
 export * from './tokenizer.js';
 export * from './renderer.js';
+export * from './error-codes.js';
+export * from './error-analyzer.js';
 
 // TODO: Add incremental tokenization for large documents
 // TODO: Add language server protocol support

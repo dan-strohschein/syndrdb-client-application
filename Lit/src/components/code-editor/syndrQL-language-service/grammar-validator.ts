@@ -5,15 +5,19 @@
 
 import { SyntaxToken, TokenType } from './types.js';
 import { ALL_SYNDRQL_KEYWORDS } from '../../query-editor/syndrQL-language-service/syndrql-keyword-identifier.js';
+import { ErrorDetail } from './error-codes.js';
+import { SyndrQLErrorAnalyzer } from './error-analyzer.js';
 
 /**
  * Grammar validation result for a token sequence
+ * Enhanced to include detailed error information following VSCode error patterns
  */
 export interface GrammarValidationResult {
   isValid: boolean;
   invalidTokens: Set<number>; // Indices of invalid tokens
   expectedTokens?: string[];   // What was expected at error point
-  errorMessage?: string;
+  errorMessage?: string;       // Legacy error message
+  errorDetails?: ErrorDetail[]; // Detailed error information for user feedback
 }
 
 /**
@@ -530,19 +534,46 @@ class SyndrQLGrammarState {
 
 /**
  * Main grammar validator class
+ * Enhanced with comprehensive error analysis for detailed user feedback
  */
 export class SyndrQLGrammarValidator {
   private grammarState: SyndrQLGrammarState;
+  private errorAnalyzer: SyndrQLErrorAnalyzer;
 
   constructor() {
     this.grammarState = new SyndrQLGrammarState();
+    this.errorAnalyzer = new SyndrQLErrorAnalyzer();
   }
 
   /**
    * Validate a sequence of tokens for grammatical correctness
+   * Enhanced to include comprehensive error analysis
+   * @param tokens - Tokens to validate
+   * @param statementLineOffset - Line offset for error reporting (0-based)
+   * @returns Detailed validation result with error information
    */
-  validate(tokens: SyntaxToken[]): GrammarValidationResult {
-    return this.grammarState.validateTokens(tokens);
+  validate(tokens: SyntaxToken[], statementLineOffset: number = 0): GrammarValidationResult {
+    // Get basic grammar validation result
+    const baseResult = this.grammarState.validateTokens(tokens);
+    
+    // Analyze errors if validation failed
+    let errorDetails: ErrorDetail[] = [];
+    if (!baseResult.isValid) {
+      // Analyze grammar-level errors
+      const grammarErrors = this.errorAnalyzer.analyzeGrammarErrors(tokens, baseResult, statementLineOffset);
+      
+      // Analyze token-level errors
+      const tokenErrors = this.errorAnalyzer.analyzeTokenErrors(tokens, statementLineOffset);
+      
+      // Combine all errors
+      errorDetails = [...grammarErrors, ...tokenErrors];
+    }
+    
+    // Return enhanced result with error details
+    return {
+      ...baseResult,
+      errorDetails
+    };
   }
 
   /**
@@ -552,5 +583,25 @@ export class SyndrQLGrammarValidator {
     const result = this.validate([...context, token]);
     const tokenIndex = context.length;
     return !result.invalidTokens.has(tokenIndex);
+  }
+  
+  /**
+   * Get detailed error analysis for a validation result
+   * @param tokens - The tokens that were validated
+   * @param validationResult - The validation result to analyze
+   * @param statementLineOffset - Line offset for error reporting
+   * @returns Array of detailed error information
+   */
+  getDetailedErrors(
+    tokens: SyntaxToken[], 
+    validationResult: GrammarValidationResult,
+    statementLineOffset: number = 0
+  ): ErrorDetail[] {
+    if (validationResult.errorDetails) {
+      return validationResult.errorDetails;
+    }
+    
+    // Fallback analysis if errorDetails not available
+    return this.errorAnalyzer.analyzeGrammarErrors(tokens, validationResult, statementLineOffset);
   }
 }

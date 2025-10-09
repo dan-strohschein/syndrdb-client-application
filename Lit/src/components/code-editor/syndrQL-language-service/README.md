@@ -73,12 +73,7 @@ See `INTEGRATION.md` for detailed integration steps with the code editor.
 
 ## Testing
 
-Run the example tests:
-
-```typescript
-import { runAllTests } from './example';
-runAllTests();
-```
+tbd
 
 ## Architecture Benefits
 
