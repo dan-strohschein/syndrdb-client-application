@@ -15,7 +15,7 @@ export class UserManagementRenderer {
     databaseName: string,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void,
     onUsersClick: (connection: Connection, usersNodeId: string) => Promise<void>
   ): TemplateResult {
     const usersNodeId = generateUsersNodeId(connection.id, databaseName);
@@ -39,7 +39,7 @@ export class UserManagementRenderer {
              }
              onUsersClick(connection, usersNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, usersNodeId, 'Users', 'users')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, usersNodeId, 'Users', 'users', null)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -70,13 +70,13 @@ export class UserManagementRenderer {
   static renderUserNode(
     connection: Connection,
     userName: string,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void
   ): TemplateResult {
     const userNodeId = generateUserNodeId(connection.id, userName);
 
     return html`
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, userNodeId, userName, 'user')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, userNodeId, userName, 'user', userName)}>
         <span class="mr-2 w-4 text-center"></span>
         <span class="mr-2"><i class="fa-solid fa-user"></i></span>
         <span>${userName}</span>

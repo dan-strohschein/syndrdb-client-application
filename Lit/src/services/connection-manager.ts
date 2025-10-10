@@ -1,4 +1,5 @@
 import { SyndrDBDriver, ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
+import { Bundle } from '../types/bundle';
 import { connectionPool, PooledConnection } from './connection-pool';
 
 export interface BundleDetails {
@@ -31,17 +32,40 @@ export interface Connection {
   lastError?: string;
   databases?: string[];
   users?: string[];
-  databaseBundles?: Map<string, string[]>; // Map of database name to its bundles
+  databaseBundles?: Map<string, Bundle[]>; // Map of database name to its bundles
   bundleDetails?: Map<string, BundleDetails>; // Map of bundle name to its details
   currentDatabase?: string; // Track the current database context
+  
 }
 
 export class ConnectionManager {
   private connections: Map<string, Connection> = new Map();
   private activeConnectionId: string | null = null;
   private eventListeners: Map<string, Function[]> = new Map();
+  private static instance: ConnectionManager;
 
-  constructor() {}
+  constructor() {
+    // Initialize connection manager
+    this.connections = new Map();
+    this.activeConnectionId = null;
+    this.eventListeners = new Map();
+    ConnectionManager.instance = this;
+  }
+
+  static getNewInstance(): ConnectionManager {
+    return new this();
+  }
+
+  static getInstance(): ConnectionManager {
+    if (!this.instance) {
+      this.instance = new ConnectionManager();
+    }
+    return this.instance;
+  }
+
+  getAllConnections(): Map<string, Connection> {
+    return this.connections;
+  }
 
   /**
    * Add event listener for connection events
@@ -61,6 +85,20 @@ export class ConnectionManager {
     if (listeners) {
       listeners.forEach(callback => callback(data));
     }
+  }
+
+  /**
+   * Notify listeners that connections have changed (bundles loaded, etc.)
+   */
+  private notifyConnectionsChanged(): void {
+    this.emit('connectionsChanged', this.connections);
+  }
+
+  /**
+   * Subscribe to connection changes (for components that need to re-render)
+   */
+  public onConnectionsChanged(callback: (connections: Map<string, Connection>) => void): void {
+    this.addEventListener('connectionsChanged', callback);
   }
 
   /**
@@ -262,60 +300,60 @@ export class ConnectionManager {
   /**
    * Load bundles for a specific database
    */
-  async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<string[]> {
-    const connection = this.connections.get(connectionId);
-    if (!connection || connection.status !== 'connected') {
-      throw new Error('Connection is not available');
-    }
+  // async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<string[]> {
+  //   const connection = this.connections.get(connectionId);
+  //   if (!connection || connection.status !== 'connected') {
+  //     throw new Error('Connection is not available');
+  //   }
 
-    try {
-      // Set database context first
-      await this.setDatabaseContext(connectionId, databaseName);
+  //   try {
+  //     // Set database context first
+  //     await this.setDatabaseContext(connectionId, databaseName);
       
-      const bundlesCommand = `SHOW BUNDLES;`; // No need for "FOR database" when context is set
-      console.log('📦 Loading bundles for database:', databaseName, 'with command:', bundlesCommand);
+  //     const bundlesCommand = `SHOW BUNDLES;`; // No need for "FOR database" when context is set
+  //     console.log('📦 Loading bundles for database:', databaseName, 'with command:', bundlesCommand);
       
-      const bundlesResult = await connection.driver.executeQuery(bundlesCommand);
-      console.log('📦 SHOW BUNDLES result:', bundlesResult);
+  //     const bundlesResult = await connection.driver.executeQuery(bundlesCommand);
+  //     console.log('📦 SHOW BUNDLES result:', bundlesResult);
       
-      let bundles: string[] = [];
+  //     let bundles: string[] = [];
       
-      if (bundlesResult.success && bundlesResult.data) {
+  //     if (bundlesResult.success && bundlesResult.data) {
 
-        if (bundlesResult.ResultCount && bundlesResult.ResultCount > 0 && bundlesResult.data != null) {
-          if (Array.isArray(bundlesResult.data)) {
-            bundles = bundlesResult.data.map((bundle: any) => {
-              // The new structure has BundleMetadata containing the bundle info
-              if (bundle.BundleMetadata && bundle.BundleMetadata.Name) {
-                return bundle.BundleMetadata.Name;
-              }
-              // Fallback to old structure if BundleMetadata doesn't exist
-              return bundle.Name || String(bundle);
-            });
-          }
-        } else {
-          bundles = [];
-        }
-      } else {
-        console.log('❌ No bundle data received for database:', databaseName);
-      }
+  //       if (bundlesResult.ResultCount && bundlesResult.ResultCount > 0 && bundlesResult.data != null) {
+  //         if (Array.isArray(bundlesResult.data)) {
+  //           bundles = bundlesResult.data.map((bundle: any) => {
+  //             // The new structure has BundleMetadata containing the bundle info
+  //             if (bundle.BundleMetadata && bundle.BundleMetadata.Name) {
+  //               return bundle.BundleMetadata.Name;
+  //             }
+  //             // Fallback to old structure if BundleMetadata doesn't exist
+  //             return bundle.Name || String(bundle);
+  //           });
+  //         }
+  //       } else {
+  //         bundles = [];
+  //       }
+  //     } else {
+  //       console.log('❌ No bundle data received for database:', databaseName);
+  //     }
       
-      // Store the bundles for this database
-      if (!connection.databaseBundles) {
-        connection.databaseBundles = new Map();
-      }
-      connection.databaseBundles.set(databaseName, bundles);
+  //     // Store the bundles for this database
+  //     if (!connection.databaseBundles) {
+  //       connection.databaseBundles = new Map();
+  //     }
+  //     connection.databaseBundles.set(databaseName, bundles);
       
-      console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
+  //     console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
       
-      this.emit('connectionStatusChanged', connection);
-      return bundles;
+  //     this.emit('connectionStatusChanged', connection);
+  //     return bundles;
       
-    } catch (error) {
-      console.error('Failed to fetch bundles for database:', databaseName, error);
-      return [];
-    }
-  }
+  //   } catch (error) {
+  //     console.error('Failed to fetch bundles for database:', databaseName, error);
+  //     return [];
+  //   }
+  // }
 
   /**
    * Set the current database context for a connection
@@ -379,14 +417,14 @@ export class ConnectionManager {
   /**
    * Get bundles for a specific database (from cache)
    */
-  getBundlesForDatabase(connectionId: string, databaseName: string): string[] {
-    const connection = this.connections.get(connectionId);
-    if (!connection || !connection.databaseBundles) {
-      return [];
-    }
+  // getBundlesForDatabase(connectionId: string, databaseName: string): string[] {
+  //   const connection = this.connections.get(connectionId);
+  //   if (!connection || !connection.databaseBundles) {
+  //     return [];
+  //   }
     
-    return connection.databaseBundles.get(databaseName) || [];
-  }
+  //   return connection.databaseBundles.get(databaseName) || [];
+  // }
 
   /**
    * Test a connection without adding it to the manager
@@ -445,6 +483,34 @@ export class ConnectionManager {
   getConnections(): Connection[] {
     return Array.from(this.connections.values());
   }
+
+
+// Add method to store bundles for a specific database
+  async setBundlesForDatabase(connectionId: string, databaseName: string, bundles: Bundle[]): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (connection) {
+      if (!connection.databaseBundles) {
+        connection.databaseBundles = new Map();
+      }
+      connection.databaseBundles.set(databaseName, bundles);
+      
+      // Trigger update to notify components
+      this.notifyConnectionsChanged();
+    }
+  }
+  
+  // Add method to get bundles for a specific database
+  getBundlesForDatabase(connectionId: string, databaseName: string): Bundle[] {
+    const connection = this.connections.get(connectionId);
+    return connection?.databaseBundles?.get(databaseName) || [];
+  }
+  
+  // Add method to check if bundles are loaded for a database
+  hasBundlesForDatabase(connectionId: string, databaseName: string): boolean {
+    const connection = this.connections.get(connectionId);
+    return connection?.databaseBundles?.has(databaseName) || false;
+  }
+
 
   /**
    * Get bundle details for a specific bundle

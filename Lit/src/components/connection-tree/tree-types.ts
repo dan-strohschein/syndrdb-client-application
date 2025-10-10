@@ -9,6 +9,7 @@ export interface ContextMenuState {
   nodeId: string;
   nodeName: string;
   nodeType: string;
+  data?: any;
 }
 
 export type NodeType = 'connection' | 'databases' | 'database' | 'bundles' | 'bundle' | 'fields' | 'field' | 'indexes' | 'index' | 'relationships' | 'relationship' | 'hash-indexes' | 'btree-indexes' | 'users' | 'user';

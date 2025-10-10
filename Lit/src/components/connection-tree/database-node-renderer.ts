@@ -18,8 +18,13 @@ import {
 } from './tree-utils';
 import { TreeDataService } from './tree-data-service';
 import { UserManagementRenderer } from './user-management-renderer';
+import { BundleManager } from '../../services/bundle-manager';
+import { Bundle } from '../../types/bundle';
 
 export class DatabaseNodeRenderer {
+
+  private static bundleManager = new BundleManager();
+
   /**
    * Render the Databases container node and its children
    */
@@ -27,7 +32,7 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onUsersClick: (connection: Connection, usersNodeId: string) => Promise<void>,
@@ -44,7 +49,7 @@ export class DatabaseNodeRenderer {
              onSetActiveConnection(connection.id);
              onToggleNode(databasesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, databasesNodeId, 'Databases', 'databases')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, databasesNodeId, 'Databases', 'databases', null)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -98,7 +103,7 @@ export class DatabaseNodeRenderer {
     databaseName: string,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onUsersClick: (connection: Connection, usersNodeId: string) => Promise<void>,
@@ -106,22 +111,33 @@ export class DatabaseNodeRenderer {
   ): TemplateResult {
     const databaseNodeId = generateDatabaseNodeId(connection.id, databaseName);
     const expanded = isExpanded(databaseNodeId);
-
+    let bundles: Bundle[] = [];
     return html`
       <!-- Individual Database Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
            @click=${async () => {
              onSetActiveConnection(connection.id);
              // Set database context when clicking on a database
+             
              try {
                const { connectionManager } = await import('../../services/connection-manager');
                await connectionManager.setDatabaseContext(connection.id, databaseName);
+              // IF the database node has not been expanded before, load its bundles
+              if (!expanded) {
+                try {
+                  bundles = await this.bundleManager.loadBundlesForDatabase(connection.id, databaseName);
+                  await connectionManager.setBundlesForDatabase(connection.id, databaseName, bundles);
+                } catch (error) {
+                  console.error('Failed to load bundles for database:', databaseName, error);
+                }
+              }
+
              } catch (error) {
                console.error('Failed to set database context:', databaseName, error);
              }
              onToggleNode(databaseNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, databaseNodeId, databaseName, 'database')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, databaseNodeId, databaseName, 'database', databaseName)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -138,6 +154,7 @@ export class DatabaseNodeRenderer {
           ${DatabaseNodeRenderer.renderBundlesNode(
             connection, 
             databaseName, 
+            bundles,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -159,9 +176,10 @@ export class DatabaseNodeRenderer {
   static renderBundlesNode(
     connection: Connection,
     databaseName: string,
+    bundles: Bundle[],
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle | null) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onBundleClick?: (connection: Connection, bundleName: string, bundleNodeId: string) => Promise<void>
@@ -169,8 +187,10 @@ export class DatabaseNodeRenderer {
     const bundlesNodeId = generateBundlesNodeId(connection.id, databaseName);
     const expanded = isExpanded(bundlesNodeId);
     // Get bundles specific to this database
-    const databaseBundles = connection.databaseBundles?.get(databaseName) || [];
-    const bundleCount = databaseBundles.length;
+// Get bundles from connection object instead of local variable
+  const storedBundles = connection.databaseBundles?.get(databaseName) || [];
+  
+    let bundleCount = storedBundles.length;
 
     return html`
       <!-- Bundles Container Node -->
@@ -184,18 +204,11 @@ export class DatabaseNodeRenderer {
              } catch (error) {
                console.error('Failed to set database context:', databaseName, error);
              }
-             // If not expanded, load bundles for this database first
-             if (!expanded) {
-               try {
-                 const { connectionManager } = await import('../../services/connection-manager');
-                 await connectionManager.loadBundlesForDatabase(connection.id, databaseName);
-               } catch (error) {
-                 console.error('Failed to load bundles for database:', databaseName, error);
-               }
-             }
+               
+             
              onToggleNode(bundlesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles',null)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -211,11 +224,12 @@ export class DatabaseNodeRenderer {
       <!-- Bundles Children (when expanded) -->
       ${expanded ? html`
         <div class="ml-6 space-y-1">
-          ${databaseBundles.map((bundleName: string) => 
+          ${storedBundles.map((bundle: Bundle) => 
             DatabaseNodeRenderer.renderIndividualBundleNode(
               connection, 
               databaseName, 
-              bundleName, 
+              bundle.Name, 
+              bundle,
               isExpanded, 
               onToggleNode, 
               onContextMenu,
@@ -236,9 +250,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onBundleClick?: (connection: Connection, bundleName: string, bundleNodeId: string) => Promise<void>
@@ -271,18 +286,18 @@ export class DatabaseNodeRenderer {
                await onBundleClick(connection, bundleName, bundleNodeId);
              }
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundleNodeId, bundleName, 'bundle')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundleNodeId, bundle.Name, 'bundle', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
         <draggable-component class="mr-2 cursor-move" 
-        .getDropDataHandler=${() => bundleName}
-        .dragData=${bundleName}
+        .getDropDataHandler=${() => bundle.Name}
+        .dragData=${bundle.Name}
         title="Drag to create a query">
           <span class="mr-2">
             <i class="${getNodeIcon('bundle')}"></i>
           </span>
-          <span>${bundleName}</span>
+          <span>${bundle.Name}</span>
         </draggable-component>
       </div>
 
@@ -294,6 +309,7 @@ export class DatabaseNodeRenderer {
             connection, 
             databaseName, 
             bundleName,
+            bundle,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -306,6 +322,7 @@ export class DatabaseNodeRenderer {
             connection, 
             databaseName, 
             bundleName,
+            bundle,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -318,6 +335,7 @@ export class DatabaseNodeRenderer {
             connection, 
             databaseName, 
             bundleName,
+            bundle,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -336,9 +354,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void
   ): TemplateResult {
@@ -361,7 +380,7 @@ export class DatabaseNodeRenderer {
              }
              onToggleNode(fieldsNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, fieldsNodeId, 'Fields', 'fields')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, fieldsNodeId, 'Fields', 'fields', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -379,7 +398,7 @@ export class DatabaseNodeRenderer {
         <div class="ml-6 space-y-1">
           ${bundleDetails.documentStructure.FieldDefinitions.map((field: any) => html`
             <div class="flex  p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-field-' + field.Name, field.Name, 'field')}>
+                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-field-' + field.Name, field.Name, 'field', bundle)}>
               
               <span class="mr-2">
                 <i class="${getNodeIcon('field')}"></i>
@@ -401,9 +420,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void
   ): TemplateResult {
@@ -419,7 +439,7 @@ export class DatabaseNodeRenderer {
              onSetActiveConnection(connection.id);
              onToggleNode(relationshipsNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, relationshipsNodeId, 'Relationships', 'relationships')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, relationshipsNodeId, 'Relationships', 'relationships', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -437,7 +457,7 @@ export class DatabaseNodeRenderer {
         <div class="ml-6 space-y-1">
           ${bundleDetails.relationships.map((rel: any, index: number) => html`
             <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-relationship-' + index, 'Relationship ' + (index + 1), 'relationship')}>
+                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-relationship-' + index, 'Relationship ' + (index + 1), 'relationship', bundle)}>
               
               <span class="mr-2">
                 <i class="${getNodeIcon('relationship')}"></i>
@@ -457,9 +477,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void
   ): TemplateResult {
@@ -482,7 +503,7 @@ export class DatabaseNodeRenderer {
              }
              onToggleNode(indexesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, indexesNodeId, 'Indexes', 'indexes')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, indexesNodeId, 'Indexes', 'indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -503,6 +524,7 @@ export class DatabaseNodeRenderer {
             connection, 
             databaseName, 
             bundleName,
+            bundle,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -515,6 +537,7 @@ export class DatabaseNodeRenderer {
             connection, 
             databaseName, 
             bundleName,
+            bundle,
             isExpanded, 
             onToggleNode, 
             onContextMenu,
@@ -533,9 +556,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void
   ): TemplateResult {
@@ -551,7 +575,7 @@ export class DatabaseNodeRenderer {
              onSetActiveConnection(connection.id);
              onToggleNode(hashIndexesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, hashIndexesNodeId, 'Hash', 'hash-indexes')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, hashIndexesNodeId, 'Hash', 'hash-indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -571,7 +595,7 @@ export class DatabaseNodeRenderer {
             .filter((idx: any) => idx.IndexType === 'hash')
             .map((index: any, i: number) => html`
             <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-hash-index-' + i, 'Hash Index ' + (i + 1), 'index')}>
+                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-hash-index-' + i, 'Hash Index ' + (i + 1), 'index', bundle)}>
              
               <span class="mr-2">
                 <i class="${getNodeIcon('index')}"></i>
@@ -591,9 +615,10 @@ export class DatabaseNodeRenderer {
     connection: Connection,
     databaseName: string,
     bundleName: string,
+    bundle: Bundle,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void
   ): TemplateResult {
@@ -609,7 +634,7 @@ export class DatabaseNodeRenderer {
              onSetActiveConnection(connection.id);
              onToggleNode(btreeIndexesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, btreeIndexesNodeId, 'B-Tree', 'btree-indexes')}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, btreeIndexesNodeId, 'B-Tree', 'btree-indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>
@@ -629,7 +654,7 @@ export class DatabaseNodeRenderer {
             .filter((idx: any) => idx.IndexType === 'b-tree')
             .map((index: any, i: number) => html`
             <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
-                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-btree-index-' + i, 'B-Tree Index ' + (i + 1), 'index')}>
+                 @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-btree-index-' + i, 'B-Tree Index ' + (i + 1), 'index', bundle)}>
              
               <span class="mr-2">
                 <i class="${getNodeIcon('index')}"></i>

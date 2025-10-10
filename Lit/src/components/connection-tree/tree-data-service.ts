@@ -2,8 +2,13 @@
  * Data fetching service for the connection tree
  */
 import { Connection, BundleDetails } from '../../services/connection-manager';
+import { BundleManager }from '../../services/bundle-manager';
+import { Bundle } from '../../types/bundle';
 
 export class TreeDataService {
+
+  private static bundleManager = new BundleManager();
+
   /**
    * Fetch bundle details for a specific bundle
    */
@@ -65,10 +70,10 @@ export class TreeDataService {
   /**
    * Load bundles for a specific database
    */
-  static async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<string[]> {
+  static async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<Bundle[]> {
     try {
-      const { connectionManager } = await import('../../services/connection-manager');
-      return await connectionManager.loadBundlesForDatabase(connectionId, databaseName);
+      // TODO I'm not 100% sure about this change
+      return await this.bundleManager.loadBundlesForDatabase(connectionId, databaseName);
     } catch (error) {
       console.error('Error loading bundles for database:', error);
       throw error;

@@ -1,4 +1,4 @@
-import { html, css, LitElement } from 'lit';
+import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 @customElement('field-definition-editor')
@@ -7,27 +7,27 @@ export class FieldDefinitionEditor extends LitElement {
     @property({ type: Object })
     field: {
         id?: string;
-        name: string;
-        type: string;
-        isRequired: boolean;
-        isUnique: boolean;
-        defaultValue?: any;
+        Name: string;
+        Type: string;
+        IsRequired: boolean;
+        IsUnique: boolean;
+        DefaultValue?: any;
     } | null = null;
 
     @state()
     private formData: {
         id?: string;
-        name: string;
-        type: string;
-        isRequired: boolean;
-        isUnique: boolean;
-        defaultValue?: any;
+        Name: string;
+        Type: string;
+        IsRequired: boolean;
+        IsUnique: boolean;
+        DefaultValue?: any;
     } = {
-        name: '',
-        type: 'STRING',
-        isRequired: false,
-        isUnique: false,
-        defaultValue: '',
+        Name: '',
+        Type: 'STRING',
+        IsRequired: false,
+        IsUnique: false,
+        DefaultValue: '',
     };
 
     @state()
@@ -44,18 +44,18 @@ export class FieldDefinitionEditor extends LitElement {
     /**
      * Initialize form data when field property changes
      */
-    updated(changedProperties: Map<string, any>) {
-        super.updated(changedProperties);
-        
-        if (changedProperties.has('field') && this.field) {
-            // Initialize form data from field
+     protected willUpdate(changedProperties: PropertyValues): void {
+         super.willUpdate(changedProperties);
+
+         if (changedProperties.has('field') && this.field) {
+             // Initialize form data from field
             this.formData = {
                 id: this.field.id,
-                name: this.field.name || '',
-                type: this.field.type || 'STRING',
-                isRequired: this.field.isRequired || false,
-                isUnique: this.field.isUnique || false,
-                defaultValue: this.field.defaultValue || '',
+                Name: this.field.Name || '',
+                Type: this.field.Type || 'STRING',
+                IsRequired: this.field.IsRequired || false,
+                IsUnique: this.field.IsUnique || false,
+                DefaultValue: this.field.DefaultValue || '',
             };
         }
     }
@@ -97,14 +97,14 @@ export class FieldDefinitionEditor extends LitElement {
                     <input 
                         type="text" 
                         class="input input-bordered w-full h-8" 
-                        .value="${this.formData.name}"
+                        .value="${this.formData.Name}"
                         @input="${(e: Event) => this.handleInputChange('name', (e.target as HTMLInputElement).value)}"
                         placeholder="Field name" 
                     />
                 </div>
                 <div class="flex-auto" style="flex-grow: 0.46;">
                     <select class="select select-bordered w-full h-8 text-sm"
-                     .value="${this.formData.type}"
+                     .value="${this.formData.Type}"
                      @change="${(e: Event) => this.handleInputChange('type', (e.target as HTMLSelectElement).value)}"
                     >
                         <option disabled selected>Type</option>
@@ -117,15 +117,15 @@ export class FieldDefinitionEditor extends LitElement {
                 </div>
                 <div class="flex items-center justify-start pl-2 pr-1">
                     <input type="checkbox" class="toggle toggle-sm toggle-info" 
-                    .checked="${this.formData.isRequired}"
-                    @change="${(e: Event) => this.handleInputChange('isRequired', (e.target as HTMLInputElement).checked)}"
+                    .checked="${this.formData.IsRequired}"
+                    @change="${(e: Event) => this.handleInputChange('IsRequired', (e.target as HTMLInputElement).checked)}"
                     />
                     <span class="text-xs ml-1">Required</span>
                 </div>
                 <div class="flex items-center justify-start pl-1 pr-1">
                     <input type="checkbox" class="toggle toggle-sm toggle-info" 
-                    .checked="${this.formData.isUnique}"
-                    @change="${(e: Event) => this.handleInputChange('isUnique', (e.target as HTMLInputElement).checked)}"
+                    .checked="${this.formData.IsUnique}"
+                    @change="${(e: Event) => this.handleInputChange('IsUnique', (e.target as HTMLInputElement).checked)}"
                     />
                     <span class="text-xs ml-1">Unique</span>
                 </div>
@@ -133,8 +133,8 @@ export class FieldDefinitionEditor extends LitElement {
                     <input 
                         type="text" 
                         class="input input-bordered w-full h-8" 
-                        .value="${this.formData.defaultValue}"
-                        @input="${(e: Event) => this.handleInputChange('defaultValue', (e.target as HTMLInputElement).value)}"
+                        .value="${this.formData.DefaultValue}"
+                        @input="${(e: Event) => this.handleInputChange('DefaultValue', (e.target as HTMLInputElement).value)}"
                         placeholder="Default value" 
                     />
                 </div>

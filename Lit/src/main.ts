@@ -81,6 +81,11 @@ export class AppRoot extends LitElement {
       this.handleNewBundleRequest(event as CustomEvent);
     });
 
+    // List for edit-bundle events
+     this.addEventListener('edit-bundle-requested', (event: Event) => {
+      this.handleEditBundleRequest(event as CustomEvent);
+    });
+
     // Listen for database-created events
     this.addEventListener('database-created', (event: Event) => {
       this.handleDatabaseCreated(event as CustomEvent);
@@ -217,15 +222,159 @@ private async handleNewBundleRequest(event: CustomEvent) {
     console.log('🎯 App root received new-bundle-requested event');
     console.log('Event detail:', event.detail);
 
-    // Find the bundle-modal element and open it
+    // Validate event data
+    const { connectionId, databaseName } = event.detail || {};
+    
+    if (!connectionId) {
+      console.error('❌ New bundle request missing connectionId');
+      this.showBundleError('Cannot create bundle: Missing connection information');
+      return;
+    }
+
+    // Find the bundle-modal element
     const bundleModal = this.querySelector('bundle-modal');
-    if (bundleModal) {
-      console.log('📤 Opening bundle modal');
-      (bundleModal as any).open = true;
-      (bundleModal as any).connectionId = event.detail?.connectionId;
-      (bundleModal as any).requestUpdate();
-    } else {
+    if (!bundleModal) {
       console.error('❌ Could not find bundle-modal element');
+      this.showBundleError('System error: Bundle creator not available');
+      return;
+    }
+
+    try {
+      console.log('📤 Opening bundle modal for new bundle creation');
+      (bundleModal as any).open = true;
+      (bundleModal as any).editMode = false; // Ensure we're in create mode
+      (bundleModal as any).connectionId = connectionId;
+      (bundleModal as any).databaseName = databaseName; // Pass database context if available
+      (bundleModal as any).bundleId = null; // Clear any existing bundle ID
+      (bundleModal as any).bundle = null; // Clear any existing bundle data
+      (bundleModal as any).requestUpdate();
+      
+      console.log('✅ Bundle modal opened successfully for new bundle creation');
+      
+    } catch (error) {
+      console.error('❌ Error opening bundle modal for new bundle:', error);
+      this.showBundleError('Failed to open bundle creator');
+    }
+  }
+
+private async handleEditBundleRequest(event: CustomEvent) {
+    console.log('🎯 App root received edit-bundle-requested event');
+    console.log('Event detail:', event.detail);
+
+    // Validate event data
+    const { bundleId, bundle, connectionId, bundleName } = event.detail || {};
+    
+    if (!bundleId && !bundle) {
+      console.error('❌ Edit bundle request missing both bundleId and bundle data');
+      this.showBundleError('Cannot edit bundle: Missing bundle identifier or data');
+      return;
+    }
+
+    if (!connectionId) {
+      console.error('❌ Edit bundle request missing connectionId');
+      this.showBundleError('Cannot edit bundle: Missing connection information');
+      return;
+    }
+
+    // Find the bundle-modal element
+    const bundleModal = this.querySelector('bundle-modal');
+    if (!bundleModal) {
+      console.error('❌ Could not find bundle-modal element');
+      this.showBundleError('System error: Bundle editor not available');
+      return;
+    }
+
+    // Enhanced logging for debugging
+    console.log('� Bundle data validation:', {
+      hasBundleId: !!bundleId,
+      hasBundleObject: !!bundle,
+      hasConnectionId: !!connectionId,
+      bundleName: bundleName || bundle?.name || 'Unknown',
+      bundleObjectKeys: bundle ? Object.keys(bundle) : 'No bundle object'
+    });
+
+    try {
+      // Set modal properties with validation
+      (bundleModal as any).open = true;
+      (bundleModal as any).editMode = true; // Ensure we're in edit mode
+      (bundleModal as any).connectionId = connectionId;
+      (bundleModal as any).bundle = bundle;
+
+      // Pass both bundleId and bundle for redundancy
+      if (bundleId) {
+        (bundleModal as any).bundleId = bundleId;
+        console.log('✅ Bundle ID passed to modal:', bundleId);
+      }
+      
+      if (bundle) {
+        // Validate bundle object has minimum required properties
+        if (this.validateBundleObject(bundle)) {
+          (bundleModal as any).bundle = bundle;
+          console.log('✅ Bundle object validated and passed to modal');
+        } else {
+          console.warn('⚠️ Bundle object validation failed, modal will need to fetch data using bundleId');
+          (bundleModal as any).bundle = null; // Clear invalid bundle
+        }
+      } else if (bundleId) {
+        // No bundle object provided, but we have bundleId - modal should fetch the data
+        console.log('ℹ️ No bundle object provided, modal will fetch data using bundleId:', bundleId);
+        (bundleModal as any).bundle = null;
+      }
+      
+      (bundleModal as any).requestUpdate();
+      console.log('📤 Bundle modal opened successfully for editing');
+      
+    } catch (error) {
+      console.error('❌ Error opening bundle modal:', error);
+      this.showBundleError('Failed to open bundle editor');
+    }
+  }
+
+  /**
+   * Validate that a bundle object has the minimum required properties
+   */
+  private validateBundleObject(bundle: any): boolean {
+    if (!bundle || typeof bundle !== 'object') {
+      console.warn('⚠️ Bundle validation: Not an object');
+      return false;
+    }
+
+    // Check for essential bundle properties
+    const requiredFields = ['Name']; // Add other required fields as needed
+    const optionalFields = ['BundleId', 'DocumentStructure', 'Indexes', 'Relationships']; // Log these for debugging
+
+    for (const field of requiredFields) {
+      if (!bundle[field]) {
+        console.warn(`⚠️ Bundle validation: Missing required field '${field}'`);
+        return false;
+      }
+    }
+
+    // Log optional fields for debugging
+    console.log('🔍 Bundle object fields:', {
+      required: requiredFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
+      optional: optionalFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
+      totalFields: Object.keys(bundle).length
+    });
+
+    return true;
+  }
+
+  /**
+   * Show bundle-related error messages to the user
+   */
+  private showBundleError(message: string): void {
+    console.log('🔍 Attempting to show bundle error:', message);
+    
+    const errorModal = this.querySelector('error-modal');
+    if (errorModal) {
+      (errorModal as any).open = true;
+      (errorModal as any).errorMessage = message;
+      (errorModal as any).requestUpdate();
+      console.log('✅ Bundle error displayed to user');
+    } else {
+      console.error('❌ Could not find error-modal, falling back to alert');
+      alert(`Bundle Error: ${message}`);
     }
   }
 

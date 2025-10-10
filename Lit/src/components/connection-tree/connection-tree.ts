@@ -67,11 +67,11 @@ export class ConnectionTree extends LitElement {
   /**
    * Handle context menu events
    */
-  private handleContextMenu = (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string): void => {
+  private handleContextMenu = (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any): void => {
     event.preventDefault();
     event.stopPropagation();
-    
-    this.contextMenu = TreeContextMenuHandler.createContextMenu(event, nodeId, nodeName, nodeType);
+
+    this.contextMenu = TreeContextMenuHandler.createContextMenu(event, nodeId, nodeName, nodeType, data);
     this.requestUpdate();
   };
 
@@ -180,6 +180,12 @@ export class ConnectionTree extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     document.addEventListener('click', this.handleDocumentClick);
+
+    import('../../services/connection-manager').then(({ connectionManager }) => {
+    connectionManager.onConnectionsChanged(() => {
+      this.requestUpdate(); // Re-render when connections change
+    });
+  });
   }
 
   disconnectedCallback() {

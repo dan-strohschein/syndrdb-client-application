@@ -1357,11 +1357,18 @@ export class QueryEditor extends LitElement {
       this.activeTab = tab;
       
       // Load the content for the new tab
-      const newTabQueryText = tab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
+      const newTabQueryText = tab === 'syndrql' || tab === 'new-editor' ? this.syndrqlQueryText : this.graphqlQueryText;
       this.queryText = newTabQueryText;
       
       // Update editor reference when tab changes
       setTimeout(() => {
+        // let editorSelector = '';
+        
+        // if (tab === 'syndrql') {
+        //   editorSelector = '.custom-editor[data-placeholder*="SyndrQL"]';
+        // } else if (tab === 'graphql') {
+        //   editorSelector = '.custom-editor[data-placeholder*="GraphQL"]';
+        // }
         const editorSelector = tab === 'syndrql' 
           ? '.custom-editor[data-placeholder*="SyndrQL"]'
           : '.custom-editor[data-placeholder*="GraphQL"]';
@@ -1381,6 +1388,17 @@ export class QueryEditor extends LitElement {
           
           // Focus the new editor
           editor.focus();
+        }
+        
+        // Special handling for the new code-editor component
+        if (tab === 'new-editor') {
+          
+          const codeEditor = this.querySelector('code-editor') as any;
+          
+          if (codeEditor && codeEditor.inputCapture) {
+            // Focus the canvas-based editor using its InputCapture system
+            codeEditor.inputCapture.focus();
+          }
         }
       }, 0);
       
@@ -1471,7 +1489,7 @@ export class QueryEditor extends LitElement {
           </div>
 
           <div class="h-full absolute inset-0 p-4 ${this.activeTab === 'new-editor' ? 'visible z-10' : 'invisible z-0'}">
-           <code-editor></code-editor>
+           <code-editor data-placeholder="New Editor"></code-editor>
           </div>
         </div>
         

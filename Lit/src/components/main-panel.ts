@@ -87,7 +87,7 @@ export class MainPanel extends LitElement {
     if (this.queryEditors.length === 0) {
       this.queryEditors = [
         {name: "Default Query Editor"},
-        {name: "Drag & Drop Demo"} // Demo tab
+        
       ];
     }
     

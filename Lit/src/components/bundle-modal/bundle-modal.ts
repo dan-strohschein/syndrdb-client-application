@@ -1,4 +1,4 @@
-import { html, css, LitElement } from 'lit';
+import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { connectionManager } from '../../services/connection-manager';
 import { FieldsTab } from './fields-tab';
@@ -72,14 +72,21 @@ export class BundleModal extends LitElement {
         }));
     }
 
-    private handleInputChange(field: string, value: string | boolean | number | Date) {
-        this.formData = {
-            ...this.formData,
-            [field]: value
-        };
-        // Clear error when user starts typing
-        if (this.errorMessage) {
-            this.errorMessage = '';
+    protected updated(changedProperties: PropertyValues): void {
+        // Check if the bundle property has changed
+        if (changedProperties.has('bundle')) {
+            console.log('Bundle modal updated, bundle changed:', this.bundle);
+            if (this.bundle) {
+                this.formData = {
+                    name: this.bundle.Name || '',
+                };
+                console.log('Form data updated with bundle data:', this.bundle);
+            } else {
+                this.formData = {
+                    name: '',
+                };
+                console.log('Form data reset (no bundle)');
+            }
         }
     }
 
@@ -156,21 +163,21 @@ export class BundleModal extends LitElement {
                 bundleData.fieldDefinitions.forEach((field) => 
                 {
                     
-                    let fieldString = `{"${field.name}", ${field.type.toUpperCase()}, `;
-                    if (field.isRequired) {
+                    let fieldString = `{"${field.Name}", ${field.Type.toUpperCase()}, `;
+                    if (field.IsRequired) {
                         fieldString += ' TRUE';
                     } else {
                         fieldString += ' FALSE';
                     }
                     fieldString += ', ';
-                    if (field.isUnique) {
+                    if (field.IsUnique) {
                         fieldString += ' TRUE';
                     } else {
                         fieldString += ' FALSE';
                     }
                     fieldString += ', ';
-                    if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') {                       
-                        fieldString += `  ${field.defaultValue}`;
+                    if (field.DefaultValue !== undefined && field.DefaultValue !== null && field.DefaultValue !== '') {                       
+                        fieldString += `  ${field.DefaultValue}`;
                     }
                     fieldString += '} ';
                     fieldStrings.push(fieldString);

@@ -1,4 +1,4 @@
-import { html, css, LitElement } from 'lit';
+import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { connectionManager } from '../../services/connection-manager';
@@ -47,22 +47,58 @@ export class FieldsTab extends LitElement {
     /**
      * Initialize form data when bundle property changes
      */
-    updated(changedProperties: Map<string, any>) {
-        super.updated(changedProperties);
+    // updated(changedProperties: Map<string, any>) {
+    //     super.updated(changedProperties);
         
+    //     if (changedProperties.has('bundle') && this.bundle) {
+    //         // Initialize form data from bundle
+    //         this.formData = {
+    //             name: this.bundle.Name || '',
+    //             fieldDefinitions: this.bundle.DocumentStructure?.FieldDefinitions || [],
+    //         };
+            
+    //         // Initialize fields array from bundle field definitions
+    //         this.fields = [...(this.bundle.DocumentStructure?.FieldDefinitions || [])];
+            
+    //         console.log('Initialized fields-tab with bundle data:', this.bundle);
+    //     }
+    // }
+
+    /**
+     * handle when the bundle is passed in from the parent for editing
+     * Use willUpdate instead of firstUpdated to avoid scheduling additional updates
+     */
+    protected willUpdate(changedProperties: PropertyValues): void {
+        // Only process bundle data if the bundle property has changed
         if (changedProperties.has('bundle') && this.bundle) {
-            // Initialize form data from bundle
-            this.formData = {
-                name: this.bundle.Name || '',
-                fieldDefinitions: this.bundle.FieldDefinitions || [],
-            };
+            console.log('Fields tab willUpdate, bundle changed:', this.bundle);
             
-            // Initialize fields array from bundle field definitions
-            this.fields = [...(this.bundle.FieldDefinitions || [])];
+            this.formData.name = this.bundle.Name || '';
             
-            console.log('Initialized fields-tab with bundle data:', this.bundle);
+            // Use the correct path: bundle.FieldDefinitions (not DocumentStructure.FieldDefinitions)
+            const fieldDefinitions = this.bundle.FieldDefinitions || [];
+            if (Array.isArray(fieldDefinitions)) {
+                this.fields = fieldDefinitions.map(field => ({
+                    ...field,
+                    id: crypto.randomUUID()
+                }));
+            } else {
+                // Handle case where FieldDefinitions is an object instead of array
+                let fieldNames = Object.keys(fieldDefinitions);
+                this.fields = [];
+                for (let name of fieldNames) {
+                    if (name !== 'DocumentID') {
+                        this.fields.push({
+                            ...(fieldDefinitions as any)[name],
+                            name: name,
+                            id: crypto.randomUUID()
+                        });
+                    }
+                }
+            }
         }
     }
+
 
     /**
      * Validate bundle name according to the rules:
@@ -110,11 +146,11 @@ export class FieldsTab extends LitElement {
     private handleAddField() {
         let newField: FieldDefinition = {
             id: crypto.randomUUID(), // Add unique ID for tracking
-            name: '',
-            type: '',
-            isRequired: false,
-            isUnique: false,
-            defaultValue: null
+            Name: '',
+            Type: '',
+            IsRequired: false,
+            IsUnique: false,
+            DefaultValue: null
         };
 
         this.fields = [...this.fields, newField];

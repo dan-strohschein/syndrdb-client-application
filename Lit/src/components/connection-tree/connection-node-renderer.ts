@@ -14,7 +14,7 @@ export class ConnectionNodeRenderer {
     connection: Connection,
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onUsersClick: (connection: Connection, usersNodeId: string) => Promise<void>,
@@ -36,7 +36,7 @@ export class ConnectionNodeRenderer {
                onSetActiveConnection(connection.id);
                onToggleNode(connection.id);
              }}
-             @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id, connection.name, 'connection')}>
+             @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id, connection.name, 'connection', connection)}>
           
           <span class="mr-3 w-4 text-center">
             <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-sm"></i>

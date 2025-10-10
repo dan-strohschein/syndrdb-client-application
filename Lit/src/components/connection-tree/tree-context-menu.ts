@@ -12,7 +12,8 @@ export class TreeContextMenuHandler {
     event: MouseEvent, 
     nodeId: string, 
     nodeName: string, 
-    nodeType: string
+    nodeType: string,
+    data: any
   ): ContextMenuState {
     return {
       visible: true,
@@ -20,7 +21,8 @@ export class TreeContextMenuHandler {
       y: event.clientY,
       nodeId,
       nodeName,
-      nodeType
+      nodeType,
+      data
     };
   }
 
@@ -160,9 +162,27 @@ export class TreeContextMenuHandler {
         break;
         case CONTEXT_MENU_ACTIONS.EDIT_BUNDLE:
             console.log('🗄️ Dispatching edit-bundle-requested event from connection tree')
+            
+            // Extract bundle information from nodeId and nodeName
+            const bundleConnectionId = contextMenu.nodeId.split('-')[0]; // Extract connection ID
+            const bundleId = contextMenu.nodeId; // Use full nodeId as bundleId
+            const bundleName = contextMenu.nodeName; // Use nodeName as bundle name
+            const bundle = contextMenu.data; // Use data for additional bundle info
+
+            console.log('📊 Bundle edit data:', {
+                nodeId: contextMenu.nodeId,
+                nodeName: contextMenu.nodeName,
+                extractedConnectionId: bundleConnectionId,
+                bundleId: bundleId,
+                bundleName: bundleName
+            });
+            
             eventDispatcher(new CustomEvent('edit-bundle-requested', {
                 detail: { 
-                connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
+                connectionId: bundleConnectionId,
+                bundleId: bundleId, // Pass the bundle ID
+                bundleName: bundleName, // Pass the bundle name
+                bundle: bundle, // Pass the full bundle data if available
                 nodeType: contextMenu.nodeType,
                 nodeName: contextMenu.nodeName,
                 nodeId: contextMenu.nodeId
@@ -178,7 +198,8 @@ export class TreeContextMenuHandler {
                 connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
                 nodeType: contextMenu.nodeType,
                 nodeName: contextMenu.nodeName,
-                nodeId: contextMenu.nodeId
+                nodeId: contextMenu.nodeId,
+                bundle: contextMenu.data // Pass the full bundle data if available
             },
             bubbles: true
             }));
@@ -249,6 +270,17 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.QUERY,
         icon: 'fa-plus',
         label: 'New Query Editor'
+      });
+    } else if (nodeType === NODE_TYPES.BUNDLE) {
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.EDIT_BUNDLE,
+        icon: 'fa-pen-to-square',
+        label: 'Edit Bundle'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.DELETE_BUNDLE,
+        icon: 'fa-trash',
+        label: 'Delete Bundle'
       });
     } else {
       actions.push({
