@@ -237,8 +237,8 @@ export class SyndrDBMainService extends EventEmitter {
       });
       
       if (connection.socket) {
-        connection.socket.write(query + '\n');
-        console.log('✅ Query sent to TCP socket successfully');
+        connection.socket.write(query + '\n\x04');
+        console.log('✅ Query sent to TCP socket successfully (with \\x04 terminator)');
       } else {
         console.log('❌ No socket available to send query');
       }
@@ -293,64 +293,79 @@ export class SyndrDBMainService extends EventEmitter {
     connectionString: string
   ) {
     const message = data.toString().trim();
-    console.log('🔐 Authentication data received:', message);
+    console.log('🔐 Raw data received:', message);
     console.log('🔐 Current connection status:', connection.status);
 
-    // Try to parse as JSON first
-    let response;
-    try {
-      response = JSON.parse(message);
-      console.log('🔐 Parsed as JSON object:', response);
-    } catch (parseError) {
-      // If not JSON, wrap as message object for authentication flow
-      response = { message };
-      console.log('🔐 Non-JSON response, wrapped as message object');
-    }
-
-    // Handle welcome message (step 2)
-    if (connection.status === 'connecting' && 
-        response.message && 
-        response.message.includes('Welcome to SyndrDB')) {
-      console.log('📩 Received welcome message, sending connection string...');
+    // Handle welcome message (step 2) - wait for welcome, then send connection string
+    if (connection.status === 'connecting' && message.includes('Welcome to SyndrDB')) {
+      console.log('📩 Received welcome message, sending connection string immediately...');
       console.log('🔐 Connection string to send:', connectionString);
-      // Send the connection string for authentication (step 3)
-      connection.socket?.write(connectionString + ';\n');
-      console.log('🔐 Connection string sent, waiting for authentication response...');
+      
+      // Send the connection string immediately (step 3)
+      if (connection.socket) {
+        const authString = connectionString + ';\n\x04';
+        console.log('🔐 Writing to socket - Length:', authString.length, 'bytes (includes `;\\n\\x04` terminator)');
+        console.log('🔐 Socket writable:', connection.socket.writable);
+        console.log('🔐 Socket destroyed:', connection.socket.destroyed);
+        
+        const writeSuccess = connection.socket.write(authString, 'utf8', (err) => {
+          if (err) {
+            console.error('❌ Socket write error:', err);
+          } else {
+            console.log('✅ Socket write completed successfully');
+          }
+        });
+        
+        console.log('🔐 Write returned:', writeSuccess);
+      }
+      
       connection.status = 'authenticating';
+      console.log('🔐 Status changed to authenticating, waiting for authentication response...');
       return;
     }
 
-    // Handle authentication response (step 4)
-    if (connection.status === 'authenticating' && 
-        response.message && 
-        response.message.includes('Authentication successful - Session:') &&
-        response.status === 'success') {
-      console.log('🎉 Authentication successful!', response.message);
-      connection.status = 'connected';
-      connection.authenticationComplete = true;
+    // Handle authentication response (step 4) - display raw results
+    if (connection.status === 'authenticating') {
+      console.log('🎉 RAW AUTHENTICATION RESPONSE:', message);
       
-      // Remove connection timeout after successful authentication
-      connection.socket?.setTimeout(0);
-      console.log('✅ Socket timeout removed after authentication');
+      // Try to parse as JSON
+      let response;
+      try {
+        response = JSON.parse(message);
+        console.log('🔐 Parsed authentication response:', JSON.stringify(response, null, 2));
+      } catch (parseError) {
+        console.log('🔐 Non-JSON authentication response, treating as raw text');
+        response = { message };
+      }
       
-      this.emitConnectionStatus(connection.id, 'connected');
-      console.log('✅ SyndrDB authentication fully complete - ready for queries');
+      // Check for success
+      if ((response.message && response.message.includes('Authentication successful')) ||
+          response.status === 'success') {
+        console.log('🎉 Authentication successful!');
+        connection.status = 'connected';
+        connection.authenticationComplete = true;
+        
+        // Remove connection timeout after successful authentication
+        connection.socket?.setTimeout(0);
+        console.log('✅ Socket timeout removed after authentication');
+        
+        this.emitConnectionStatus(connection.id, 'connected');
+        console.log('✅ SyndrDB authentication fully complete - ready for queries');
+        
+        resolve({ success: true, connectionId: connection.id });
+        return;
+      }
       
-      resolve({ success: true, connectionId: connection.id });
-      return;
-    }
-
-    // Handle authentication failure
-    if (connection.status === 'authenticating' && 
-        ((response.status && response.status !== 'success') || 
-         (response.error))) {
-      console.log('❌ Authentication failed:', response);
-      connection.status = 'error';
-      connection.lastError = response.message || response.error || 'Authentication failed';
-      this.emitConnectionStatus(connection.id, 'error', connection.lastError);
-      
-      resolve({ success: false, error: connection.lastError });
-      return;
+      // Check for authentication failure
+      if (response.error || response.status === 'error') {
+        console.log('❌ Authentication failed:', response);
+        connection.status = 'error';
+        connection.lastError = response.message || response.error || 'Authentication failed';
+        this.emitConnectionStatus(connection.id, 'error', connection.lastError);
+        
+        resolve({ success: false, error: connection.lastError });
+        return;
+      }
     }
   }
 

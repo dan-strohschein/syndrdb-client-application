@@ -149,17 +149,17 @@ export class InputCapture implements IInputCapture {
     this.hiddenTextArea.addEventListener('keydown', (e) => {
       this.currentKeyEvent = e;
       
-      console.log('🔑 KEY EVENT:', {
-        key: e.key,
-        ctrlKey: e.ctrlKey,
-        metaKey: e.metaKey,
-        isSpecialKey: this.isSpecialKey(e.key),
-        isModifierCombo: this.isModifierKeyCombo(e)
-      });
+      // console.log('🔑 KEY EVENT:', {
+      //   key: e.key,
+      //   ctrlKey: e.ctrlKey,
+      //   metaKey: e.metaKey,
+      //   isSpecialKey: this.isSpecialKey(e.key),
+      //   isModifierCombo: this.isModifierKeyCombo(e)
+      // });
       
       // Check if this is a special key we want to handle
       if (this.isSpecialKey(e.key) || this.isModifierKeyCombo(e)) {
-        console.log('🎯 HANDLING KEY COMMAND');
+    //    console.log('🎯 HANDLING KEY COMMAND');
         e.preventDefault(); // Prevent default browser behavior
         
         const command = this.createKeyCommand(e);
@@ -191,7 +191,8 @@ export class InputCapture implements IInputCapture {
       'Enter',
       'Backspace', 'Delete',
       'Home', 'End',
-      'PageUp', 'PageDown'
+      'PageUp', 'PageDown',
+      'Escape'
     ];
     
     return specialKeys.includes(key);

@@ -254,7 +254,7 @@ export class FontMeasurer {
       ascent = textMetrics.fontBoundingBoxAscent;
       descent = textMetrics.fontBoundingBoxDescent;
       lineHeight = ascent + descent;
-      console.log('Using actual font metrics:', { ascent, descent, lineHeight, fontSize });
+      //console.log('Using actual font metrics:', { ascent, descent, lineHeight, fontSize });
     } else {
       // Fallback to font size for line height (more accurate than arbitrary multiplier)
       lineHeight = fontSize;
@@ -280,7 +280,7 @@ export class FontMeasurer {
       capHeight
     };
     
-    console.log('Final font metrics:', metrics);
+    //console.log('Final font metrics:', metrics);
     return metrics;
   }
   

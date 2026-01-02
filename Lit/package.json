@@ -12,10 +12,16 @@
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run dev\" \"npm run build:main && wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^1.1.0",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
     "daisyui": "^5.1.9",
@@ -25,6 +31,7 @@
     "tailwindcss": "^3.3.5",
     "typescript": "^5.2.2",
     "vite": "^4.5.0",
+    "vitest": "^1.1.0",
     "wait-on": "^7.2.0"
   },
   "dependencies": {

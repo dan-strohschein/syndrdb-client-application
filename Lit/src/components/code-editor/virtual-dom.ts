@@ -75,7 +75,7 @@ export class VirtualDocumentModel implements IDocumentModel {
    * Implements Monaco-style behavior: creates missing lines and pads with spaces.
    */
   insertText(position: Position, text: string): void {
-    console.log('VirtualDocumentModel.insertText called with:', { position, text, currentLineCount: this.document.lines.length });
+   // console.log('VirtualDocumentModel.insertText called with:', { position, text, currentLineCount: this.document.lines.length });
     
     // Ensure the target line exists by creating empty lines if needed
     this.ensureLineExists(position.line);
@@ -83,7 +83,7 @@ export class VirtualDocumentModel implements IDocumentModel {
     // Ensure the target column exists by padding the line with spaces if needed
     this.ensureColumnExists(position.line, position.column);
     
-    console.log('After ensuring line/column exists:', { linesAfterEnsure: this.document.lines.length, targetLine: this.document.lines[position.line] });
+    //console.log('After ensuring line/column exists:', { linesAfterEnsure: this.document.lines.length, targetLine: this.document.lines[position.line] });
     
     const line = this.document.lines[position.line];
     const before = line.substring(0, position.column);
@@ -118,7 +118,7 @@ export class VirtualDocumentModel implements IDocumentModel {
       };
     }
     
-    console.log('After text insertion:', { finalLineCount: this.document.lines.length, cursorPosition: this.document.cursorPosition });
+   // console.log('After text insertion:', { finalLineCount: this.document.lines.length, cursorPosition: this.document.cursorPosition });
     
     // TODO: Phase 2 - Add change tracking for undo/redo
     // this.recordChange('insert', position, text);
@@ -221,8 +221,9 @@ export class VirtualDocumentModel implements IDocumentModel {
    * Sets a single selection from start to end position.
    */
   setSelection(start: Position, end: Position): void {
-    this.validatePosition(start);
-    this.validatePosition(end);
+    // Clamp positions to valid bounds instead of throwing errors
+    start = this.clampPosition(start);
+    end = this.clampPosition(end);
     
     // Ensure start comes before end
     if (this.comparePositions(start, end) > 0) {
@@ -315,6 +316,26 @@ export class VirtualDocumentModel implements IDocumentModel {
       throw new Error(`Column ${position.column} out of bounds (0 to ${lineLength})`);
     }
   }
+
+  /**
+   * Clamps a position to valid document bounds.
+   * Used when positions might be out of bounds due to text deletion or other operations.
+   */
+  private clampPosition(position: Position): Position {
+    // Ensure we have at least one line
+    if (this.document.lines.length === 0) {
+      return { line: 0, column: 0 };
+    }
+
+    // Clamp line to valid range
+    let line = Math.max(0, Math.min(position.line, this.document.lines.length - 1));
+    
+    // Clamp column to valid range for the line
+    const lineLength = this.document.lines[line].length;
+    let column = Math.max(0, Math.min(position.column, lineLength));
+    
+    return { line, column };
+  }
   
   /**
    * Compares two positions to determine order.
@@ -325,5 +346,34 @@ export class VirtualDocumentModel implements IDocumentModel {
       return a.line - b.line;
     }
     return a.column - b.column;
+  }
+
+  /**
+   * Get the complete document text as a single string
+   * Used for autocomplete/suggestion generation
+   */
+  getFullDocumentText(): string {
+    return this.document.lines.join('\n');
+  }
+
+  /**
+   * Get text from start of document up to the specified cursor position
+   * Used for contextual autocomplete suggestions
+   */
+  getTextUpToCursor(cursorPosition: Position): string {
+    const lines = this.document.lines;
+    let text = '';
+    
+    for (let i = 0; i < cursorPosition.line; i++) {
+      if (i < lines.length) {
+        text += lines[i] + '\n';
+      }
+    }
+    
+    if (cursorPosition.line < lines.length) {
+      text += lines[cursorPosition.line].substring(0, cursorPosition.column);
+    }
+    
+    return text;
   }
 }

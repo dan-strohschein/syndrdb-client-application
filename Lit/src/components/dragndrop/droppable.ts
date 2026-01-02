@@ -128,29 +128,29 @@ export class DroppableComponent extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.dragDropManager.registerDropzone(this);
-        console.log('🎯 Droppable registered:', this);
+       // console.log('🎯 Droppable registered:', this);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         this.dragDropManager.unregisterDropzone(this);
-        console.log('🎯 Droppable unregistered:', this);
+       // console.log('🎯 Droppable unregistered:', this);
     }
 
     setHoverState(hovered: boolean) {
         if (this.isHovered !== hovered) {
             this.isHovered = hovered;
-            console.log('🎯 Dropzone hover state changed:', { hovered, element: this });
+           // console.log('🎯 Dropzone hover state changed:', { hovered, element: this });
             this.requestUpdate();
         }
     }
 
     async handleDrop(draggable: Element, dropX: number, dropY: number) {
-        console.log('🎯 Handling drop in droppable:', { draggable, dropX, dropY });
+       // console.log('🎯 Handling drop in droppable:', { draggable, dropX, dropY });
 
         // Check if we accept this draggable
         if (!this.acceptsDraggable(draggable)) {
-            console.log('🎯 Draggable not accepted by this dropzone');
+         //   console.log('🎯 Draggable not accepted by this dropzone');
             return;
         }
 
@@ -167,7 +167,7 @@ export class DroppableComponent extends LitElement {
         if (this.onDrop) {
             try {
                 const result = await this.onDrop(draggable, dropX, dropY);
-                console.log('🎯 Drop handler result:', result);
+           //     console.log('🎯 Drop handler result:', result);
                 
                 // Dispatch drop event with the result
                 this.dispatchEvent(new CustomEvent('drop-completed', {

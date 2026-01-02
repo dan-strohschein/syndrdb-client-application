@@ -7,6 +7,8 @@ export class GraphQLQueryEditor extends LitElement {
   @state()
   private query: string = '';
 
+// TODO This will be replaced with the code-editor at some point soon.
+
 // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
     return this;

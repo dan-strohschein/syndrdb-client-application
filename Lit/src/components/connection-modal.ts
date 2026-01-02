@@ -22,7 +22,7 @@ export class ConnectionModal extends LitElement {
   // Add debugging for when open property changes
   updated(changedProperties: Map<string, any>) {
     if (changedProperties.has('open')) {
-      console.log('Modal open property changed to:', this.open);
+     // console.log('Modal open property changed to:', this.open);
       
       // If opening in edit mode, prepopulate the form
       if (this.open && this.editMode && this.connectionToEdit) {
@@ -31,7 +31,7 @@ export class ConnectionModal extends LitElement {
     }
     
     if (changedProperties.has('connectionToEdit') && this.connectionToEdit) {
-      console.log('Connection to edit changed:', this.connectionToEdit);
+    //  console.log('Connection to edit changed:', this.connectionToEdit);
       if (this.open && this.editMode) {
         this.prepopulateForm();
       }
@@ -56,7 +56,7 @@ export class ConnectionModal extends LitElement {
 
   private prepopulateForm() {
     if (this.connectionToEdit && this.connectionToEdit.config) {
-      console.log('Prepopulating form with connection data:', this.connectionToEdit.config);
+      // console.log('Prepopulating form with connection data:', this.connectionToEdit.config);
       this.formData = {
         name: this.connectionToEdit.config.name || this.connectionToEdit.name || '',
         hostname: this.connectionToEdit.config.hostname || '',

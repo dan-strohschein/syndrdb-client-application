@@ -60,7 +60,7 @@ export class UserModal extends LitElement {
             };
         } else if (changedProperties.has('user') && !this.user) {
             // If user is cleared (for new user), reset form
-            console.log('🆕 User cleared, resetting form for new user');
+         //   console.log('🆕 User cleared, resetting form for new user');
             this.formData = {
                 name: '',
                 userId: '',

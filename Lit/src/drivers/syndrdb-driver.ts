@@ -48,19 +48,19 @@ export class SyndrDBDriver {
     try {
       // Check if we're running in Electron
       if (typeof window !== 'undefined' && window.electronAPI) {
-        console.log('Connecting to SyndrDB via Electron main process...');
+        // console.log('Connecting to SyndrDB via Electron main process...');
         
         const result = await window.electronAPI.syndrdb.connect(config);
-        console.log('🔗 Main process connect result:', result);
+        // console.log('🔗 Main process connect result:', result);
         
         if (result.success && result.connectionId) {
           this.connectionId = result.connectionId;
-          console.log('💾 Set connectionId to:', this.connectionId);
+          // console.log('💾 Set connectionId to:', this.connectionId);
           
           // The main process already waits for authentication completion
           // No need for additional waiting here since result.success means auth is complete
           this.connected = true;
-          console.log('✅ SyndrDB connection and authentication successful:', this.connectionId);
+          // console.log('✅ SyndrDB connection and authentication successful:', this.connectionId);
           return true;
         } else {
           console.error('❌ SyndrDB connection/authentication failed:', result.error);
@@ -88,31 +88,31 @@ export class SyndrDBDriver {
       const statusHandler = (data: any) => {
         if (resolved) return; // Prevent multiple resolutions
         
-        console.log('🔊 Received connection status event:', data);
-        console.log('🔊 Checking against connectionId:', this.connectionId);
-        console.log('🔊 Connection IDs match:', data.connectionId === this.connectionId);
+        // console.log('🔊 Received connection status event:', data);
+        // console.log('🔊 Checking against connectionId:', this.connectionId);
+        // console.log('🔊 Connection IDs match:', data.connectionId === this.connectionId);
         
         if (data.connectionId === this.connectionId) {
-          console.log('🎯 Connection ID matches, processing status:', data.status);
+          // console.log('🎯 Connection ID matches, processing status:', data.status);
           if (data.status === 'connected') {
-            console.log('✅ Authentication successful - cleaning up and resolving');
+            // console.log('✅ Authentication successful - cleaning up and resolving');
             resolved = true;
             clearTimeout(timeout);
             // Add a small delay to ensure authentication messages are fully processed
             setTimeout(() => resolve(true), 500);
           } else if (data.status === 'error') {
-            console.log('❌ Authentication failed - cleaning up and resolving false');
+            // console.log('❌ Authentication failed - cleaning up and resolving false');
             resolved = true;
             clearTimeout(timeout);
             resolve(false);
           }
         } else {
-          console.log('🔄 Connection ID mismatch, ignoring this status event');
+          // console.log('🔄 Connection ID mismatch, ignoring this status event');
         }
       };
 
       // Listen for connection status updates
-      console.log('🎧 Starting to listen for connection status events...');
+      // console.log('🎧 Starting to listen for connection status events...');
       window.electronAPI?.syndrdb.onConnectionStatus(statusHandler);
       
       // Set a timeout for authentication (10 seconds)
@@ -134,7 +134,7 @@ export class SyndrDBDriver {
     const connectionString = this.buildConnectionString(config);
     const wsUrl = `ws://${config.hostname}:${parseInt(config.port) + 1}`;
     
-    console.log('Fallback: Connecting via WebSocket:', wsUrl);
+    // console.log('Fallback: Connecting via WebSocket:', wsUrl);
     
     // For now, just simulate success in development
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -160,7 +160,7 @@ export class SyndrDBDriver {
         return await window.electronAPI.syndrdb.testConnection(config);
       } else {
         // Fallback for non-Electron environments
-        console.log('Testing connection via fallback method...');
+        // console.log('Testing connection via fallback method...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         return true; // Mock success for development
       }
@@ -178,29 +178,29 @@ export class SyndrDBDriver {
       throw new Error('Not connected to SyndrDB server');
     }
 
-    console.log('🔍 executeQuery called with:', query);
-    console.log('🔍 Connected:', this.connected);
-    console.log('🔍 ConnectionId:', this.connectionId);
-    console.log('🔍 Window electronAPI available:', typeof window !== 'undefined' && !!window.electronAPI);
+    // console.log('🔍 executeQuery called with:', query);
+    // console.log('🔍 Connected:', this.connected);
+    // console.log('🔍 ConnectionId:', this.connectionId);
+    // console.log('🔍 Window electronAPI available:', typeof window !== 'undefined' && !!window.electronAPI);
     
     // Test the electronAPI object structure
-    if (typeof window !== 'undefined' && window.electronAPI) {
-      console.log('🔍 electronAPI keys:', Object.keys(window.electronAPI));
-      console.log('🔍 syndrdb keys:', Object.keys(window.electronAPI.syndrdb || {}));
-      console.log('🔍 executeQuery function type:', typeof window.electronAPI.syndrdb?.executeQuery);
-    }
+    // if (typeof window !== 'undefined' && window.electronAPI) {
+    //   console.log('🔍 electronAPI keys:', Object.keys(window.electronAPI));
+    //   console.log('🔍 syndrdb keys:', Object.keys(window.electronAPI.syndrdb || {}));
+    //   console.log('🔍 executeQuery function type:', typeof window.electronAPI.syndrdb?.executeQuery);
+    // }
 
     try {
       // Check if we're running in Electron
       if (typeof window !== 'undefined' && window.electronAPI) {
-        console.log('✅ Using Electron IPC for query execution');
-        console.log('🚀 About to call window.electronAPI.syndrdb.executeQuery with:', { connectionId: this.connectionId, query });
+        // console.log('✅ Using Electron IPC for query execution');
+        // console.log('🚀 About to call window.electronAPI.syndrdb.executeQuery with:', { connectionId: this.connectionId, query });
         const result = await window.electronAPI.syndrdb.executeQuery(this.connectionId, query);
-        console.log('📦 Query result from Electron:', result);
+        // console.log('📦 Query result from Electron:', result);
         return result;
       } else {
         // Fallback to mock implementation for development
-        console.log('⚠️ Using mock implementation - Electron API not available');
+        // console.log('⚠️ Using mock implementation - Electron API not available');
         return this.executeQueryMock(query);
       }
     } catch (error) {

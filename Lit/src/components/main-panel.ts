@@ -184,7 +184,7 @@ export class MainPanel extends LitElement {
                 ${editor.name === "Drag & Drop Demo" ? html`
                   <draggable-demo class="w-full h-full"></draggable-demo>
                 ` : html`
-                  <query-editor-container 
+                  <query-editor-frame
                     class="w-full h-full }" 
                     .tabName=${editor.name} 
                     .initialQuery=${editor.queryState || editor.initialQuery || ''} 
@@ -192,7 +192,7 @@ export class MainPanel extends LitElement {
                     .connectionId=${editor.connectionId || ''}
                     .isActive=${this.activeTabIndex === index}
                     @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}>
-                  </query-editor-container>
+                  </query-editor-frame>
                 `}
               </div>
             `;

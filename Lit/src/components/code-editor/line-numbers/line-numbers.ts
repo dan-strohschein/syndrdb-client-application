@@ -1,5 +1,5 @@
 import { html, LitElement, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 /**
  * Line Numbers Component
@@ -23,19 +23,10 @@ export class LineNumbers extends LitElement {
   
   @property({ type: Number })
   fontSize: number = 14;
-  
-  @state()
-  private containerHeight: number = 0;
 
   // Disable Shadow DOM to allow global Tailwind CSS and coordinate with parent
   createRenderRoot() {
     return this;
-  }
-
-  updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has('visibleHeight')) {
-      this.containerHeight = this.visibleHeight;
-    }
   }
 
   /**
@@ -78,7 +69,7 @@ export class LineNumbers extends LitElement {
         class="line-numbers-container"
         style="
           width: ${width}px;
-          height: ${this.containerHeight}px;
+          height: ${this.visibleHeight}px;
           background-color: #1a1a1a;
           border-right: 1px solid #333;
           position: relative;

@@ -66,14 +66,10 @@ export class ErrorPopUp extends LitElement {
    * Hide the popover
    */
   hide(): void {
-    console.log('🔴 ErrorPopUp: hide() called, isHoveringPopover:', this.isHoveringPopover);
     // Only hide if not hovering over the popover itself
     if (!this.isHoveringPopover) {
-     // console.log('🔴 ErrorPopUp: Actually hiding popover');
-      //this.visible = false;
-      //this.requestUpdate();
-    } else {
-     // console.log('🔴 ErrorPopUp: NOT hiding - mouse is over popover');
+      this.visible = false;
+      this.requestUpdate();
     }
   }
 
@@ -93,20 +89,14 @@ export class ErrorPopUp extends LitElement {
    * Handle mouse leave on popover to allow hiding
    */
   private handlePopoverMouseLeave(event: MouseEvent): void {
-
-  const relatedTarget = event.relatedTarget as HTMLElement;
-  
-
-    // const hoveredElement = event.target as HTMLElement;
-
-   
-     this.isHoveringPopover = false;
-    this.visible = false;
-    this.requestUpdate();
-    // // Dispatch event to notify parent that we've left the popover
-     const event2 = new CustomEvent('popover-mouse-leave', { bubbles: true });
+    const relatedTarget = event.relatedTarget as HTMLElement;
     
-     this.dispatchEvent(event2);
+    this.isHoveringPopover = false;
+    
+    // Don't hide immediately - let the parent handle the hide delay
+    // Just dispatch the event to notify parent
+    const event2 = new CustomEvent('popover-mouse-leave', { bubbles: true });
+    this.dispatchEvent(event2);
   }
 
   /**
@@ -165,9 +155,10 @@ export class ErrorPopUp extends LitElement {
   render() {
     return html`
       <div 
-        class="error-popover ${this.visible ? 'visible' : 'hidden'}"
-        style="${this.getPopoverStyle()}"
-        
+        class="error-popover"
+        style="${this.getPopoverStyle()}; visibility: ${this.visible ? 'visible' : 'hidden'}; pointer-events: ${this.visible ? 'auto' : 'none'};"
+        @mouseenter="${this.handlePopoverMouseEnter}"
+        @mouseleave="${this.handlePopoverMouseLeave}"
       >
         <div style="
           padding: 12px 16px;
@@ -179,9 +170,6 @@ export class ErrorPopUp extends LitElement {
           color: white;
           line-height: 1.4;
         "
-        @mouseenter="${this.handlePopoverMouseEnter}"
-        @mouseleave="${this.handlePopoverMouseLeave}"
-        
         >
           ${this.errorMessage ? html`
             <div style="font-weight: 500;">

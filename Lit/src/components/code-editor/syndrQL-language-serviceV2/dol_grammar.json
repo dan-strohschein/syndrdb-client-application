@@ -1,0 +1,122 @@
+[
+    {
+        "version": "1.0.0",
+        "root": "create_user_statement",
+        "rules": [
+            {"name": "create_user_statement",
+            "symbols": [
+                {"token":"CREATE"},
+                {"token":"USER"},
+                {"token": "identifier", "optional": false},
+                {"token":"WITH"},
+                {"token":"PASSWORD"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "update_user_statement",
+        "rules": [
+            {"name": "update_user_statement",
+            "symbols": [
+                {"token":"UPDATE"},
+                {"token":"USER"},
+                {"token": "identifier", "optional": false},
+                {"token":"SET"},
+                {"token":"PASSWORD"},
+                {"token":"="},
+                {"token": "literal", "optional": false},
+                {"token": "FORCE", "optional": true},
+                {"literal":";"}
+            ],  
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "delete_user_statement",
+        "rules": [
+            {"name": "delete_user_statement",
+            "symbols": [
+                {"token":"DELETE"},
+                {"token":"USER"},
+                {"token": "identifier", "optional": false},
+                {"token": "FORCE", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "grant_permissions_statement",
+        "rules": [
+            {"name": "grant_permissions_statement",
+            "symbols": [
+                {"token": "GRANT"},
+                {"token": "permission_list", "optional": false},
+                {"token": "TO"},
+                {"token": "USER"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null 
+            }
+        ]
+    },
+    {
+        "root": "grant_role_statement",
+        "rules": [
+            {"name": "grant_role_statement",
+            "symbols": [
+                {"token": "GRANT"},
+                {"token": "ROLE"},
+                {"token": "identifier", "optional": false},
+                {"token": "TO"},
+                {"token": "USER"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "revoke_permissions_statement",
+        "rules": [
+            {"name": "revoke_permissions_statement",
+            "symbols": [
+                {"token": "REVOKE"},
+                {"token": "permission_list", "optional": false},
+                {"token": "FROM"},
+                {"token": "USER"},
+                {"token": "identifier", "optional": false},
+                {"token": "FORCE", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "revoke_role_statement",
+        "rules": [
+            {"name": "revoke_role_statement",
+            "symbols": [
+                {"token": "REVOKE"},
+                {"token": "ROLE"},
+                {"token": "identifier", "optional": false},
+                {"token": "FROM"},
+                {"token": "USER"},
+                {"token": "identifier", "optional": false},
+                {"token": "FORCE", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null 
+            }
+        ]
+    }
+]

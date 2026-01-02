@@ -4,28 +4,67 @@ import './components/sidebar-panel';
 import './components/main-panel';
 import './components/connection-tree/connection-tree';
 import './components/connection-modal';
-import './components/query-editor/query-editor';
+import './components/query-editor/query-editor-tab-container';
 import './components/query-editor/graphql-query-editor';
-import './components/query-editor/syndrql-query-editor';
+// import './components/query-editor/syndrql-query-editor';
 import './components/json-tree/json-tree';
 import './components/json-tree/json-tree-node';
 import './components/navigation-bar';
-import './components/query-editor/query-editor-container';
+import './components/query-editor/query-editor-frame';
 import './components/about-modal';
 import './components/user-modal';
 import './components/database-modal';
 import './components/bundle-modal/bundle-modal';
 import './components/bundle-modal/fields-tab';
 import './components/bundle-modal/indexes-tab';
+import './components/bundle-modal/relationships-tab';
+import './components/bundle-modal/relationship-field-editor'
 import './components/bundle-modal/field-definition-editor';
 import './components/code-editor/code-editor';
 import './components/error-modal';
 import './components/status-bar';
-import './components/status-bar';
+
 import './components/dragndrop/draggable-demo';
 import './components/dragndrop/draggable';
 import './components/dragndrop/droppable';
 import './components/code-editor/code-editor';
+import './components/code-editor/suggestion-complete/suggestion-dropdown';
+
+// Import configuration and validation systems
+import { configLoader } from './config/config-loader.js';
+import { validateAllGrammars } from './components/code-editor/syndrQL-language-serviceV2/schema-validator.js';
+
+/**
+ * Initialize application configuration and validation
+ */
+async function initializeApplication() {
+  try {
+    console.log('🚀 Initializing SyndrDB Client Application...');
+
+    // Load configuration
+    console.log('📝 Loading configuration...');
+    await configLoader.loadConfig('/config.yaml');
+    const config = configLoader.getConfig();
+    console.log(`✅ Configuration loaded (environment: ${config.environment})`);
+
+    // Validate grammar files on system launch
+    console.log('🔍 Validating grammar files...');
+    await validateAllGrammars();
+    console.log('✅ Grammar validation complete');
+
+    console.log('✅ Application initialization complete');
+  } catch (error) {
+    console.error('❌ Application initialization failed:', error);
+    // Show error to user
+    alert(`Application initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check the console for details.`);
+    throw error;
+  }
+}
+
+// Initialize on app load
+initializeApplication().catch(error => {
+  console.error('Fatal error during initialization:', error);
+});
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -170,8 +209,8 @@ export class AppRoot extends LitElement {
   }
 
   private handleDeleteConnection(event: CustomEvent) {
-    console.log('🎯 App root received delete-connection event');
-    console.log('Event detail:', event.detail);
+   // console.log('🎯 App root received delete-connection event');
+   // console.log('Event detail:', event.detail);
     
     // Find the connection-modal element and open it for deletion confirmation
     const connectionModal = this.querySelector('connection-modal');
@@ -186,8 +225,8 @@ export class AppRoot extends LitElement {
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
-    console.log('🎯 App root received add-query-editor event, forwarding to main-panel');
-    console.log('Event detail:', event.detail);
+   // console.log('🎯 App root received add-query-editor event, forwarding to main-panel');
+   // console.log('Event detail:', event.detail);
     
     // Find the main-panel element and dispatch the event to it
     const mainPanel = this.querySelector('main-panel');
@@ -203,8 +242,8 @@ export class AppRoot extends LitElement {
   }
 
   private async handleNewDatabaseRequest(event: CustomEvent) {
-    console.log('🎯 App root received new-database-requested event');
-    console.log('Event detail:', event.detail);
+   // console.log('🎯 App root received new-database-requested event');
+   // console.log('Event detail:', event.detail);
 
     // Find the database-modal element and open it
     const databaseModal = this.querySelector('database-modal');
@@ -219,8 +258,8 @@ export class AppRoot extends LitElement {
   }
 
 private async handleNewBundleRequest(event: CustomEvent) {
-    console.log('🎯 App root received new-bundle-requested event');
-    console.log('Event detail:', event.detail);
+   // console.log('🎯 App root received new-bundle-requested event');
+   // console.log('Event detail:', event.detail);
 
     // Validate event data
     const { connectionId, databaseName } = event.detail || {};
@@ -240,7 +279,7 @@ private async handleNewBundleRequest(event: CustomEvent) {
     }
 
     try {
-      console.log('📤 Opening bundle modal for new bundle creation');
+    //  console.log('📤 Opening bundle modal for new bundle creation');
       (bundleModal as any).open = true;
       (bundleModal as any).editMode = false; // Ensure we're in create mode
       (bundleModal as any).connectionId = connectionId;
@@ -249,7 +288,7 @@ private async handleNewBundleRequest(event: CustomEvent) {
       (bundleModal as any).bundle = null; // Clear any existing bundle data
       (bundleModal as any).requestUpdate();
       
-      console.log('✅ Bundle modal opened successfully for new bundle creation');
+    //  console.log('✅ Bundle modal opened successfully for new bundle creation');
       
     } catch (error) {
       console.error('❌ Error opening bundle modal for new bundle:', error);
@@ -258,8 +297,8 @@ private async handleNewBundleRequest(event: CustomEvent) {
   }
 
 private async handleEditBundleRequest(event: CustomEvent) {
-    console.log('🎯 App root received edit-bundle-requested event');
-    console.log('Event detail:', event.detail);
+   // console.log('🎯 App root received edit-bundle-requested event');
+   // console.log('Event detail:', event.detail);
 
     // Validate event data
     const { bundleId, bundle, connectionId, bundleName } = event.detail || {};
@@ -285,13 +324,13 @@ private async handleEditBundleRequest(event: CustomEvent) {
     }
 
     // Enhanced logging for debugging
-    console.log('� Bundle data validation:', {
-      hasBundleId: !!bundleId,
-      hasBundleObject: !!bundle,
-      hasConnectionId: !!connectionId,
-      bundleName: bundleName || bundle?.name || 'Unknown',
-      bundleObjectKeys: bundle ? Object.keys(bundle) : 'No bundle object'
-    });
+    // console.log('� Bundle data validation:', {
+    //   hasBundleId: !!bundleId,
+    //   hasBundleObject: !!bundle,
+    //   hasConnectionId: !!connectionId,
+    //   bundleName: bundleName || bundle?.name || 'Unknown',
+    //   bundleObjectKeys: bundle ? Object.keys(bundle) : 'No bundle object'
+    // });
 
     try {
       // Set modal properties with validation
@@ -303,26 +342,26 @@ private async handleEditBundleRequest(event: CustomEvent) {
       // Pass both bundleId and bundle for redundancy
       if (bundleId) {
         (bundleModal as any).bundleId = bundleId;
-        console.log('✅ Bundle ID passed to modal:', bundleId);
+        // console.log('✅ Bundle ID passed to modal:', bundleId);
       }
       
       if (bundle) {
         // Validate bundle object has minimum required properties
         if (this.validateBundleObject(bundle)) {
           (bundleModal as any).bundle = bundle;
-          console.log('✅ Bundle object validated and passed to modal');
+          // console.log('✅ Bundle object validated and passed to modal');
         } else {
           console.warn('⚠️ Bundle object validation failed, modal will need to fetch data using bundleId');
           (bundleModal as any).bundle = null; // Clear invalid bundle
         }
       } else if (bundleId) {
         // No bundle object provided, but we have bundleId - modal should fetch the data
-        console.log('ℹ️ No bundle object provided, modal will fetch data using bundleId:', bundleId);
+        // console.log('ℹ️ No bundle object provided, modal will fetch data using bundleId:', bundleId);
         (bundleModal as any).bundle = null;
       }
       
       (bundleModal as any).requestUpdate();
-      console.log('📤 Bundle modal opened successfully for editing');
+    //  console.log('📤 Bundle modal opened successfully for editing');
       
     } catch (error) {
       console.error('❌ Error opening bundle modal:', error);
@@ -351,11 +390,11 @@ private async handleEditBundleRequest(event: CustomEvent) {
     }
 
     // Log optional fields for debugging
-    console.log('🔍 Bundle object fields:', {
-      required: requiredFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
-      optional: optionalFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
-      totalFields: Object.keys(bundle).length
-    });
+    // console.log('🔍 Bundle object fields:', {
+    //   required: requiredFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
+    //   optional: optionalFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
+    //   totalFields: Object.keys(bundle).length
+    // });
 
     return true;
   }
@@ -364,7 +403,7 @@ private async handleEditBundleRequest(event: CustomEvent) {
    * Show bundle-related error messages to the user
    */
   private showBundleError(message: string): void {
-    console.log('🔍 Attempting to show bundle error:', message);
+    // console.log('🔍 Attempting to show bundle error:', message);
     
     const errorModal = this.querySelector('error-modal');
     if (errorModal) {
@@ -379,8 +418,8 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private async handleDatabaseCreated(event: CustomEvent) {
-    console.log('🎯 App root received database-created event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received database-created event');
+    // console.log('Event detail:', event.detail);
 
     // Find the sidebar-panel and trigger a tree refresh
     const sidebarPanel = this.querySelector('sidebar-panel');
@@ -397,7 +436,7 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleAboutModalRequest(event: CustomEvent) {
-    console.log('🎯 App root received about-modal-requested event');
+ //   console.log('🎯 App root received about-modal-requested event');
     
     // Find the about-modal element and open it
     const aboutModal = this.querySelector('about-modal');
@@ -410,8 +449,8 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleAddUserRequest(event: CustomEvent) {
-    console.log('🎯 App root received add-user event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received add-user event');
+    // console.log('Event detail:', event.detail);
     
     // Find the user-modal element and open it for creating a new user
     const userModal = this.querySelector('user-modal');
@@ -427,8 +466,8 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleEditUserRequest(event: CustomEvent) {
-    console.log('🎯 App root received edit-user event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received edit-user event');
+    // console.log('Event detail:', event.detail);
     
     // Find the user-modal element and open it for editing
     const userModal = this.querySelector('user-modal');
@@ -457,8 +496,8 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleConnectDatabase(event: CustomEvent) {
-    console.log('🎯 App root received connect-database event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received connect-database event');
+    // console.log('Event detail:', event.detail);
     
     // In a prod application, we would:
     // 1. Get connection details from the connection store
@@ -467,14 +506,14 @@ private async handleEditBundleRequest(event: CustomEvent) {
     // 4. Notify the connection tree of the status change
     
     // For now, we'll just log the connection attempt
-    console.log(`🔌 Attempting to connect to database: ${event.detail.connectionId}`);
+   // console.log(`🔌 Attempting to connect to database: ${event.detail.connectionId}`);
     // We typically dispatch this to the connection service
     // connectionService.connect(event.detail.connectionId);
   }
 
   private handleDisconnectDatabase(event: CustomEvent) {
-    console.log('🎯 App root received disconnect-database event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received disconnect-database event');
+    // console.log('Event detail:', event.detail);
     
     // In a production application, we would:
     // 1. Close the database connection
@@ -486,8 +525,8 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleTestConnection(event: CustomEvent) {
-    console.log('🎯 App root received test-connection event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received test-connection event');
+    // console.log('Event detail:', event.detail);
     
     // In a real application, you would:
     // 1. Test the connection using stored connection details
@@ -504,25 +543,25 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleConnectionError(event: CustomEvent) {
-    console.log('🎯 App root received connection-error event');
-    console.log('Event detail:', event.detail);
+    // console.log('🎯 App root received connection-error event');
+    // console.log('Event detail:', event.detail);
     
     const { connectionName, error } = event.detail;
     const errorMessage = error || 'Unknown connection error occurred.';
     
-    console.log('🔍 Attempting to find error-modal element...');
+    //console.log('🔍 Attempting to find error-modal element...');
     
     // Find the error modal and show it with the error message
     const errorModal = this.querySelector('error-modal');
     
-    console.log('🔍 Error modal element found:', !!errorModal);
+  //  console.log('🔍 Error modal element found:', !!errorModal);
     
     if (errorModal) {
       console.log('📤 Showing error modal with message:', errorMessage);
       (errorModal as any).open = true;
       (errorModal as any).errorMessage = `Failed to connect to "${connectionName}": ${errorMessage}`;
       (errorModal as any).requestUpdate();
-      console.log('✅ Error modal should now be visible');
+    //  console.log('✅ Error modal should now be visible');
     } else {
       console.error('❌ Could not find error-modal element');
       // Fallback: show an alert for debugging
@@ -534,9 +573,9 @@ private async handleEditBundleRequest(event: CustomEvent) {
    * Handle query execution results and update status bar
    */
   private handleQueryExecuted(event: CustomEvent) {
-    console.log('⏱️ App root received query-executed event');
-    console.log('Query result detail:', event.detail);
-    
+      // console.log('⏱️ App root received query-executed event');
+      // console.log('Query result detail:', event.detail);
+      
     const { executionTime, ResultCount } = event.detail;
     
     // Find the status bar and update execution time and result count
@@ -544,12 +583,12 @@ private async handleEditBundleRequest(event: CustomEvent) {
     if (statusBar) {
       if (executionTime !== undefined) {
         statusBar.executionTimeMS = executionTime;
-        console.log('✅ Updated status bar with execution time:', executionTime, 'ms');
+        // console.log('✅ Updated status bar with execution time:', executionTime, 'ms');
       }
       
       if (ResultCount !== undefined) {
         statusBar.resultCount = ResultCount;
-        console.log('✅ Updated status bar with result count:', ResultCount);
+        // console.log('✅ Updated status bar with result count:', ResultCount);
       }
     } else {
       console.warn('⚠️ Could not find status bar element');

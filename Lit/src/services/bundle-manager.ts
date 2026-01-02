@@ -71,7 +71,7 @@ constructor() {}
       console.log('📦 Loading bundles for database:', databaseName, 'with command:', bundlesCommand);
       
       const bundlesResult = await connection.driver.executeQuery(bundlesCommand);
-      console.log('📦 SHOW BUNDLES result:', bundlesResult);
+      // console.log('📦 SHOW BUNDLES result:', bundlesResult);
       
       let bundles: Bundle[] = [];
       
@@ -80,12 +80,25 @@ constructor() {}
         if (bundlesResult.ResultCount && bundlesResult.ResultCount > 0 && bundlesResult.data != null) {
           if (Array.isArray(bundlesResult.data)) {
             bundles = bundlesResult.data.map((rawBundle: any) => {
-              // The new structure has BundleMetadata containing the bundle info
-              let newBundle:Bundle = { Name: '', FieldDefinitions: [] };
-              if (rawBundle.BundleMetadata) {
-
+              // New structure: bundles are directly in Result array with all properties
+              let newBundle: Bundle = { Name: '', FieldDefinitions: [] };
+              
+              // Try new structure first (direct properties)
+              if (rawBundle.Name) {
+                newBundle.Name = rawBundle.Name;
+                newBundle.DocumentStructure = rawBundle.DocumentStructure;
+                newBundle.Indexes = rawBundle.Indexes;
+                newBundle.Relationships = rawBundle.Relationships;
+                newBundle.FieldDefinitions = rawBundle.DocumentStructure?.FieldDefinitions || [];
+                newBundle.BundleId = rawBundle.BundleID || rawBundle.BundleId; // Handle both casings
+                newBundle.CreatedAt = rawBundle.CreatedAt;
+                newBundle.UpdatedAt = rawBundle.UpdatedAt;
+                newBundle.DocumentCount = rawBundle.TotalDocuments; // Updated field name
+              }
+              // Fallback to old BundleMetadata structure
+              else if (rawBundle.BundleMetadata) {
                 if (rawBundle.BundleMetadata.Name) {
-                    newBundle.Name = rawBundle.BundleMetadata.Name;
+                  newBundle.Name = rawBundle.BundleMetadata.Name;
                 }
                 newBundle.DocumentStructure = rawBundle.BundleMetadata.DocumentStructure;
                 newBundle.Indexes = rawBundle.BundleMetadata.Indexes;
@@ -95,10 +108,8 @@ constructor() {}
                 newBundle.CreatedAt = rawBundle.BundleMetadata.CreatedAt;
                 newBundle.UpdatedAt = rawBundle.BundleMetadata.UpdatedAt;
                 newBundle.DocumentCount = rawBundle.BundleMetadata.DocumentCount;
-                
               }
               
-              // Fallback to old structure if BundleMetadata doesn't exist
               return newBundle;
             });
           }
@@ -115,7 +126,7 @@ constructor() {}
       }
       connection.databaseBundles.set(databaseName, bundles);
       
-      console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
+ //     console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
       
       this.emit('connectionStatusChanged', connection);
       return bundles;

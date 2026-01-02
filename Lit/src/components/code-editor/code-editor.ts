@@ -10,11 +10,28 @@ import { VirtualDocumentModel } from './virtual-dom.js';
 import { MonospaceCoordinateSystem, FontMeasurer } from './font-metrics.js';
 import { ViewportManager } from './viewport-manager.js';
 import { Position, FontMetrics, KeyCommand, EditorTheme, ScrollOffset, ScrollbarDragState, Coordinates, MouseEventData, CharacterPosition } from './types.js';
-import { createSyndrQLHighlighter, SyndrQLSyntaxHighlighter, SyntaxTheme, SyntaxToken, CodeStatement, CodeCache } from './syndrQL-language-service/index.js';
-import { StatementParser } from './syndrQL-language-service/statement-parser.js';
-import { SyndrQLGrammarValidator } from './syndrQL-language-service/grammar-validator.js';
+import { LanguageServiceV2, type ValidationResult, type SyntaxTheme, type ParsedStatement, DEFAULT_SYNDRQL_THEME } from './syndrQL-language-serviceV2/index.js';
+import type { Suggestion, Token } from './syndrQL-language-serviceV2/index.js';
+import { DEFAULT_CONFIG } from '../../config/config-types.js';
 import './error-pop-up/error-pop-up.js';
 import './line-numbers/line-numbers.js';
+import './suggestion-complete/suggestion-dropdown.js';
+
+/**
+ * Internal types for statement tracking
+ */
+interface CodeStatement {
+  code: string;
+  lineStart: number;
+  lineEnd: number;
+  tokens: Token[];
+  isValid: boolean;
+  isDirty: boolean;
+}
+
+interface CodeCache {
+  statements: CodeStatement[];
+}
 
 @customElement('code-editor')
 export class CodeEditor extends LitElement {
@@ -90,16 +107,16 @@ export class CodeEditor extends LitElement {
   private viewportManager!: ViewportManager;
   private resizeObserver!: ResizeObserver;
   
-  // Syntax highlighter
-  private syntaxHighlighter!: SyndrQLSyntaxHighlighter;
-  
-  // Statement cache for granular validation
-  private statementParser!: StatementParser;
-  private grammarValidator!: SyndrQLGrammarValidator;
+  // Language Service V2 - Modern grammar-driven validation, suggestions, and rendering
+  private languageService!: LanguageServiceV2;
   private codeCache: CodeCache = { statements: [] };
-  private validationResults = new Map<string, any>(); // Store validation results by statement key
+  private validationResults = new Map<string, ValidationResult>(); // Store V2 validation results
   private statementValidationTimeout: number | null = null;
   private readonly STATEMENT_VALIDATION_DELAY = 200;
+  
+  // Autocomplete suggestion system
+  private suggestionUpdateTimeout: number | null = null;
+  private readonly SUGGESTION_UPDATE_DELAY = 150;
   
   // Error popover for invalid token/statement details
   private errorPopup!: HTMLElement;
@@ -108,16 +125,28 @@ export class CodeEditor extends LitElement {
   private currentHoveredToken: { line: number, column: number, statement: any } | null = null;
   private isPopoverVisible: boolean = false;
   private isMouseOverPopover: boolean = false;
+  private isMouseOverInvalidStatement: boolean = false;
 
-  // Line numbers tracking
+  // Line numbers tracking - lineCount needs to be reactive for child component updates
   @state()
   private lineCount: number = 1;
   
-  @state()
   private editorScrollTop: number = 0;
   
-  @state()
   private editorHeight: number = 400;
+
+  // Suggestion system state
+  @state()
+  private suggestions: Suggestion[] = [];
+
+  @state()
+  private showSuggestions: boolean = false;
+
+  @state()
+  private suggestionPosition: { x: number; y: number } = { x: 0, y: 0 };
+
+  @state()
+  private selectedSuggestionIndex: number = 0;
 
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -136,10 +165,10 @@ export class CodeEditor extends LitElement {
     
     // If font properties changed, update font metrics
     if (changedProperties.has('fontFamily') || changedProperties.has('fontSize')) {
-      if (this.isInitialized && this.fontMeasurer && this.syntaxHighlighter) {
+      if (this.isInitialized && this.fontMeasurer && this.languageService) {
         const fontMetrics = this.fontMeasurer.measureFont(this.fontFamily, this.fontSize);
         this.coordinateSystem.setFontMetrics(fontMetrics);
-        this.syntaxHighlighter.updateFontMetrics(fontMetrics);
+        this.languageService.updateFontMetrics(fontMetrics);
       }
     }
   }
@@ -197,8 +226,8 @@ export class CodeEditor extends LitElement {
       // Set initial cursor style
       this.canvas.style.cursor = 'text';
       
-      // Start cursor blinking
-      this.startCursorBlinking();
+      // Set up focus/blur handlers for cursor visibility
+      this.setupFocusHandlers();
       
       // Initial render
       this.renderEditor();
@@ -206,42 +235,38 @@ export class CodeEditor extends LitElement {
       this.isInitialized = true;
       // console.log('Code editor initialized successfully');
 
-      // Initialize syntax highlighter
-    this.syntaxHighlighter = createSyndrQLHighlighter({
-        theme: {
-            keyword: '#569CD6',
-            identifier: '#9CDCFE',
-            string: '#CE9178',
-            comment: '#6A9955',
-            literal: '#CE9178',
-            operator: '#D4D4D4',
-            punctuation: '#D4D4D4',
-            number: '#B5CEA8',
-            placeholder: '#B5CEA8',
-            unknown: '#B5CEA8',
-             errorUnderline: {
-                color: '#ff0000',     // Red color
-                thickness: 1,         // Line thickness
-                amplitude: 1,         // Height of squiggles  
-                frequency: 4          // Pixels per wave
-            }
+      // Initialize Language Service V2 with rendering capabilities
+      this.languageService = new LanguageServiceV2(DEFAULT_CONFIG);
+      await this.languageService.initialize();
+      
+      // Initialize V2 renderer with canvas context and font metrics
+      const syntaxTheme: SyntaxTheme = {
+        ...DEFAULT_SYNDRQL_THEME,
+        keyword: '#569CD6',
+        identifier: '#9CDCFE',
+        string: '#CE9178',
+        comment: '#6A9955',
+        literal: '#CE9178',
+        operator: '#D4D4D4',
+        punctuation: '#D4D4D4',
+        number: '#B5CEA8',
+        placeholder: '#B5CEA8',
+        unknown: '#B5CEA8',
+        errorUnderline: {
+          color: '#ff0000',
+          thickness: 1,
+          amplitude: 1,
+          frequency: 4
         }
-    });
-    this.syntaxHighlighter.initialize(this.context, fontMetrics);
-
-    // Initialize statement parser for granular validation
-    this.statementParser = new StatementParser();
-    this.grammarValidator = new SyndrQLGrammarValidator();
-
-    // Set up grammar validation callback to re-render when validation completes
-    this.syntaxHighlighter.setGrammarValidationCallback((code: string, tokens: SyntaxToken[]) => {
-      // Re-render the editor when grammar validation completes
-      this.renderEditor();
-    });
+      };
+      this.languageService.initializeRenderer(this.context, fontMetrics, syntaxTheme);
+      console.log('✅ Language Service V2 initialized with rendering');
 
     // Initialize document context and statement cache
     this.updateStatementCache();
-    this.updateSyntaxHighlighterContext();
+
+    // Listen for database context changes from connection manager
+    this.setupDatabaseContextListener();
 
     } catch (error) {
       console.error('Failed to initialize code editor:', error);
@@ -249,33 +274,120 @@ export class CodeEditor extends LitElement {
   }
   
   /**
+   * Set up listener for database context changes
+   */
+  private async setupDatabaseContextListener(): Promise<void> {
+    try {
+//      console.log('🎯 CodeEditor: Setting up database context listener...');
+      const { connectionManager } = await import('../../services/connection-manager');
+      
+ //     console.log('🎯 CodeEditor: Connection manager imported, registering listeners...');
+      
+      // Listen for database context changes
+      connectionManager.addEventListener('databaseContextChanged', ({ databaseName }: { databaseName: string }) => {
+//        console.log(`🎯 CodeEditor: Received databaseContextChanged event for "${databaseName}"`);
+        if (this.languageService) {
+          this.languageService.setDatabaseContext(databaseName);
+        }
+      });
+
+      // Listen for bundles loaded events to update context data
+      connectionManager.addEventListener('bundlesLoaded', async ({ databaseName, bundles }: { databaseName: string, bundles: any[] }) => {
+ //       console.log(`🎯 CodeEditor: Received bundlesLoaded event for "${databaseName}" with ${bundles.length} bundles`);
+        
+        if (this.languageService) {
+          // Convert bundles to DatabaseDefinition format
+          const bundleDefs: any[] = bundles.map((bundle: any) => {
+            const bundleName = bundle.Name || bundle.name;
+            
+            // Extract fields from DocumentStructure.FieldDefinitions
+            const fieldsMap = new Map();
+            
+            const fieldDefs = bundle.DocumentStructure?.FieldDefinitions;
+            
+            if (fieldDefs) {
+              for (const [fieldName, fieldDef] of Object.entries(fieldDefs)) {
+                const field = fieldDef as any;
+                fieldsMap.set(fieldName, {
+                  name: field.Name || fieldName,
+                  type: field.Type || 'text',
+                  constraints: {
+                    nullable: !field.Required,
+                    unique: field.Unique === true,
+                    primary: fieldName === 'DocumentID',
+                    default: field.DefaultValue
+                  }
+                });
+              }
+            }
+            
+//            console.log(`🎯 CodeEditor: Bundle "${bundleName}" has ${fieldsMap.size} fields`);
+            
+            return {
+              name: bundleName,
+              database: databaseName,
+              fields: fieldsMap,
+              relationships: new Map(),
+              indexes: bundle.Indexes || []
+            };
+          });
+
+          // Update context with database and bundle data
+          this.languageService.updateContextData([{
+            name: databaseName,
+            bundles: new Map(bundleDefs.map(b => [b.name, b]))
+          }]);
+          
+//          console.log(`🎯 CodeEditor: Context updated with ${bundleDefs.length} bundles`);
+        }
+      });
+
+    //  console.log('✅ Database context listeners registered successfully');
+    } catch (error) {
+      console.error('Failed to set up database context listener:', error);
+    }
+  }
+  
+  /**
    * Sets up canvas sizing to fill parent container and handle resize events.
    */
+
   /**
-   * Update syntax highlighter with current document context for grammar validation
+   * Update statement cache by parsing the current document
+   * Uses V2 language service for proper comment and statement boundary detection
    */
-  private updateSyntaxHighlighterContext(): void {
-    if (this.syntaxHighlighter && this.documentModel) {
+  private updateStatementCache(): void {
+    if (this.documentModel && this.languageService) {
       const lines = this.documentModel.getLines();
       const fullText = lines.join('\n');
-      this.syntaxHighlighter.updateDocumentContext(fullText);
+      
+      // Update document in language service (tokenizes entire document for multi-line comment support)
+      this.languageService.updateDocument(fullText);
+      
+      // Use V2 language service to parse statements
+      const parsedStatements = this.languageService.parseStatements(fullText, 'editor');
+      
+      // Convert parsed statements to CodeStatement format
+      const statements: CodeStatement[] = parsedStatements.map(stmt => ({
+        code: stmt.text,
+        lineStart: stmt.startLine - 1, // Convert to 0-based
+        lineEnd: stmt.endLine - 1,     // Convert to 0-based  
+        tokens: stmt.tokens,
+        isValid: true,
+        isDirty: true
+      }));
+      
+      this.codeCache = { statements };
     }
   }
 
   /**
-   * Update statement cache by parsing the current document
+   * Find which statement a specific line belongs to
    */
-  private updateStatementCache(): void {
-    if (this.documentModel && this.statementParser) {
-      const lines = this.documentModel.getLines();
-      const fullText = lines.join('\n');
-      
-      // Parse document into statements
-      const statements = this.statementParser.parseStatements(fullText);
-      this.codeCache = { statements };
-      
-     // console.log('🔥 Statement cache updated:', statements.length, 'statements');
-    }
+  private getStatementForLine(lineIndex: number): CodeStatement | null {
+    return this.codeCache.statements.find(stmt => 
+      lineIndex >= stmt.lineStart && lineIndex <= stmt.lineEnd
+    ) || null;
   }
 
   /**
@@ -287,11 +399,12 @@ export class CodeEditor extends LitElement {
     }
     
     const cursorPosition = this.documentModel.getCursorPosition();
-    return this.statementParser.findStatementAtPosition(
-      this.codeCache.statements,
-      cursorPosition.line,
-      cursorPosition.column
-    );
+    const line = cursorPosition.line;
+    
+    // Find statement containing this line
+    return this.codeCache.statements.find(stmt => 
+      line >= stmt.lineStart && line <= stmt.lineEnd
+    ) || null;
   }
 
   /**
@@ -300,16 +413,13 @@ export class CodeEditor extends LitElement {
   private markCurrentStatementDirty(): void {
     const currentStatement = this.getCurrentStatement();
     if (currentStatement) {
-      // Mark statement as dirty if not already dirty
+      // Mark statement as dirty
       if (!currentStatement.isDirty) {
-        this.codeCache.statements = this.statementParser.markStatementDirty(
-          this.codeCache.statements,
-          currentStatement
-        );
-        console.log('🔥 Statement marked dirty:', currentStatement.code.substring(0, 50) + '...');
+        currentStatement.isDirty = true;
+    //    console.log('🔥 Statement marked dirty:', currentStatement.code.substring(0, 50) + '...');
       }
       
-      // Always schedule validation (debounced) - this reschedules on each keystroke
+      // Always schedule validation (debounced)
       this.scheduleStatementValidation(currentStatement);
     }
   }
@@ -323,19 +433,18 @@ export class CodeEditor extends LitElement {
       clearTimeout(this.statementValidationTimeout);
     }
     
-    // Schedule new validation
-    this.statementValidationTimeout = window.setTimeout(() => {
-      this.validateStatement(statement);
+    // Schedule new validation (async)
+    this.statementValidationTimeout = window.setTimeout(async () => {
+      await this.validateStatement(statement);
     }, this.STATEMENT_VALIDATION_DELAY);
   }
 
   /**
-   * Validate a specific statement and update cache
-   * Enhanced with comprehensive error analysis and detailed logging
+   * Validate a specific statement using Language Service V2
+   * V2 provides enhanced error analysis with 70+ error codes
    */
-  private validateStatement(statement: CodeStatement): void {
+  private async validateStatement(statement: CodeStatement): Promise<void> {
     // Find the current version of this statement in the cache
-    // (content may have changed since validation was scheduled)
     const currentStatement = this.codeCache.statements.find(s => 
       s.lineStart === statement.lineStart && s.lineEnd === statement.lineEnd
     );
@@ -344,48 +453,62 @@ export class CodeEditor extends LitElement {
       return; // Statement not found or already clean
     }
 
-    // console.log('🔥 VALIDATING STATEMENT:', currentStatement.code);
+  //  console.log('🔥 VALIDATING STATEMENT (V2):', currentStatement.code.substring(0, 50));
 
-    // Use the grammar validator with statement line offset for accurate error reporting
-    const validationResult = this.grammarValidator.validate(
-      currentStatement.tokens, 
-      currentStatement.lineStart
-    );
-    const isValid = validationResult.isValid;
-    
-    // console.log('🔥 VALIDATION RESULT:', {
-    //   valid: isValid, 
-    //   invalidTokens: Array.from(validationResult.invalidTokens),
-    //   errorCount: validationResult.errorDetails?.length || 0
-    // });
-    
-    // Log detailed error information for debugging and future UI implementation
-    if (validationResult.errorDetails && validationResult.errorDetails.length > 0) {
-      //console.log('🔥 DETAILED ERRORS:');
-      validationResult.errorDetails.forEach((error, index) => {
-        // console.log(`  ${index + 1}. [${error.code}] ${error.message}`);
-        // console.log(`     Location: Line ${error.line + 1}, Column ${error.column + 1}`);
-        // console.log(`     Source: "${error.source}"`);
-        // if (error.suggestion) {
-        //   console.log(`     Suggestion: ${error.suggestion}`);
-        // }
-        // console.log('');
+    try {
+      // Use Language Service V2 for validation
+      const validationResult = await this.languageService.validate(
+        currentStatement.code,
+        `editor:${currentStatement.lineStart}`
+      );
+      
+      const isValid = validationResult.valid;
+      
+      console.log('🔥 V2 VALIDATION RESULT:', {
+        valid: isValid,
+        errors: validationResult.errors.length,
+        warnings: validationResult.warnings.length
       });
+      
+      // Log detailed errors
+      if (validationResult.errors.length > 0) {
+        console.log('❌ VALIDATION ERRORS:');
+        validationResult.errors.forEach((error, index) => {
+          console.log(`  ${index + 1}. [${error.code}] ${error.message}`);
+        //  console.log(`     Location: Position ${error.startPosition}-${error.endPosition}`);
+          if (error.suggestion) {
+            console.log(`     Suggestion: ${error.suggestion}`);
+          }
+        });
+      }
+      
+      // Log detailed warnings
+      if (validationResult.warnings.length > 0) {
+        console.log('⚠️ VALIDATION WARNINGS:');
+        validationResult.warnings.forEach((warning, index) => {
+          console.log(`  ${index + 1}. [${warning.code}] ${warning.message}`);
+          console.log(`     Location: Position ${warning.startPosition}-${warning.endPosition}`);
+          if (warning.suggestion) {
+            console.log(`     Suggestion: ${warning.suggestion}`);
+          }
+        });
+      }
+      
+      // Mark statement as clean with validation result
+      currentStatement.isValid = isValid;
+      currentStatement.isDirty = false;
+      
+      // Store V2 validation results for hover error display
+      const statementKey = `${currentStatement.lineStart}-${currentStatement.lineEnd}`;
+      this.validationResults.set(statementKey, validationResult);
+      
+      // Re-render to show validation results
+      this.renderEditor();
+    } catch (error) {
+      console.error('❌ V2 validation error:', error);
+      currentStatement.isValid = false;
+      currentStatement.isDirty = false;
     }
-    
-    // Mark statement as clean with validation result
-    this.codeCache.statements = this.statementParser.markStatementClean(
-      this.codeCache.statements,
-      currentStatement,
-      isValid
-    );
-    
-    // Store validation results for hover error display
-    const statementKey = `${currentStatement.lineStart}-${currentStatement.lineEnd}`;
-    this.validationResults.set(statementKey, validationResult);
-    
-    // Re-render to show validation results
-    this.renderEditor();
   }
 
   private setupCanvasSizing(): void {
@@ -441,12 +564,11 @@ export class CodeEditor extends LitElement {
       this.updateStatementCache();
       this.markCurrentStatementDirty();
       
-      // Keep the old syntax highlighter system for now (will be replaced later)
-      if (this.syntaxHighlighter) {
-        this.syntaxHighlighter.markDirty();
-        this.syntaxHighlighter.clearCache();
-        this.updateSyntaxHighlighterContext();
-      }
+      // Update line count for line-numbers component
+      this.updateLineCount();
+      
+      // Trigger autocomplete suggestions (debounced)
+      this.debouncedUpdateSuggestions();
       
       // Ensure cursor remains visible
       this.ensureCursorVisible();
@@ -464,20 +586,28 @@ export class CodeEditor extends LitElement {
         return; // Command was handled by clipboard operations
       }
       
+      // Handle suggestion navigation if suggestions are visible
+      if (this.showSuggestions) {
+        console.log('🔑 Key command with suggestions visible:', command.key);
+        if (this.handleSuggestionKeyCommand(command)) {
+          console.log('✅ Suggestion key command handled:', command.key);
+          return; // Command was handled by suggestion system
+        }
+      }
+      
       // Process key command using InputProcessor
       this.inputProcessor.processKeyCommand(command, this.documentModel);
+      
+      // Hide suggestions on certain navigation commands
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(command.key)) {
+        this.hideSuggestions();
+      }
       
       // Update statement cache and mark current statement as dirty for content-modifying commands
       if (this.isContentModifyingCommand(command.key)) {
         this.updateStatementCache();
         this.markCurrentStatementDirty();
-      }
-      
-      // Keep the old syntax highlighter system for now (will be replaced later)
-      if (this.syntaxHighlighter && this.isContentModifyingCommand(command.key)) {
-        this.syntaxHighlighter.markDirty();
-        this.syntaxHighlighter.clearCache();
-        this.updateSyntaxHighlighterContext();
+        this.updateLineCount();
       }
       
       // Ensure cursor remains visible after navigation
@@ -517,19 +647,16 @@ export class CodeEditor extends LitElement {
 
     // Listen for popover hover events
     this.addEventListener('popover-mouse-enter', () => {
-     // console.log('🖱️ Mouse entered popover');
       this.isMouseOverPopover = true;
       
       // Cancel any pending hide timeout when mouse enters popover
       if (this.popoverHideTimeout) {
         clearTimeout(this.popoverHideTimeout);
         this.popoverHideTimeout = null;
-        console.log('✅ Cancelled popover hide timeout due to mouse enter');
       }
     });
 
     this.addEventListener('popover-mouse-leave', () => {
-     // console.log('🖱️ Mouse left popover');
       this.isMouseOverPopover = false;
       
       // Hide popover when mouse leaves it (with small delay)
@@ -538,7 +665,7 @@ export class CodeEditor extends LitElement {
 
     // Listen for popover dismissed by escape key
     this.addEventListener('popover-dismissed', () => {
-      console.log('⌨️ Popover dismissed by escape key');
+     // console.log('⌨️ Popover dismissed by escape key');
       this.isPopoverVisible = false;
       this.isMouseOverPopover = false;
       this.currentHoveredToken = null;
@@ -553,9 +680,9 @@ export class CodeEditor extends LitElement {
     // Handle mouse leaving the entire editor area
     this.canvas.addEventListener('mouseleave', () => {
         this.canvas.style.cursor = 'text';
-      // Hide popover when mouse leaves the editor completely
-    
-      this.hideErrorPopoverImmediate();
+      // Don't immediately hide popover - it may be rendered outside the canvas
+      // Let the normal hover detection handle hiding with proper delay
+      // this.hideErrorPopoverImmediate();
     });
     
     this.inputCapture.onMouseUp((event) => {
@@ -579,6 +706,45 @@ export class CodeEditor extends LitElement {
   }
   
   /**
+   * Sets up focus and blur handlers to control cursor visibility and border glow.
+   */
+  private setupFocusHandlers(): void {
+    // Get the hidden textarea from inputCapture
+    const hiddenTextArea = this.inputCapture['hiddenTextArea'] as HTMLTextAreaElement;
+    
+    // Get the container div for border styling
+    const container = this.querySelector('.border') as HTMLDivElement;
+    
+    // Start cursor blinking when editor gains focus
+    hiddenTextArea.addEventListener('focus', () => {
+      this.cursorVisible = true;
+      this.startCursorBlinking();
+      
+      // Add orange glow effect
+      if (container) {
+        container.style.boxShadow = '0 0 0 2px rgba(255, 165, 0, 0.5)';
+        container.style.borderColor = 'rgb(255, 165, 0)';
+      }
+      
+      this.renderEditor();
+    });
+    
+    // Stop cursor blinking when editor loses focus
+    hiddenTextArea.addEventListener('blur', () => {
+      this.stopCursorBlinking();
+      this.cursorVisible = false;
+      
+      // Remove glow effect
+      if (container) {
+        container.style.boxShadow = '';
+        container.style.borderColor = '';
+      }
+      
+      this.renderEditor();
+    });
+  }
+  
+  /**
    * Viewport Management
    */
   private updateViewport(): void {
@@ -598,12 +764,14 @@ export class CodeEditor extends LitElement {
     );
     
     if (newScrollOffset && (newScrollOffset.x !== this.scrollOffset.x || newScrollOffset.y !== this.scrollOffset.y)) {
-      this.scrollOffset = newScrollOffset;
-      // Update ViewportManager's scroll offset to keep it in sync
-      this.viewportManager.updateScrollOffset(newScrollOffset);
-      // Update coordinate system with new scroll offset
-      this.coordinateSystem.setScrollOffset(newScrollOffset);
-      this.requestUpdate();
+      // Use requestAnimationFrame to defer state update after the current update cycle
+      requestAnimationFrame(() => {
+        this.scrollOffset = newScrollOffset;
+        // Update ViewportManager's scroll offset to keep it in sync
+        this.viewportManager.updateScrollOffset(newScrollOffset);
+        // Update coordinate system with new scroll offset
+        this.coordinateSystem.setScrollOffset(newScrollOffset);
+      });
     }
   }
   
@@ -635,11 +803,12 @@ export class CodeEditor extends LitElement {
     };
     
     // Update scroll position
-    this.scrollOffset = clampedOffset;
-    this.viewportManager.updateScrollOffset(clampedOffset);
-    
-    // Update coordinate system with new scroll offset
-    this.coordinateSystem.setScrollOffset(clampedOffset);
+    requestAnimationFrame(() => {
+      this.scrollOffset = clampedOffset;
+      this.viewportManager.updateScrollOffset(clampedOffset);
+      // Update coordinate system with new scroll offset
+      this.coordinateSystem.setScrollOffset(clampedOffset);
+    });
     
     // Re-render with new scroll position
     this.renderEditor();
@@ -655,15 +824,17 @@ export class CodeEditor extends LitElement {
     if (hitInfo.type !== 'none') {
       if (hitInfo.type === 'vertical-thumb' || hitInfo.type === 'horizontal-thumb') {
         // Start smooth dragging the thumb
-        this.scrollbarDrag = {
-          active: true,
-          type: hitInfo.type === 'vertical-thumb' ? 'vertical' : 'horizontal',
-          startMousePos: mousePos,
-          startScrollOffset: { ...this.scrollOffset },
-          thumbOffset: hitInfo.type === 'vertical-thumb' ? 
-                      mousePos.y - hitInfo.region!.y : 
-                      mousePos.x - hitInfo.region!.x
-        };
+        requestAnimationFrame(() => {
+          this.scrollbarDrag = {
+            active: true,
+            type: hitInfo.type === 'vertical-thumb' ? 'vertical' : 'horizontal',
+            startMousePos: mousePos,
+            startScrollOffset: { ...this.scrollOffset },
+            thumbOffset: hitInfo.type === 'vertical-thumb' ? 
+                        mousePos.y - hitInfo.region!.y : 
+                        mousePos.x - hitInfo.region!.x
+          };
+        });
         
         // Initialize smooth drag state
         this.lastMousePos = mousePos;
@@ -674,7 +845,6 @@ export class CodeEditor extends LitElement {
         this.handleScrollbarTrackClick(mousePos, hitInfo.type);
       }
       
-      this.requestUpdate();
       return true; // Event handled
     }
     
@@ -706,15 +876,16 @@ export class CodeEditor extends LitElement {
     this.removeGlobalMouseCapture();
     
     // End dragging
-    this.scrollbarDrag = {
-      active: false,
-      type: null,
-      startMousePos: { x: 0, y: 0 },
-      startScrollOffset: { x: 0, y: 0 },
-      thumbOffset: 0
-    };
+    requestAnimationFrame(() => {
+      this.scrollbarDrag = {
+        active: false,
+        type: null,
+        startMousePos: { x: 0, y: 0 },
+        startScrollOffset: { x: 0, y: 0 },
+        thumbOffset: 0
+      };
+    });
     
-    this.requestUpdate();
     return true; // Event handled
   }
   
@@ -728,26 +899,29 @@ export class CodeEditor extends LitElement {
       const clickRatio = mousePos.y / trackHeight;
       const maxScrollY = Math.max(0, this.getTotalContentHeight() - viewportInfo.height);
       
-      this.scrollOffset = {
-        x: this.scrollOffset.x,
-        y: Math.max(0, Math.min(maxScrollY, clickRatio * maxScrollY))
-      };
+      requestAnimationFrame(() => {
+        this.scrollOffset = {
+          x: this.scrollOffset.x,
+          y: Math.max(0, Math.min(maxScrollY, clickRatio * maxScrollY))
+        };
+        this.viewportManager.updateScrollOffset(this.scrollOffset);
+        this.coordinateSystem.setScrollOffset(this.scrollOffset);
+      });
     } else if (trackType === 'horizontal-track') {
       // Calculate target scroll position based on click position
       const trackWidth = viewportInfo.width - scrollbarWidth;
       const clickRatio = mousePos.x / trackWidth;
       const maxScrollX = Math.max(0, this.getTotalContentWidth() - viewportInfo.width);
       
-      this.scrollOffset = {
-        x: Math.max(0, Math.min(maxScrollX, clickRatio * maxScrollX)),
-        y: this.scrollOffset.y
-      };
+      requestAnimationFrame(() => {
+        this.scrollOffset = {
+          x: Math.max(0, Math.min(maxScrollX, clickRatio * maxScrollX)),
+          y: this.scrollOffset.y
+        };
+        this.viewportManager.updateScrollOffset(this.scrollOffset);
+        this.coordinateSystem.setScrollOffset(this.scrollOffset);
+      });
     }
-    
-    this.viewportManager.updateScrollOffset(this.scrollOffset);
-    // Update coordinate system with new scroll offset
-    this.coordinateSystem.setScrollOffset(this.scrollOffset);
-    this.requestUpdate();
   }
 
   /**
@@ -775,10 +949,8 @@ export class CodeEditor extends LitElement {
     // });
     
     // Find the statement at this position
-    const statement = this.statementParser.findStatementAtPosition(
-      this.codeCache.statements,
-      position.line,
-      position.column
+    const statement = this.codeCache.statements.find(stmt => 
+      position.line >= stmt.lineStart && position.line <= stmt.lineEnd
     );
 
     // console.log('📋 STATEMENT DEBUG:', {
@@ -815,16 +987,23 @@ export class CodeEditor extends LitElement {
     
     // Check if this new token/statement has validation errors
     if (statement && !statement.isValid && !statement.isDirty) {
-      console.log('✅ Found invalid statement, showing popover');
+ //     console.log('✅ Found invalid statement, showing popover');
       
       // Get stored validation results for this statement
       const statementKey = `${statement.lineStart}-${statement.lineEnd}`;
       const validationResult = this.validationResults.get(statementKey);
       
       let errors = [];
-      if (validationResult && validationResult.errorDetails && validationResult.errorDetails.length > 0) {
-        // Use detailed error information from validation
-        errors = validationResult.errorDetails;
+      if (validationResult && validationResult.errors && validationResult.errors.length > 0) {
+        // Use V2 error details (enhanced with suggestions, quick fixes, etc.)
+        errors = validationResult.errors.map(err => ({
+          code: err.code,
+          message: err.message,
+          line: 0, // Position-based errors, convert if needed
+          column: err.startPosition,
+          source: '', // V2 doesn't expose source directly
+          suggestion: err.suggestion
+        }));
       } else {
         // Fallback to generic error message
         errors = [{
@@ -835,10 +1014,10 @@ export class CodeEditor extends LitElement {
       
       // Calculate exact token position for popover placement
       const tokenScreenPos = this.calculateTokenScreenPosition(position);
-      console.log('📍 TOKEN POSITION:', { 
-        calculatedPosition: tokenScreenPos,
-        originalPosition: position 
-      });
+      // console.log('📍 TOKEN POSITION:', { 
+      //   calculatedPosition: tokenScreenPos,
+      //   originalPosition: position 
+      // });
       
       this.showErrorPopover(tokenScreenPos.x, tokenScreenPos.y, errors);
     } else {
@@ -885,10 +1064,8 @@ export class CodeEditor extends LitElement {
     // });
     
     // Find statement at this calculated position
-    const statement = this.statementParser.findStatementAtPosition(
-      this.codeCache.statements,
-      lineIndex,
-      columnIndex
+    const statement = this.codeCache.statements.find(stmt => 
+      lineIndex >= stmt.lineStart && lineIndex <= stmt.lineEnd
     );
     
     // console.log('📋 ALT STATEMENT DEBUG:', {
@@ -904,7 +1081,8 @@ export class CodeEditor extends LitElement {
     
     // Rest of hover logic...
     if (statement && !statement.isValid && !statement.isDirty) {
-      //console.log('✅ ALT: Found invalid statement');
+      // Mark that we're over an invalid statement
+      this.isMouseOverInvalidStatement = true;
       
       // Find the actual token being hovered over
       const hoveredTokenPosition = this.findTokenAtPosition(lineIndex, columnIndex);
@@ -943,10 +1121,27 @@ export class CodeEditor extends LitElement {
         //   calculation: `canvas(${canvasRect.left}) + startCol(${hoveredTokenPosition.startColumn}) * charWidth(${fontMetrics.characterWidth}) - scrollX(${this.scrollOffset.x})`
         // });
         
-        const errors = [{
-          message: `Invalid SyndrQL statement detected on lines ${statement.lineStart + 1}-${statement.lineEnd + 1}`,
-          code: 'INVALID_STATEMENT'
-        }];
+        // Get actual validation errors for this statement
+        const statementKey = `${statement.lineStart}-${statement.lineEnd}`;
+        const validationResult = this.validationResults.get(statementKey);
+        
+        const errors = [];
+        if (validationResult && validationResult.errors.length > 0) {
+          // Add all validation errors with their details
+          validationResult.errors.forEach(error => {
+            errors.push({
+              message: error.message,
+              code: error.code,
+              suggestion: error.suggestion
+            });
+          });
+        } else {
+          // Fallback to generic message if no specific errors found
+          errors.push({
+            message: `Invalid SyndrQL statement detected on lines ${statement.lineStart + 1}-${statement.lineEnd + 1}`,
+            code: 'INVALID_STATEMENT'
+          });
+        }
         
         this.showErrorPopover(tokenStartX, tokenStartY, errors);
       } else {
@@ -957,20 +1152,23 @@ export class CodeEditor extends LitElement {
         
       }
     } else {
-      // Not hovering over an invalid token, but don't hide immediately if popover is visible
-      // This allows user to move mouse from token to popover without it disappearing
-      if (this.isPopoverVisible && this.currentHoveredToken) {
-        console.log('⏸️ Not over token but popover is visible, giving time to reach popover');
-        // Only start hide timer if we're not already over the popover
-        if (!this.isMouseOverPopover) {
+      // Not hovering over an invalid token
+      //console.log('❌ NOT over invalid statement, setting isMouseOverInvalidStatement = false, isMouseOverPopover:', this.isMouseOverPopover);
+      this.isMouseOverInvalidStatement = false;
+      
+      // Hide popover if we're not over the popover either
+      if (this.isPopoverVisible) {
+        //console.log('⏸️ Left invalid statement, popover visible, checking if should hide');
+        // Only hide if mouse is not over the popover AND we haven't already started the hide process
+        if (!this.isMouseOverPopover && !this.popoverHideTimeout) {
+         // console.log('🚀 Starting hide timer (first time leaving invalid area)');
           this.hideErrorPopover();
         }
+        // If mouse IS over popover, the hideErrorPopover will be called
+        // when mouse leaves the popover (from popover-mouse-leave event)
       } else {
-        
-        // No popover visible or no previous token, safe to clear state
-       // console.log('❌ Not hovering over invalid token, hiding popover');
+        // No popover visible, just clear state
         this.currentHoveredToken = null;
-        this.hideErrorPopover();
       }
     }
   }
@@ -1057,16 +1255,16 @@ export class CodeEditor extends LitElement {
     // Get font metrics for accurate positioning
     const fontMetrics = this.coordinateSystem.getFontMetrics();
     
-    console.log('🔧 POSITION CALC DEBUG:', {
-      inputPosition: position,
-      fontMetrics: {
-        lineHeight: fontMetrics.lineHeight,
-        ascent: fontMetrics.ascent,
-        descent: fontMetrics.descent,
-        characterWidth: fontMetrics.characterWidth
-      },
-      scrollOffset: this.scrollOffset
-    });
+    // console.log('🔧 POSITION CALC DEBUG:', {
+    //   inputPosition: position,
+    //   fontMetrics: {
+    //     lineHeight: fontMetrics.lineHeight,
+    //     ascent: fontMetrics.ascent,
+    //     descent: fontMetrics.descent,
+    //     characterWidth: fontMetrics.characterWidth
+    //   },
+    //   scrollOffset: this.scrollOffset
+    // });
     
     // Convert document position to screen coordinates (this gives us the character position)
     const screenPos = this.coordinateSystem.positionToScreen({
@@ -1074,10 +1272,10 @@ export class CodeEditor extends LitElement {
       column: position.column
     });
     
-    console.log('📐 SCREEN POS DEBUG:', {
-      screenPos,
-      beforeCanvasAdjustment: screenPos
-    });
+    // console.log('📐 SCREEN POS DEBUG:', {
+    //   screenPos,
+    //   beforeCanvasAdjustment: screenPos
+    // });
     
     // Get canvas rectangle to convert to absolute screen coordinates
     const canvasRect = this.canvas?.getBoundingClientRect();
@@ -1090,11 +1288,11 @@ export class CodeEditor extends LitElement {
     const tokenTopLeftX = canvasRect.left + screenPos.x;
     const tokenTopLeftY = canvasRect.top + screenPos.y - fontMetrics.ascent; // Move up from baseline to top
     
-    console.log('📍 FINAL POSITION DEBUG:', {
-      canvasRect: { left: canvasRect.left, top: canvasRect.top },
-      tokenTopLeft: { x: tokenTopLeftX, y: tokenTopLeftY },
-      ascentAdjustment: fontMetrics.ascent
-    });
+    // console.log('📍 FINAL POSITION DEBUG:', {
+    //   canvasRect: { left: canvasRect.left, top: canvasRect.top },
+    //   tokenTopLeft: { x: tokenTopLeftX, y: tokenTopLeftY },
+    //   ascentAdjustment: fontMetrics.ascent
+    // });
     
     return {
       x: tokenTopLeftX,
@@ -1116,8 +1314,15 @@ export class CodeEditor extends LitElement {
     const errorPopup = this.querySelector('error-pop-up') as any;
     
     if (errorPopup) {
-      // Format errors for display
-      const errorMessages = errors.map(error => error.message || error.description || 'Unknown error').join('\n');
+      // Format errors with code and suggestion details (like console output)
+      const errorMessages = errors.map((error, index) => {
+        let msg = `${index + 1}. [${error.code}] ${error.message || error.description || 'Unknown error'}`;
+        if (error.suggestion) {
+          msg += `\n   Suggestion: ${error.suggestion}`;
+        }
+        return msg;
+      }).join('\n\n');
+      
       errorPopup.show(screenX, screenY, errorMessages);
       this.isPopoverVisible = true;
     }
@@ -1128,22 +1333,27 @@ export class CodeEditor extends LitElement {
    * This method can be called from the browser console for testing
    */
   public testErrorPopover(): void {
-    console.log('🧪 Testing error popover functionality...');
+    // console.log('🧪 Testing error popover functionality...');
     
     // Find an invalid statement for testing
     const invalidStatement = this.codeCache.statements.find(s => !s.isValid && !s.isDirty);
     
     if (invalidStatement) {
-      console.log('🔍 Found invalid statement:', invalidStatement);
+      // console.log('🔍 Found invalid statement:', invalidStatement);
       
       // Get stored validation results
       const statementKey = `${invalidStatement.lineStart}-${invalidStatement.lineEnd}`;
       const validationResult = this.validationResults.get(statementKey);
       
       let mockErrors = [];
-      if (validationResult && validationResult.errorDetails && validationResult.errorDetails.length > 0) {
-        mockErrors = validationResult.errorDetails;
-        console.log('📋 Using stored validation errors:', mockErrors);
+      if (validationResult && validationResult.errors && validationResult.errors.length > 0) {
+        mockErrors = validationResult.errors.map(err => ({
+          message: err.message,
+          code: err.code,
+          line: invalidStatement.lineStart,
+          column: err.startPosition
+        }));
+        // console.log('📋 Using stored validation errors:', mockErrors);
       } else {
         // Create mock error data as fallback
         mockErrors = [{
@@ -1152,7 +1362,7 @@ export class CodeEditor extends LitElement {
           line: invalidStatement.lineStart,
           column: 0
         }];
-        console.log('📋 Using fallback mock errors:', mockErrors);
+        // console.log('📋 Using fallback mock errors:', mockErrors);
       }
       
       // Calculate position for first character of invalid statement
@@ -1164,12 +1374,12 @@ export class CodeEditor extends LitElement {
       // Show popover at calculated token position
       this.showErrorPopover(tokenPosition.x, tokenPosition.y, mockErrors);
       
-      console.log('✅ Error popover displayed at token position:', tokenPosition);
+      // console.log('✅ Error popover displayed at token position:', tokenPosition);
       
       // Hide after 3 seconds for testing
       setTimeout(() => {
         this.hideErrorPopoverImmediate();
-        console.log('✅ Error popover hidden');
+        // console.log('✅ Error popover hidden');
       }, 3000);
     } else {
       console.log('⚠️ No invalid statements found. Try typing an incomplete statement like "SELECT" and then call this method.');
@@ -1190,7 +1400,6 @@ export class CodeEditor extends LitElement {
   private hideErrorPopover(): void {
     // Don't try to hide if popover is already hidden
     if (!this.isPopoverVisible) {
-      //console.log('✋ Popover already hidden, skipping hide');
       return;
     }
     
@@ -1199,24 +1408,18 @@ export class CodeEditor extends LitElement {
       clearTimeout(this.popoverHideTimeout);
     }
     
-    //console.log('🔄 hideErrorPopover called, isMouseOverPopover:', this.isMouseOverPopover);
-    
     this.popoverHideTimeout = window.setTimeout(() => {
-     // console.log('🕰️ Hide timeout fired, isMouseOverPopover:', this.isMouseOverPopover);
-      // Only hide if mouse is not over the popover
-      if (!this.isMouseOverPopover) {
-     //   console.log('🫥 Hiding popover - mouse not over popover');
+      // Only hide if mouse is not over the popover AND not over the invalid statement
+      if (!this.isMouseOverPopover && !this.isMouseOverInvalidStatement) {
         const errorPopup = this.querySelector('error-pop-up') as any;
         if (errorPopup) {
           errorPopup.hide();
         }
         this.isPopoverVisible = false;
         this.currentHoveredToken = null;
-      } else {
-        console.log('⏸️ NOT hiding popover - mouse is over popover');
       }
       this.popoverHideTimeout = null;
-    }, 200); // Increased delay to give more time for mouse to reach popover
+    }, 500); // 500ms delay to give user time to move mouse into popover
   }
 
   /**
@@ -1234,6 +1437,7 @@ export class CodeEditor extends LitElement {
     }
     this.isPopoverVisible = false;
     this.isMouseOverPopover = false; // Reset popover hover state
+    this.isMouseOverInvalidStatement = false; // Reset statement hover state
     this.currentHoveredToken = null;
   }
     
@@ -1247,10 +1451,12 @@ export class CodeEditor extends LitElement {
       this.dragUpdateScheduled = true;
       requestAnimationFrame(() => {
         if (newScrollOffset.x !== this.scrollOffset.x || newScrollOffset.y !== this.scrollOffset.y) {
-          this.scrollOffset = newScrollOffset;
-          this.viewportManager.updateScrollOffset(newScrollOffset);
-          // Update coordinate system with new scroll offset
-          this.coordinateSystem.setScrollOffset(newScrollOffset);
+          requestAnimationFrame(() => {
+            this.scrollOffset = newScrollOffset;
+            this.viewportManager.updateScrollOffset(newScrollOffset);
+            // Update coordinate system with new scroll offset
+            this.coordinateSystem.setScrollOffset(newScrollOffset);
+          });
           this.renderEditorOptimized(); // Use optimized rendering during drag
         }
         this.dragUpdateScheduled = false;
@@ -1278,16 +1484,39 @@ export class CodeEditor extends LitElement {
     };
     
     this.globalMouseUpHandler = (event: MouseEvent) => {
+      // Handle scrollbar drag end
       if (this.scrollbarDrag.active) {
         this.removeGlobalMouseCapture();
-        this.scrollbarDrag = {
-          active: false,
-          type: null,
-          startMousePos: { x: 0, y: 0 },
-          startScrollOffset: { x: 0, y: 0 },
-          thumbOffset: 0
+        requestAnimationFrame(() => {
+          this.scrollbarDrag = {
+            active: false,
+            type: null,
+            startMousePos: { x: 0, y: 0 },
+            startScrollOffset: { x: 0, y: 0 },
+            thumbOffset: 0
+          };
+        });
+      }
+      
+      // Handle text selection end (in case mouse is released outside editor)
+      if (this.inputProcessor && this.documentModel) {
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseEventData: MouseEventData = {
+          coordinates: {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+          },
+          button: event.button,
+          buttons: event.buttons,
+          modifiers: {
+            shift: event.shiftKey,
+            ctrl: event.ctrlKey,
+            alt: event.altKey,
+            meta: event.metaKey
+          }
         };
-        this.requestUpdate();
+        this.inputProcessor.processMouseUp(mouseEventData, this.documentModel);
+        this.renderEditor();
       }
     };
     
@@ -1439,13 +1668,13 @@ export class CodeEditor extends LitElement {
     return this.getThemeColor(this.backgroundColor);
   }
   
-    public updateSyntaxTheme(theme: Partial<SyntaxTheme>): void {
+  public updateSyntaxTheme(theme: Partial<SyntaxTheme>): void {
     this.syntaxTheme = { ...this.syntaxTheme, ...theme };
-    if (this.syntaxHighlighter) {
-        this.syntaxHighlighter.setTheme(theme);
+    if (this.languageService) {
+        this.languageService.setTheme({ ...DEFAULT_SYNDRQL_THEME, ...this.syntaxTheme, ...theme } as SyntaxTheme);
         this.renderEditor(); // Re-render with new theme
     }
-    }
+  }
 
   /**
    * Handle clipboard commands (Ctrl+C, Ctrl+V, Ctrl+X)
@@ -1534,7 +1763,6 @@ export class CodeEditor extends LitElement {
         // Update editor state
         this.updateStatementCache();
         this.markCurrentStatementDirty();
-        this.updateSyntaxHighlighterContext();
         this.renderEditor();
         
         console.log('📋 Pasted from clipboard:', clipboardText);
@@ -1572,7 +1800,6 @@ export class CodeEditor extends LitElement {
       // Update editor state
       this.updateStatementCache();
       this.markCurrentStatementDirty();
-      this.updateSyntaxHighlighterContext();
       this.renderEditor();
       
       console.log('✂️ Cut to clipboard:', selectedText);
@@ -1622,13 +1849,26 @@ export class CodeEditor extends LitElement {
   }
 
   /**
+   * Update line count only if it changed (for line-numbers component)
+   * Deferred to avoid cascading updates during event handlers
+   */
+  private updateLineCount(): void {
+    if (this.documentModel) {
+      const newLineCount = this.documentModel.getLines().length;
+      if (newLineCount !== this.lineCount) {
+        // Use requestAnimationFrame to defer state update after the current update cycle
+        requestAnimationFrame(() => {
+          this.lineCount = newLineCount;
+        });
+      }
+    }
+  }
+
+  /**
    * Basic rendering with selection support.
    */
   private renderEditor(): void {
     if (!this.context) return;
-    
-    // Update line numbers data for synchronization
-    this.updateLineNumbersData();
     
     // Update viewport dimensions
     this.updateViewport();
@@ -1677,30 +1917,32 @@ export class CodeEditor extends LitElement {
     
     if (!selection || !this.documentModel.hasSelection()) {
       // No selection - render normally
-      // Render with syntax highlighting instead of plain text
-      if (this.enableSyntaxHighlighting && this.syntaxHighlighter) {
-        // Get full document text for grammar validation context
-        const lines = this.documentModel.getLines();
-        const fullText = lines.join('\n');
-        
-        // Find which statement this line belongs to
-        const statement = this.statementParser.findStatementAtLine(this.codeCache.statements, lineIndex);
-        const hasStatementError = statement && !statement.isValid && !statement.isDirty;
-        
-        // Render with syntax highlighting and statement-level error information
-        this.syntaxHighlighter.renderLine(
-            this.context,
-            lineText,
-            lineIndex + 1,
-            y,
-            fontMetrics,
-            this.viewportManager.getScrollOffset(),
-            fullText
+      // Render with syntax highlighting using V2 language service
+      if (this.enableSyntaxHighlighting && this.languageService) {
+        // Render line with V2 language service (just syntax highlighting)
+        this.languageService.renderLine(
+          lineText,
+          lineIndex + 1,
+          y,
+          fontMetrics,
+          this.viewportManager.getScrollOffset()
         );
         
-        // Render statement-level error underlines if needed
-        if (hasStatementError) {
-          this.renderStatementErrorUnderline(lineText, lineIndex, y, fontMetrics);
+        // Check if this line's statement has validation errors
+        const statement = this.getStatementForLine(lineIndex);
+        if (statement) {
+          const statementKey = `${statement.lineStart}-${statement.lineEnd}`;
+          const validationResult = this.validationResults.get(statementKey);
+          
+          // Render statement-level error underlines if this statement has errors
+          if (validationResult && !validationResult.valid && validationResult.errors.length > 0) {
+            this.languageService.renderStatementError(
+              lineText,
+              y,
+              fontMetrics,
+              this.viewportManager.getScrollOffset()
+            );
+          }
         }
         } else {
         // Fallback to plain text rendering
@@ -1890,13 +2132,13 @@ export class CodeEditor extends LitElement {
     if (!this.cursorVisible) return;
     
     const cursorPos = this.documentModel.getCursorPosition();
+    // positionToScreen already applies scroll offset, don't apply it again
     const screenPos = this.coordinateSystem.positionToScreen(cursorPos);
     const fontMetrics = this.coordinateSystem.getFontMetrics();
-    const scrollOffset = this.viewportManager.getScrollOffset();
     
-    // Apply scroll offset to cursor position
-    const x = screenPos.x - scrollOffset.x;
-    const y = screenPos.y - scrollOffset.y;
+    // Use screen position directly (scroll already applied in positionToScreen)
+    const x = screenPos.x;
+    const y = screenPos.y;
     
     // Only draw cursor if it's in the visible area
     const viewportInfo = this.viewportManager.getViewportInfo();
@@ -2043,11 +2285,6 @@ export class CodeEditor extends LitElement {
     // Insert dropped text directly at the target position (this will auto-expand the document)
     this.documentModel.insertText(finalPosition, dropData);
     
-    // Clear syntax highlighting cache since document changed
-    if (this.syntaxHighlighter) {
-      this.syntaxHighlighter.clearCache();
-    }
-    
     // Ensure cursor is visible after insertion
     this.ensureCursorVisible();
     
@@ -2168,9 +2405,271 @@ export class CodeEditor extends LitElement {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
+    
+    // Dispose V2 language service
+    if (this.languageService) {
+      this.languageService.dispose();
+    }
+  }
+
+  // ============================================================================
+  // SUGGESTION/AUTOCOMPLETE METHODS
+  // ============================================================================
+
+  /**
+   * Debounced method to update suggestions - prevents excessive API calls
+   */
+  private debouncedUpdateSuggestions = (): void => {
+    if (this.suggestionUpdateTimeout) {
+      clearTimeout(this.suggestionUpdateTimeout);
+    }
+    
+    this.suggestionUpdateTimeout = window.setTimeout(async () => {
+      await this.updateSuggestions();
+    }, this.SUGGESTION_UPDATE_DELAY);
+  };
+
+  /**
+   * Update autocomplete suggestions based on current cursor position and text
+   * Uses Language Service V2 for context-aware suggestions
+   */
+  private async updateSuggestions(): Promise<void> {
+    if (!this.languageService || !this.documentModel) {
+      return;
+    }
+
+    try {
+      const cursorPosition = this.documentModel.getCursorPosition();
+      const lines = this.documentModel.getLines();
+      const fullText = lines.join('\n');
+      
+      // Calculate character position in document
+      let charPosition = 0;
+      for (let i = 0; i < cursorPosition.line; i++) {
+        charPosition += lines[i].length + 1; // +1 for newline
+      }
+      charPosition += cursorPosition.column;
+      
+      // Get V2 context-aware suggestions
+      const suggestions = await this.languageService.getSuggestions(fullText, charPosition);
+      
+      if (suggestions.length > 0) {
+        this.suggestions = suggestions;
+        this.selectedSuggestionIndex = 0;
+        this.suggestionPosition = this.calculateSuggestionPosition(cursorPosition);
+        this.showSuggestions = true;
+      } else {
+        this.hideSuggestions();
+      }
+    } catch (error) {
+      console.error('Error updating V2 suggestions:', error);
+      this.hideSuggestions();
+    }
+  }
+
+  /**
+   * Calculate the pixel position for the suggestion dropdown
+   */
+  private calculateSuggestionPosition(cursorPosition: Position): { x: number; y: number } {
+    if (!this.coordinateSystem) {
+      return { x: 0, y: 0 };
+    }
+
+    try {
+      const screenPos = this.coordinateSystem.positionToScreen(cursorPosition);
+      const fontMetrics = this.coordinateSystem.getFontMetrics();
+      
+      return {
+        x: Math.max(0, screenPos.x),
+        y: Math.max(0, screenPos.y + fontMetrics.lineHeight)
+      };
+    } catch (error) {
+      console.error('Error calculating suggestion position:', error);
+      return { x: 0, y: 0 };
+    }
+  }
+
+  /**
+   * Hide the suggestion dropdown
+   */
+  private hideSuggestions(): void {
+    console.log('🙈 Hiding suggestions, current state:', this.showSuggestions, this.suggestions.length);
+    this.showSuggestions = false;
+    this.suggestions = [];
+    this.selectedSuggestionIndex = 0;
+    this.requestUpdate(); // Force immediate Lit update
+    //console.log('🙈 After hiding suggestions, new state:', this.showSuggestions);
+  }
+
+  /**
+   * Handle suggestion selection from dropdown
+   */
+  private handleSuggestionSelected = (event: CustomEvent): void => {
+    const selectedSuggestion = event.detail.suggestion as Suggestion;
+    this.applySuggestion(selectedSuggestion);
+  };
+
+  /**
+   * Handle suggestion dropdown dismissal
+   */
+  private handleSuggestionDismissed = (): void => {
+    this.hideSuggestions();
+  };
+
+  /**
+   * Handle mouse hover over suggestion items
+   */
+  private handleSuggestionHover = (event: CustomEvent): void => {
+    this.selectedSuggestionIndex = event.detail.index;
+  };
+
+  /**
+   * Apply a selected suggestion to the editor
+   * Records usage in V2 for ranking
+   */
+  private applySuggestion(suggestion: Suggestion): void {
+    if (!this.documentModel || !this.inputProcessor) {
+      return;
+    }
+
+    try {
+      // Hide suggestions first
+      this.hideSuggestions();
+      
+      // Get current cursor position
+      const cursorPosition = this.documentModel.getCursorPosition();
+      
+      // Get text up to cursor to find partial token to replace
+      const textUpToCursor = this.documentModel.getTextUpToCursor(cursorPosition);
+      
+      // Find the start of the current partial token (only alphanumeric, not whitespace)
+      // This matches a sequence of word characters at the END of the string
+      const tokenMatch = textUpToCursor.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
+      
+      // Get the insert text
+      const insertText = suggestion.insertText || (suggestion as any).value || suggestion.label;
+      
+      // Only replace if we have a non-empty partial token
+      if (tokenMatch && tokenMatch[1] && tokenMatch[1].length > 0) {
+        // Replace the partial token
+        const partialToken = tokenMatch[1];
+        const startPosition: Position = {
+          line: cursorPosition.line,
+          column: cursorPosition.column - partialToken.length
+        };
+        
+        // Delete the partial token
+        this.documentModel.deleteText(startPosition, cursorPosition);
+        
+        // Insert the suggestion
+        this.documentModel.insertText(startPosition, insertText);
+        
+        // Update cursor position
+        this.documentModel.setCursorPosition({
+          line: startPosition.line,
+          column: startPosition.column + insertText.length
+        });
+      } else {
+        // No partial token - check if cursor is right after whitespace
+        // In this case, just insert at cursor position (don't delete anything)
+        this.documentModel.insertText(cursorPosition, insertText);
+        
+        // Update cursor position
+        this.documentModel.setCursorPosition({
+          line: cursorPosition.line,
+          column: cursorPosition.column + insertText.length
+        });
+      }
+      
+      // Record usage in V2 for ranking
+      this.languageService.recordSuggestionUsage(suggestion.label);
+      
+      // Update syntax highlighting and re-render
+      this.updateStatementCache();
+      this.markCurrentStatementDirty();
+      
+      this.renderEditor();
+      
+    } catch (error) {
+      console.error('Error applying suggestion:', error);
+    }
+  }
+
+  /**
+   * Navigate suggestions with arrow keys
+   */
+  private navigateSuggestions(direction: 'up' | 'down'): boolean {
+    if (!this.showSuggestions || this.suggestions.length === 0) {
+      return false;
+    }
+
+    if (direction === 'up') {
+      this.selectedSuggestionIndex = Math.max(0, this.selectedSuggestionIndex - 1);
+    } else {
+      this.selectedSuggestionIndex = Math.min(this.suggestions.length - 1, this.selectedSuggestionIndex + 1);
+    }
+
+    return true;
+  }
+
+  /**
+   * Accept the currently selected suggestion
+   */
+  private acceptSelectedSuggestion(): boolean {
+    if (!this.showSuggestions || this.suggestions.length === 0) {
+      return false;
+    }
+
+    const selectedSuggestion = this.suggestions[this.selectedSuggestionIndex];
+    if (selectedSuggestion) {
+      this.applySuggestion(selectedSuggestion);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Handle key commands when suggestions are visible
+   */
+  private handleSuggestionKeyCommand(command: KeyCommand): boolean {
+    switch (command.key) {
+      case 'ArrowUp':
+        return this.navigateSuggestions('up');
+      
+      case 'ArrowDown':
+        return this.navigateSuggestions('down');
+      
+      case 'Enter':
+      case 'Tab':
+        return this.acceptSelectedSuggestion();
+      
+      case 'Escape':
+        console.log('🚪 Escape pressed, hiding suggestions');
+        this.hideSuggestions();
+        return true;
+      
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Utility method for debouncing function calls
+   */
+  private debounce<T extends (...args: any[]) => void>(func: T, delay: number): (...args: Parameters<T>) => void {
+    let timeoutId: number;
+    return (...args: Parameters<T>) => {
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => func.apply(this, args), delay);
+    };
   }
   
   render() {
+    // Compute scroll-related values inline, but use reactive lineCount
+    const editorScrollTop = this.scrollOffset.y;
+    const editorHeight = this.canvas?.clientHeight || 400;
+    
     return html`
     <droppable-component @drop-completed=${this.handleTextDrop}>
       <div class="border border-gray-600 rounded-lg bg-gray-900 relative h-full w-full flex">
@@ -2178,8 +2677,8 @@ export class CodeEditor extends LitElement {
         <line-numbers
           .totalLines=${this.lineCount}
           .lineHeight=${this.coordinateSystem?.getFontMetrics()?.lineHeight || 20}
-          .scrollTop=${this.editorScrollTop}
-          .visibleHeight=${this.editorHeight}
+          .scrollTop=${editorScrollTop}
+          .visibleHeight=${editorHeight}
           .fontSize=${this.fontSize}
         ></line-numbers>
         
@@ -2197,6 +2696,20 @@ export class CodeEditor extends LitElement {
           
           <!-- Error popover for invalid tokens/statements -->
           <error-pop-up></error-pop-up>
+          
+          <!-- Autocomplete suggestion dropdown -->
+          ${this.showSuggestions ? html`
+            <code-editor-suggestion-dropdown
+              .suggestions=${this.suggestions}
+              .visible=${this.showSuggestions}
+              .x=${this.suggestionPosition.x}
+              .y=${this.suggestionPosition.y}
+              .selectedIndex=${this.selectedSuggestionIndex}
+              @suggestion-selected=${this.handleSuggestionSelected}
+              @suggestion-dismissed=${this.handleSuggestionDismissed}
+              @suggestion-hover=${this.handleSuggestionHover}
+            ></code-editor-suggestion-dropdown>
+          ` : ''}
         </div>
       </div>
       </droppable-component>

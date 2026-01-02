@@ -20,5 +20,31 @@ export interface BundleResponse {
 }
 
 export interface DocumentStructure {
-    FieldDefinitions: Array<FieldDefinition>;
+    FieldDefinitions: any;
+}
+
+export interface Relationship {
+    // RelationshipID is the unique identifier for the relationship.
+	RelationshipID:string
+	// Name is the name of the relationship.
+	Name:string
+	// Description is the description of the relationship.
+	Description:string
+
+	// Source field for the relationship (e.g., "DocumentID")
+	SourceField:string
+	// Destination bundle name
+	DestinationBundle:string
+	// Destination field for the relationship (e.g., "OrderID")
+	DestinationField:string
+	// Source bundle name
+	SourceBundle:string
+	// Type is the type of the relationship (e.g., "0toMany", "1toMany", "ManyToMany").
+	RelationshipType:string
+
+	// Legacy fields for backward compatibility
+	SourceBundleID:string // Bundle ID of the source document
+	SourceBundleName:string // Name of the source bundle
+	TargetBundleID:string // Bundle ID of the target document
+	TargetBundleName:string // Name of the target bundle
 }

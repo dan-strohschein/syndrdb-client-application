@@ -1,0 +1,338 @@
+
+[
+    {
+        "version": "1.0.0",
+        "root" : "select",
+        "rules": [
+            {"name": "select_statement",
+            "symbols": [
+                {"token":"SELECT"},
+                {"reference": "select_list", "optional": false},
+                {"token":"FROM", "optional": false},
+                {"token": "bundle_reference", "optional": false},
+                {"branches": [
+                    [
+                        {"reference": "join_clause", "optional": true},
+                        {"reference": "where_clause", "optional": true},
+                        {"reference": "group_by_clause", "optional": true},
+                        {"reference": "order_by_clause", "optional": true},
+                        {"reference": "limit_clause", "optional": true}
+                        
+                    ],
+                    [
+                        {"reference": "where_clause", "optional": true},
+                        {"reference": "group_by_clause", "optional": true},
+                        {"reference": "order_by_clause", "optional": true},
+                        {"reference": "limit_clause", "optional": true}
+                    ],
+                    [
+                        {"reference": "group_by_clause", "optional": true},
+                        {"reference": "order_by_clause", "optional": true},
+                        {"reference": "limit_clause", "optional": true}
+                    ],
+                    [
+                        {"reference": "order_by_clause", "optional": true},
+                        {"reference": "limit_clause", "optional": true}
+                    ],
+                    [
+                        {"reference": "limit_clause", "optional": true}
+                    ]
+                ], "optional": true},
+                {"literal":";"}
+              
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root" : "select_list",
+        "rules": [
+            {"name": "select_list",
+            "symbols": [
+                {
+                    "branches": [
+                        [
+                            {"token": "field_reference", "optional": false},
+                            {"literal":",", "optional": true},
+                            {"token": "field_reference", "optional": true}
+                        ],
+                        [
+                            {"token":"ASTERISK", "optional": false}
+                        ],
+                        [
+                            {"literal":"documents", "optional": false}
+                        ],
+                        [
+                            {"token": "function_reference", "optional": true}
+                        ]
+                    ]
+                }
+                
+            ],
+            "minimum-branches": 1,
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root" : "field",
+        "rules": [
+            {"name": "field",
+            "symbols": [
+                {"token": "field_reference", "optional": false},
+                {"literal":"AS", "optional": true},
+                {"token": "identifier", "optional": true}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "join_clause",
+        "rules": [
+            {"name": "join_clause",
+            "symbols": [
+                {"token":"JOIN"},
+                {"token": "bundle_reference", "optional": false},
+                {"token":"ON"},
+                {"token": "condition", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "where_clause",
+        "rules": [
+            {"name": "where_clause",
+            "symbols": [
+                {"token":"WHERE"},    
+                {"branches": [
+                    [
+                        {"reference": "condition", "optional": false},
+                        {"reference": "condition_joiner", "optional": true},
+                        {"reference": "condition", "optional": true}
+                    ],
+                    [
+                        {"reference": "conditional_group", "optional": false}
+                    ]
+                ], "optional": false}            
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "conditional_group",
+        "rules": [
+            {"name": "conditional_group",
+            "symbols": [
+                {"reference": "condition_joiner", "optional": true},
+                {"literal":"(", "optional": true},
+                {"reference": "condition", "optional": false},
+                {"reference": "condition_joiner", "optional": true},
+                {"reference": "condition", "optional": true},
+                {"literal":")", "optional": true}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "condition",
+        "rules": [
+            {"name": "condition",
+            "symbols": [
+                {"token": "field_reference", "optional": false},
+                {"reference": "comparison_operator", "optional": false},
+                {"token": "literal", "optional": false}
+            ],
+            "postprocess": null 
+            }
+        ]
+    },
+    {
+        "root": "comparison_operator",
+        "rules": [
+            {"name": "comparison_operator",
+            "symbols": [
+                {
+                    "branches": [
+                        [{"token":"EQ"}],
+                        [{"token":"NOT_EQ"}],
+                        [{"token":"LT"}],
+                        [{"token":"GT"}],
+                        [{"token":"LT_EQ"}],
+                        [{"token":"GT_EQ"}]
+                    ]
+                }
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "condition_joiner",
+        "rules": [
+            {"name": "condition_joiner",
+            "symbols": [
+               {"branches": [
+                    [{"token":"AND"}],
+                    [{"token":"OR"}]
+                ]}
+            ],
+            "minimum-symbols": 1,
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "limit_clause",
+        "rules": [
+            {"name": "limit_clause",
+            "symbols": [
+                {"token":"LIMIT"},
+                {"token": "literal", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "order_by_clause",
+        "rules": [
+            {"name": "order_by_clause",
+            "symbols": [
+                {"token" :"ORDER BY"},
+                {"token": "field_reference", "optional": false},
+                {"token": "ASC", "optional": true},
+                {"token":"DESC", "optional": true}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "update",
+        "rules": [
+            {"name": "update_docs_statement",
+            "symbols": [
+                {"token":"UPDATE"},
+                {"token":"DOCUMENTS"},
+                {"token":"IN"},
+                {"token":"BUNDLE"},
+                {"token": "bundle_reference", "optional": false},
+                {"literal":"("},
+                {"reference": "field_assignments", "optional": false},
+                {"literal":")"},
+                {"token": "where_clause", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "field_assignments",
+        "rules": [
+            {"name": "field_assignments",
+            "symbols": [
+                {"reference": "field_assignment", "optional": false},
+                {"literal":",", "optional": true},
+                {"reference": "field_assignment", "optional": true}
+            ],
+            "postprocess": null,
+            "minimum-symbols": 1
+            }
+        ]
+    },
+    {
+        "root": "field_assignment",
+        "rules": [
+            {"name": "field_assignment",
+            "symbols": [
+                {"token": "field_reference", "optional": false},
+                {"literal":"="},
+                {"token": "literal", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "bundle_reference",
+        "rules": [
+            {"name": "bundle_reference",
+            "symbols": [
+                {"token": "identifier", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "add_document",
+        "rules": [
+            {"name": "add_document_statement",
+            "symbols": [
+                {"token":"ADD"},
+                {"token":"DOCUMENT"},
+                {"token":"TO"},
+                {"token":"BUNDLE"},
+                {"token": "bundle_reference", "optional": false},
+                {"literal":"("},
+                {"reference": "doc_field_assignments", "optional": false},
+                {"literal":")"},
+                {"literal":";"}
+            ],
+            "postprocess": null 
+            }
+        ]
+    },
+    {
+        "root": "doc_field_assignments",
+        "rules": [
+            {"name": "doc_field_assignments",
+            "symbols": [
+                {"literal":"{" , "optional": false},
+                {"reference": "doc_field_assignment", "optional": false},
+                {"literal":"}", "optional": false},
+                {"literal":",", "optional": true}
+            ],
+            "postprocess": null,
+            "minimum-symbols": 1
+            }
+        ]
+    },
+    {
+        "root": "doc_field_assignment",
+        "rules": [
+            {"name": "doc_field_assignment",
+            "symbols": [
+                {"token": "field_reference", "optional": false},
+                {"literal":"="},
+                {"token": "literal", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "delete_document",
+        "rules": [
+            {"name": "delete_document_statement",
+            "symbols": [
+                {"token":"DELETE"},
+                {"token":"FROM"},
+                {"token":"BUNDLE"},
+                {"token": "bundle_reference", "optional": false},
+                {"reference": "where_clause", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    }
+    
+]   

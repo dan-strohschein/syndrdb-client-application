@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SyndrQL Grammar Schema",
+  "description": "JSON schema for validating SyndrQL grammar definition files",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["root", "rules"],
+    "properties": {
+      "version": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "description": "Semantic version of the grammar (e.g., '1.0.0') - required only for first element"
+      },
+      "root": {
+        "type": "string",
+        "description": "The root rule name for this grammar"
+      },
+      "rules": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/definitions/rule"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "required": ["name", "symbols"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the rule"
+        },
+        "symbols": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/symbol"
+          }
+        },
+        "postprocess": {
+          "type": ["string", "null"],
+          "description": "Optional post-processing function name"
+        },
+        "minimumBranches": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum number of branches required"
+        },
+        "minimumSymbols": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum number of symbols required"
+        }
+      }
+    },
+    "symbol": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["token"],
+          "properties": {
+            "token": {
+              "type": "string",
+              "description": "Token type (e.g., 'SELECT', 'IDENTIFIER')"
+            },
+            "optional": {
+              "type": "boolean",
+              "description": "Whether this symbol is optional"
+            },
+            "repeatable": {
+              "type": "boolean",
+              "description": "Whether this symbol can repeat"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["literal"],
+          "properties": {
+            "literal": {
+              "type": "string",
+              "description": "Literal string to match (e.g., ';', ',')"
+            },
+            "optional": {
+              "type": "boolean",
+              "description": "Whether this symbol is optional"
+            },
+            "repeatable": {
+              "type": "boolean",
+              "description": "Whether this symbol can repeat"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["reference"],
+          "properties": {
+            "reference": {
+              "type": "string",
+              "description": "Reference to another rule name"
+            },
+            "optional": {
+              "type": "boolean",
+              "description": "Whether this symbol is optional"
+            },
+            "repeatable": {
+              "type": "boolean",
+              "description": "Whether this symbol can repeat"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["branches"],
+          "properties": {
+            "branches": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Alternative branches (OR logic)",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["symbols"],
+                    "properties": {
+                      "symbols": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "$ref": "#/definitions/symbol"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Legacy format: array of symbols directly",
+                    "items": {
+                      "$ref": "#/definitions/symbol"
+                    }
+                  }
+                ]
+              }
+            },
+            "optional": {
+              "type": "boolean",
+              "description": "Whether this branch set is optional"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

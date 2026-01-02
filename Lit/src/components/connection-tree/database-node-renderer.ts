@@ -179,7 +179,7 @@ export class DatabaseNodeRenderer {
     bundles: Bundle[],
     isExpanded: (nodeId: string) => boolean,
     onToggleNode: (nodeId: string) => void,
-    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, bundle: Bundle | null) => void,
+    onContextMenu: (event: MouseEvent, nodeId: string, nodeName: string, nodeType: string, data:any) => void,
     onSetActiveConnection: (connectionId: string) => void,
     onRequestUpdate: () => void,
     onBundleClick?: (connection: Connection, bundleName: string, bundleNodeId: string) => Promise<void>
@@ -208,7 +208,7 @@ export class DatabaseNodeRenderer {
              
              onToggleNode(bundlesNodeId);
            }}
-           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles',null)}>
+           @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles', storedBundles)}>
         <span class="mr-2 w-4 text-center">
           <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
         </span>

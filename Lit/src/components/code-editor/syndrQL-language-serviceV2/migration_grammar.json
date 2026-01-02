@@ -1,0 +1,100 @@
+[
+    {
+        "version": "1.0.0",
+        "root": "migration_statement",
+        "rules": [
+            {"name": "migration_statement",
+            "symbols": [
+                {"literal": "START"},
+                {"literal":"MIGRATION"},
+                {"literal":"WITH", "optional": true},
+                {"literal":"DESCRIPTION", "optional": true},
+                {"token": "string_literal", "optional": true},
+                {"token": "Commands", "optional": false},
+                {"literal":"COMMIT"},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "show_migrations_statement",
+        "rules": [
+            {"name": "show_migrations_statement",
+            "symbols": [
+                {"literal":"SHOW"},
+                {"literal":"MIGRATIONS"},
+                {"literal": "FOR"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ]
+            }
+        ]
+    },
+    {
+        "root": "apply_migration_statement",
+        "rules": [
+            {"name": "apply_migration_statement",
+            "symbols": [
+                {"literal": "APPLY"},
+                {"literal": "MIGRATION"},
+                {"literal": "WITH"},
+                {"literal": "VERSION"},
+                {"token": "identifier", "optional": false},
+                {"literal": "FORCE", "optional": true},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "rollback_migration_statement",
+        "rules": [
+            {"name": "rollback_migration_statement",
+            "symbols": [
+                {"literal": "APPLY"},
+                {"literal": "ROLLBACK"},
+                {"literal": "TO"},
+                {"literal": "VERSION"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "validate_migration_statement",
+        "rules": [
+            {"name": "validate_migration_statement",
+            "symbols": [
+                {"literal": "VALIDATE"},
+                {"literal": "MIGRATION"},
+                {"literal": "WITH"},
+                {"literal": "VERSION"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "validate_rollback_statement",
+        "rules": [
+            {"name": "validate_rollback_statement",
+            "symbols": [
+                {"literal": "VALIDATE"},
+                {"literal": "ROLLBACK"},
+                {"literal": "TO"},
+                {"literal": "VERSION"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null 
+        }
+        ]
+    }
+]

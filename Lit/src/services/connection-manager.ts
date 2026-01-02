@@ -160,15 +160,15 @@ export class ConnectionManager {
         this.emit('connectionStatusChanged', connection);
         
         // Automatically fetch databases after successful connection
-        console.log('🔄 Automatically fetching databases after connection success...');
+        // console.log('🔄 Automatically fetching databases after connection success...');
         try {
           await this.refreshConnectionMetadata(connectionId);
-          console.log('✅ Databases fetched automatically after connection');
+          // console.log('✅ Databases fetched automatically after connection');
         } catch (error) {
           console.warn('⚠️ Failed to fetch databases automatically:', error);
         }
         
-        console.log('✅ Connection established with databases loaded');
+        // console.log('✅ Connection established with databases loaded');
       } else {
         connection.status = 'error';
         connection.lastError = 'Connection failed';
@@ -197,12 +197,12 @@ export class ConnectionManager {
     try {
       // Fetch databases
       const databasesResult = await connection.driver.executeQuery('SHOW DATABASES;');
-      console.log('📊 SHOW DATABASES result:', databasesResult);
-      console.log('📊 SHOW DATABASES data type:', typeof databasesResult.data);
-      console.log('📊 SHOW DATABASES data isArray:', Array.isArray(databasesResult.data));
+      // console.log('📊 SHOW DATABASES result:', databasesResult);
+      // console.log('📊 SHOW DATABASES data type:', typeof databasesResult.data);
+      // console.log('📊 SHOW DATABASES data isArray:', Array.isArray(databasesResult.data));
       
       if (databasesResult.success && databasesResult.data) {
-        console.log('📊 Raw database data:', databasesResult.data);
+        // console.log('📊 Raw database data:', databasesResult.data);
         // SyndrDB returns Result: ["database1", "database2", ...]
         // The data field now contains the Result array directly
         if (Array.isArray(databasesResult.data)) {
@@ -211,20 +211,20 @@ export class ConnectionManager {
             return typeof dbName === 'string' ? dbName : String(dbName);
           });
         } else {
-          console.log('⚠️ Database data is not an array, trying to convert...');
+          // console.log('⚠️ Database data is not an array, trying to convert...');
           connection.databases = [];
         }
         
-        console.log('✅ Final parsed databases:', connection.databases);
+        // console.log('✅ Final parsed databases:', connection.databases);
       } else {
-        console.log('❌ No database data received');
+        // console.log('❌ No database data received');
         connection.databases = [];
       }
 
       // Fetch users
       try {
         const usersResult = await connection.driver.executeQuery('SHOW USERS;');
-        console.log('👥 SHOW USERS result:', usersResult);
+        // console.log('👥 SHOW USERS result:', usersResult);
         
         if (usersResult.success && usersResult.data) {
           if (Array.isArray(usersResult.data)) {
@@ -235,9 +235,9 @@ export class ConnectionManager {
           } else {
             connection.users = [];
           }
-          console.log('✅ Parsed users:', connection.users);
+          // console.log('✅ Parsed users:', connection.users);
         } else {
-          console.log('❌ No user data received');
+          // console.log('❌ No user data received');
           connection.users = [];
         }
       } catch (userError) {
@@ -366,14 +366,14 @@ export class ConnectionManager {
 
     // Only execute USE command if the database context is changing
     if (connection.currentDatabase !== databaseName) {
-      console.log('🔄 Setting database context:', databaseName);
+      // console.log('🔄 Setting database context:', databaseName);
       const useCommand = `USE "${databaseName}";`;
       
       try {
         const result = await connection.driver.executeQuery(useCommand);
         if (result.success) {
           connection.currentDatabase = databaseName;
-          console.log('✅ Database context set to:', databaseName);
+          // console.log('✅ Database context set to:', databaseName);
           this.emit('databaseContextChanged', { connectionId, databaseName });
         } else {
           console.error('❌ Failed to set database context:', result);
@@ -384,7 +384,7 @@ export class ConnectionManager {
         throw error;
       }
     } else {
-      console.log('✅ Database context already set to:', databaseName);
+      // console.log('✅ Database context already set to:', databaseName);
     }
   }
 
@@ -494,6 +494,11 @@ export class ConnectionManager {
       }
       connection.databaseBundles.set(databaseName, bundles);
       
+      // console.log(`🎯 ConnectionManager: Stored ${bundles.length} bundles for database "${databaseName}"`);
+      
+      // Emit event with bundle data so language service can update context
+      this.emit('bundlesLoaded', { connectionId, databaseName, bundles });
+      
       // Trigger update to notify components
       this.notifyConnectionsChanged();
     }
@@ -533,11 +538,11 @@ export class ConnectionManager {
     }
 
     try {
-      console.log(`🔍 Fetching details for bundle: ${bundleName}`);
+      // console.log(`🔍 Fetching details for bundle: ${bundleName}`);
       
       // Execute SHOW BUNDLE query
       const result = await connection.driver.executeQuery(`SHOW BUNDLE "${bundleName}";`);
-      console.log('📦 Bundle details result:', result);
+      // console.log('📦 Bundle details result:', result);
       
       if (result.success && result.data) {
         const bundleDetails: BundleDetails = {
@@ -550,20 +555,20 @@ export class ConnectionManager {
 
         // Parse fields from DocumentStructure
         const data = result.data as any;
-        console.log('🔍 Raw data from SHOW BUNDLE:', JSON.stringify(data, null, 2));
-        console.log('🔍 Available properties in data:', Object.keys(data));
+        // console.log('🔍 Raw data from SHOW BUNDLE:', JSON.stringify(data, null, 2));
+        // console.log('🔍 Available properties in data:', Object.keys(data));
         
         // Handle new structure where bundle data might be under BundleMetadata
         let bundleData = data;
         if (data.BundleMetadata) {
-          console.log('📦 Found BundleMetadata, using nested structure');
+          // console.log('📦 Found BundleMetadata, using nested structure');
           bundleData = data.BundleMetadata;
         }
         
         if (bundleData.DocumentStructure && bundleData.DocumentStructure.FieldDefinitions) {
-          console.log('📋 FieldDefinitions found:', bundleData.DocumentStructure.FieldDefinitions);
-          console.log('📋 FieldDefinitions type:', typeof bundleData.DocumentStructure.FieldDefinitions);
-          console.log('📋 FieldDefinitions isArray:', Array.isArray(bundleData.DocumentStructure.FieldDefinitions));
+          // console.log('📋 FieldDefinitions found:', bundleData.DocumentStructure.FieldDefinitions);
+          // console.log('📋 FieldDefinitions type:', typeof bundleData.DocumentStructure.FieldDefinitions);
+          // console.log('📋 FieldDefinitions isArray:', Array.isArray(bundleData.DocumentStructure.FieldDefinitions));
           
           // Handle FieldDefinitions - it can be either an object with field names as keys, or an array
           let fieldDefinitionsArray: any[] = [];
@@ -571,53 +576,53 @@ export class ConnectionManager {
           if (Array.isArray(bundleData.DocumentStructure.FieldDefinitions)) {
             // Already an array
             fieldDefinitionsArray = bundleData.DocumentStructure.FieldDefinitions;
-            console.log('✅ Using FieldDefinitions as array');
+            // console.log('✅ Using FieldDefinitions as array');
           } else if (bundleData.DocumentStructure.FieldDefinitions && typeof bundleData.DocumentStructure.FieldDefinitions === 'object') {
             // Convert object to array - the object keys are field names
             fieldDefinitionsArray = Object.values(bundleData.DocumentStructure.FieldDefinitions);
-            console.log('🔄 Converted FieldDefinitions object to array:', fieldDefinitionsArray.length, 'fields');
+            // console.log('🔄 Converted FieldDefinitions object to array:', fieldDefinitionsArray.length, 'fields');
           }
           
           bundleDetails.documentStructure = {
             FieldDefinitions: fieldDefinitionsArray
           };
-          console.log('✅ Final parsed documentStructure with', bundleDetails.documentStructure.FieldDefinitions.length, 'fields');
+          // console.log('✅ Final parsed documentStructure with', bundleDetails.documentStructure.FieldDefinitions.length, 'fields');
         } else {
-          console.log('❌ No DocumentStructure.FieldDefinitions found in data');
+          // console.log('❌ No DocumentStructure.FieldDefinitions found in data');
           bundleDetails.documentStructure = {
             FieldDefinitions: []
           };
         }
 
         // Parse relationships if they exist
-        console.log('🔗 Looking for relationships in data...');
-        console.log('🔗 bundleData.Relationships:', bundleData.Relationships);
-        console.log('🔗 bundleData.Relationships type:', typeof bundleData.Relationships);
+        // console.log('🔗 Looking for relationships in data...');
+        // console.log('🔗 bundleData.Relationships:', bundleData.Relationships);
+        // console.log('🔗 bundleData.Relationships type:', typeof bundleData.Relationships);
         
         if (bundleData.Relationships && typeof bundleData.Relationships === 'object' && !Array.isArray(bundleData.Relationships)) {
           // This is a Go map serialized as JSON object: { "relationshipName": { "RelationshipName": "...", ... } }
-          console.log('🔗 Found Relationships as Go map object, converting to array');
+          // console.log('🔗 Found Relationships as Go map object, converting to array');
           const relationshipsArray = Object.entries(bundleData.Relationships).map(([key, relationshipData]: [string, any]) => ({
             ...relationshipData, // Spread all properties from the relationship object
             _mapKey: key // Include the original map key for reference
           }));
           bundleDetails.relationships = relationshipsArray;
-          console.log('🔗 Converted relationships map to array:', relationshipsArray);
+          // console.log('🔗 Converted relationships map to array:', relationshipsArray);
         } else if (bundleData.Relationships && Array.isArray(bundleData.Relationships)) {
-          console.log('🔗 Found Relationships as array (unexpected but handling):', bundleData.Relationships);
+          // console.log('🔗 Found Relationships as array (unexpected but handling):', bundleData.Relationships);
           bundleDetails.relationships = bundleData.Relationships;
         } else {
-          console.log('❌ No Relationships found in data');
+          // console.log('❌ No Relationships found in data');
         }
 
         // Parse indexes if they exist
-        console.log('📑 Looking for indexes in data...');
-        console.log('📑 bundleData.Indexes:', bundleData.Indexes);
-        console.log('📑 bundleData.Indexes type:', typeof bundleData.Indexes);
+        // console.log('📑 Looking for indexes in data...');
+        // console.log('📑 bundleData.Indexes:', bundleData.Indexes);
+        // console.log('📑 bundleData.Indexes type:', typeof bundleData.Indexes);
         
         if (bundleData.Indexes && typeof bundleData.Indexes === 'object' && !Array.isArray(bundleData.Indexes)) {
           // This is a Go map serialized as JSON object: { "indexName": { "IndexName": "...", "IndexType": "..." } }
-          console.log('📑 Found Indexes as Go map object, converting to array');
+          // console.log('📑 Found Indexes as Go map object, converting to array');
           const indexesArray = Object.entries(bundleData.Indexes).map(([key, indexData]: [string, any]) => ({
             IndexName: indexData.IndexName || key, // Use the key as fallback
             IndexType: indexData.IndexType?.toLowerCase() || 'unknown', // Normalize to lowercase: "hash" or "b-tree"
@@ -625,21 +630,21 @@ export class ConnectionManager {
             _mapKey: key
           }));
           bundleDetails.indexes = indexesArray;
-          console.log('📑 Converted indexes map to array:', indexesArray);
+          // console.log('📑 Converted indexes map to array:', indexesArray);
         } else if (bundleData.Indexes && Array.isArray(bundleData.Indexes)) {
-          console.log('📑 Found Indexes as array (unexpected but handling):', bundleData.Indexes);
+          // console.log('📑 Found Indexes as array (unexpected but handling):', bundleData.Indexes);
           bundleDetails.indexes = bundleData.Indexes;
         } else {
-          console.log('❌ No Indexes found in data');
+          // console.log('❌ No Indexes found in data');
         }
 
         // Store the bundle details
         connection.bundleDetails.set(bundleName, bundleDetails);
         
-        console.log('✅ Parsed bundle details:', bundleDetails);
+        // console.log('✅ Parsed bundle details:', bundleDetails);
         return bundleDetails;
       } else {
-        console.log('❌ No bundle details received');
+        // console.log('❌ No bundle details received');
         return null;
       }
     } catch (error) {

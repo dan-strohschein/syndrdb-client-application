@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { connectionManager } from '../../services/connection-manager';
 import { FieldsTab } from './fields-tab';
 import { Bundle } from '../../types/bundle';
+import { BundleManager } from '../../services/bundle-manager';
 
 @customElement('bundle-modal')
 export class BundleModal extends LitElement {
@@ -23,17 +24,16 @@ export class BundleModal extends LitElement {
   bundle: Bundle | null = null;
 
 @state()
-  private formData: {
-    name: string;
-  } = {
-    name: '',
-  };
-
-@state()
   private errorMessage = '';
 
 @state()
   private isLoading = false;
+
+ @state()
+ private connection: any = null; 
+
+ @state()
+ private bundles: Array<Bundle> = [];
 
   // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
@@ -63,39 +63,15 @@ export class BundleModal extends LitElement {
         this.errorMessage = '';
         this.isLoading = false;
         
-        this.formData = {
-            name: '',
-        };
-        
         this.dispatchEvent(new CustomEvent('close-modal', {
             bubbles: true
         }));
     }
 
-    protected updated(changedProperties: PropertyValues): void {
-        // Check if the bundle property has changed
-        if (changedProperties.has('bundle')) {
-            console.log('Bundle modal updated, bundle changed:', this.bundle);
-            if (this.bundle) {
-                this.formData = {
-                    name: this.bundle.Name || '',
-                };
-                console.log('Form data updated with bundle data:', this.bundle);
-            } else {
-                this.formData = {
-                    name: '',
-                };
-                console.log('Form data reset (no bundle)');
-            }
-        }
-    }
+
 
     private handleBundleChanged(event: CustomEvent) {
         const { name, fieldDefinitions } = event.detail;
-        this.formData = {
-            ...this.formData,
-            name
-        };
         this.bundle = { Name: name, FieldDefinitions: fieldDefinitions };
     }
 
@@ -103,15 +79,6 @@ export class BundleModal extends LitElement {
         try {
             this.isLoading = true;
             this.errorMessage = '';
-
-            // Validate form data
-            const validation = this.validateBundleName(this.formData.name);
-            if (!validation.isValid) {
-                this.errorMessage = validation.message;
-                this.isLoading = false;
-                return;
-            }
-
 
             // Check if we have a valid connection
             if (!this.connectionId) {
@@ -134,7 +101,7 @@ export class BundleModal extends LitElement {
                     return;
                 }
             
-                console.log('Current bundle data:', bundleData);
+                // console.log('Current bundle data:', bundleData);
                 createCommand = `CREATE BUNDLE "${bundleData.name}" WITH FIELDS `; //WITH FIELDS (${JSON.stringify(bundleData.fieldDefinitions)})`;
             
                 // Send CREATE BUNDLE command to server
@@ -193,11 +160,11 @@ export class BundleModal extends LitElement {
                 });
                 createCommand += ');';
                 //console.log('Transformed field definitions:', transformedFields);
-                console.log('Final CREATE BUNDLE command:', createCommand);
+                //console.log('Final CREATE BUNDLE command:', createCommand);
                 const result = await connectionManager.executeQueryWithContext(this.connectionId, createCommand);
                 
                 if (result.success) {
-                    console.log('✅ Bundle created successfully:', this.formData.name);
+                    console.log('✅ Bundle created successfully:', bundleData.name);
                     
                     // Refresh connection metadata to update the databases list
                     await connectionManager.refreshMetadata(this.connectionId);
@@ -205,7 +172,7 @@ export class BundleModal extends LitElement {
                     // Dispatch success event
                     this.dispatchEvent(new CustomEvent('bundle-created', {
                         detail: { 
-                            bundleName: this.formData.name,
+                            bundleName: bundleData.name,
                             connectionId: this.connectionId 
                         },
                         bubbles: true
@@ -272,7 +239,12 @@ export class BundleModal extends LitElement {
                                 Relationships
                             </label>
                             <div class="tab-content bg-base-100 border-base-300 p-6">
-                                TBD
+                                <relationships-tab
+                                  
+                                    .bundle="${this.bundle}"
+                                    .connectionId="${this.connectionId}"
+                                    .databaseId="${this.databaseId}"
+                                ></relationships-tab>
                             </div>
 
                             <label class="tab">
@@ -299,7 +271,7 @@ export class BundleModal extends LitElement {
                         <button 
                             type="submit"
                             class="btn btn-primary ${this.isLoading ? 'loading' : ''}" 
-                            ?disabled="${this.isLoading || this.formData.name.length === 0 || this.bundle?.FieldDefinitions.length === 0}"
+                            ?disabled="${this.isLoading || !this.bundle?.Name || this.bundle?.FieldDefinitions?.length === 0}"
                         >
                             ${this.isLoading ? 'Creating...' : 'Create Bundle'}
                         </button>

@@ -36,7 +36,7 @@ export class AboutModal extends LitElement {
   }
 
   render() {
-    console.log('About modal render called, isOpen:', this.isOpen);
+    //console.log('About modal render called, isOpen:', this.isOpen);
     return html`
       <div 
         class="fixed inset-0 z-[9999] flex items-center justify-center ${this.isOpen ? 'block' : 'hidden'}"
@@ -78,14 +78,14 @@ export class AboutModal extends LitElement {
   }
 
   open() {
-    console.log('About modal open() called');
+    //console.log('About modal open() called');
     this.isOpen = true;
     this.requestUpdate();
     console.log('About modal isOpen set to:', this.isOpen);
   }
 
   close() {
-    console.log('About modal close() called');
+ //   console.log('About modal close() called');
     this.isOpen = false;
     this.requestUpdate();
   }

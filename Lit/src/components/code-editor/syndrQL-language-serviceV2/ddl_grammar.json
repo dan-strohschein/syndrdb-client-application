@@ -1,0 +1,305 @@
+
+[
+    {
+        "version": "1.0.0",
+        "root" : "create_database_statement",
+        "rules": [
+            {"name": "create_database_statement",
+            "symbols": [
+                {"token":"CREATE"},
+                {"token":"DATABASE"},
+                {"token": "identifier", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null 
+            }
+        ] 
+     },
+     {
+        "root" : "show_statement",
+        "rules": [
+            {"name": "show_statement",
+            "symbols": [
+                {"token":"SHOW"},
+                {"branches": [
+                    [{"token":"DATABASES"}],
+                    [
+                        {"token":"BUNDLES"},
+                        {"reference": "show_bundles_for_statement", "optional": true}
+                    ]
+                ]},
+                {"literal":";"}
+            ]
+        }]
+     },
+    {
+        "root" : "show_databases_statement",
+        "rules": [
+            {"name": "show_databases_statement",
+            "symbols": [
+                {"token":"SHOW"},
+                {"token":"DATABASES"},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "create_bundle_statement",
+        "rules": [
+            {
+                "name": "create_bundle_statement",
+                "symbols": [
+                    {"token": "CREATE"},
+                    {"token": "BUNDLE"},
+                    {"token": "identifier", "optional": false},
+                    {"token": "WITH"},
+                    {"token": "FIELDS"},
+                    {"literal":"("},
+                    {"reference": "field_definitions", "optional": false},
+                    {"literal":")"},
+                
+                    {"literal":";"}
+                ],
+                "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "field_definitions",
+        "rules": [
+            {"name": "field_definitions",
+            "symbols": [
+                {"reference": "field_definition", "optional": false},
+                {"literal":",", "optional": true}
+            ],
+            "postprocess": null,
+            "minimum-symbols": 1
+            }
+        ]
+    },
+    {
+        "root": "field_definition",
+        "rules": [
+            {
+                "name": "field_definition",
+                "symbols": [
+                    {"literal": "{"},
+                    {"token": "identifier", "optional": false},
+                    {"reference": "data_type", "optional": false},
+                    {"reference": "bool_value", "optional": false},
+                    {"reference": "bool_value", "optional": false},
+                    {"token": "identifier", "optional": true},
+                    {"literal": "}" }
+                ],
+                "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "data_type",
+        "rules": [
+            {"name": "data_type",
+            "symbols": [
+                {"token": "identifier", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "bool_value",
+        "rules": [
+            {"name": "bool_value",
+            "symbols": [
+                {"literal":"TRUE"},
+                {"literal":"FALSE"}
+            ],
+            "minimum-symbols": 1,
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "show_bundles_for_statement",
+        "rules": [
+            {"name": "show_bundles_for_statement",
+            "symbols": [
+                {"token":"FOR", "optional": false},
+                {"token": "database_reference", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "update_bundle_statement",
+        "rules": [
+            {"name": "update_bundle_statement",
+            "symbols": [
+                {"token":"UPDATE"},
+                {"token":"BUNDLE"},
+                {"token": "identifier", "optional": false},
+                {"branches": [
+                    {"name" : "field_mods", "symbols": [
+                        {"token":"SET", "optional": true},
+                        {"literal":"("},
+                        {"reference": "field_modifications", "optional": false},
+                        {"literal":")"}
+                        ]
+                    },
+                    {"name" : "add_relationship", "symbols": [ 
+                        {"token":"ADD"},
+                        {"token":"RELATIONSHIP"},
+                        {"literal":"("},
+                        {"token": "identifier", "optional": false},
+                        {"token": "relationship_type", "optional": false},
+                        {"token": "bundle_reference", "optional": false},
+                        {"token": "field_reference", "optional": false},
+                        {"token": "bundle_reference", "optional": false},
+                        {"token": "field_reference", "optional": false},
+                        {"literal":")"}
+                    ]},
+                    {"name" : "change_name", "symbols": [ 
+                        {"token":"SET"},
+                        {"token":"NAME"},
+                        {"token": "identifier", "optional": false}
+                    ]}
+                    
+                ]},
+               
+                {"literal":";"}
+            ],
+            "minimum-branches": 1,
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "field_modifications",
+        "rules": [
+            {"name": "field_modifications",
+            "symbols": [
+                {"literal": "{"},
+                {"reference": "field_modification", "optional": false},
+                {"literal": ",", "optional": true},
+                {"literal": "}"},
+                {"literal":",", "optional": true}
+            ],
+            "postprocess": null,
+            "minimum-symbols": 1
+            }
+        ]
+    },
+    {
+        "root": "field_modification",
+        "rules": [
+            {"name": "field_modification",
+            "symbols": [
+                 {"branches": [
+                    {"name" : "modify_field", "symbols": [
+                        {"token":"MODIFY"},
+                        {"reference": "mod_field_definition", "optional": false}
+                    ]},
+                    {"name" : "delete_field", "symbols": [
+                        {"token":"DELETE"},
+                        {"token": "identifier", "optional": false}
+                    ]},
+                    {"name" : "add_field", "symbols": [
+                        {"token":"ADD"},
+                        {"token": "field_definition", "optional": false}
+                    ]}
+                ]}
+               
+            ],
+            "postprocess": null,
+            "minimum-branches": 1
+            }
+        ]
+    },
+    { 
+        "root": "mod_field_definition",
+        "rules": [
+            {"name": "mod_field_definition",
+            "symbols": [
+                {"token": "identifier", "optional": false},
+                {"literal": "="},
+                {"token": "literal", "optional": true},
+                {"reference": "data_type", "optional": false},
+                {"reference": "bool_value", "optional": false},
+                {"reference": "bool_value", "optional": false},
+                {"token": "literal", "optional": true}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "relationship_definitions",
+        "rules": [
+            {"name": "relationship_definitions",
+            "symbols": [
+                {"reference": "relationship_definition", "optional": false},
+                {"literal":",", "optional": true}
+            ],
+            "postprocess": null,
+            "minimum-symbols": 1
+            }
+        ]
+    },
+    {
+        "root": "relationship_definition",
+        "rules": [
+            {
+                "name": "relationship_definition",
+                "symbols": [
+                    {"literal": "{"},
+                    {"token": "bundle_reference", "optional": false},
+                    {"token": "field_reference", "optional": false},
+                    {"literal": "}" }
+                ],
+                "postprocess": null
+            }
+        ]
+    },
+    {
+        "root": "delete_bundle_statement",
+        "rules": [
+            {"name": "delete_bundle_statement",
+            "symbols": [
+                {"token":"DELETE"},
+                {"token":"BUNDLE"},
+                {"token": "bundle_reference", "optional": false},
+                {"literal":";"  }
+                ]
+            }
+        ]
+    },
+    {
+        "root": "drop_database_statement",
+        "rules": [
+            {"name": "drop_database_statement",
+            "symbols": [
+                {"token":"DROP"},
+                {"token":"DATABASE"},
+                {"token": "database_reference", "optional": false},
+                {"literal":";"  }
+                ]
+            }
+        ]
+    },
+    {
+        "root": "drop_bundle_statement",
+        "rules": [
+            {"name": "drop_bundle_statement",
+            "symbols": [
+                {"token":"DROP"},
+                {"token":"BUNDLE"},
+                {"token": "bundle_reference", "optional": false},
+                {"literal":";"  }
+                ]
+            }
+        ]
+    }
+]

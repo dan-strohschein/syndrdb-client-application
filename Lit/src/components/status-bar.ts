@@ -1,5 +1,5 @@
 import { html, css, LitElement } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 @customElement('status-bar')
 export class StatusBar extends LitElement {
@@ -9,19 +9,45 @@ export class StatusBar extends LitElement {
   @property({ type: Number })
   resultCount: number = 0;
 
-  @state()
-  private slots: Array<{ id: string; content: string; visible: boolean }> = [
-    { id: 'slot1', content: '', visible: false },
-    { id: 'slot2', content: '', visible: false },
-    { id: 'slot3', content: '', visible: false },
-    { id: 'slot4', content: '', visible: false },
-    { id: 'slot5', content: '', visible: false },
-    { id: 'slot6', content: '', visible: false },
-    { id: 'slot7', content: '', visible: false },
-    { id: 'slot8', content: '', visible: false },
-    { id: 'result-count', content: '', visible: true }, // Result count slot
-    { id: 'execution-time', content: '', visible: true }, // Rightmost slot for execution time
-  ];
+  @property({ type: String })
+  slot1Content: string = '';
+  @property({ type: Boolean })
+  slot1Visible: boolean = false;
+
+  @property({ type: String })
+  slot2Content: string = '';
+  @property({ type: Boolean })
+  slot2Visible: boolean = false;
+
+  @property({ type: String })
+  slot3Content: string = '';
+  @property({ type: Boolean })
+  slot3Visible: boolean = false;
+
+  @property({ type: String })
+  slot4Content: string = '';
+  @property({ type: Boolean })
+  slot4Visible: boolean = false;
+
+  @property({ type: String })
+  slot5Content: string = '';
+  @property({ type: Boolean })
+  slot5Visible: boolean = false;
+
+  @property({ type: String })
+  slot6Content: string = '';
+  @property({ type: Boolean })
+  slot6Visible: boolean = false;
+
+  @property({ type: String })
+  slot7Content: string = '';
+  @property({ type: Boolean })
+  slot7Visible: boolean = false;
+
+  @property({ type: String })
+  slot8Content: string = '';
+  @property({ type: Boolean })
+  slot8Visible: boolean = false;
 
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
@@ -66,10 +92,15 @@ export class StatusBar extends LitElement {
    * Update a specific slot with content
    */
   updateSlot(slotId: string, content: string, visible: boolean = true) {
-    const slotIndex = this.slots.findIndex(slot => slot.id === slotId);
-    if (slotIndex !== -1) {
-      this.slots[slotIndex] = { ...this.slots[slotIndex], content, visible };
-      this.requestUpdate();
+    switch(slotId) {
+      case 'slot1': this.slot1Content = content; this.slot1Visible = visible; break;
+      case 'slot2': this.slot2Content = content; this.slot2Visible = visible; break;
+      case 'slot3': this.slot3Content = content; this.slot3Visible = visible; break;
+      case 'slot4': this.slot4Content = content; this.slot4Visible = visible; break;
+      case 'slot5': this.slot5Content = content; this.slot5Visible = visible; break;
+      case 'slot6': this.slot6Content = content; this.slot6Visible = visible; break;
+      case 'slot7': this.slot7Content = content; this.slot7Visible = visible; break;
+      case 'slot8': this.slot8Content = content; this.slot8Visible = visible; break;
     }
   }
 
@@ -81,58 +112,80 @@ export class StatusBar extends LitElement {
   }
 
   /**
-   * Clear all slots except execution time
+   * Clear all slots
    */
   clearAllSlots() {
-    this.slots = this.slots.map(slot => ({
-      ...slot,
-      content: slot.id === 'execution-time' ? slot.content : '',
-      visible: slot.id === 'execution-time' ? slot.visible : false
-    }));
-    this.requestUpdate();
+    this.slot1Content = ''; this.slot1Visible = false;
+    this.slot2Content = ''; this.slot2Visible = false;
+    this.slot3Content = ''; this.slot3Visible = false;
+    this.slot4Content = ''; this.slot4Visible = false;
+    this.slot5Content = ''; this.slot5Visible = false;
+    this.slot6Content = ''; this.slot6Visible = false;
+    this.slot7Content = ''; this.slot7Visible = false;
+    this.slot8Content = ''; this.slot8Visible = false;
   }
 
-  /**
-   * Handle execution time and result count updates
-   */
-  updated(changedProperties: Map<string, any>) {
-    super.updated(changedProperties);
-    
-    if (changedProperties.has('executionTimeMS')) {
-      const formattedTime = this.formatExecutionTime(this.executionTimeMS);
-      this.updateSlot('execution-time', formattedTime ? `⏱️ ${formattedTime}` : '', formattedTime !== '');
-    }
-    
-    if (changedProperties.has('resultCount')) {
-      const formattedCount = this.formatResultCount(this.resultCount);
-      this.updateSlot('result-count', formattedCount ? `� ${formattedCount} results` : '', formattedCount !== '');
-    }
-  }
 
   render() {
+    const formattedTime = this.formatExecutionTime(this.executionTimeMS);
+    const formattedCount = this.formatResultCount(this.resultCount);
+
     return html`
       <div class="status-bar bg-gray-800 text-gray-200 text-xs border-t border-gray-600 h-6 flex items-center justify-between px-2">
         <!-- Left side slots -->
         <div class="flex items-center space-x-4">
-          ${this.slots.slice(0, 9).map(slot => 
-            slot.visible ? html`
-              <div class="status-slot flex items-center">
-                <span>${slot.content}</span>
-              </div>
-            ` : html``
-          )}
-        </div>
-        
-        <!-- Right side - Result count and Execution time slots -->
-        <div class="flex items-center space-x-4">
-          ${this.slots.find(slot => slot.id === 'result-count')?.visible ? html`
-            <div class="status-slot flex items-center text-blue-400 font-mono">
-              <span>${this.slots.find(slot => slot.id === 'result-count')?.content}</span>
+          ${this.slot1Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot1Content}</span>
             </div>
           ` : html``}
-          ${this.slots.find(slot => slot.id === 'execution-time')?.visible ? html`
+          ${this.slot2Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot2Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot3Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot3Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot4Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot4Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot5Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot5Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot6Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot6Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot7Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot7Content}</span>
+            </div>
+          ` : html``}
+          ${this.slot8Visible ? html`
+            <div class="status-slot flex items-center">
+              <span>${this.slot8Content}</span>
+            </div>
+          ` : html``}
+        </div>
+        
+        <!-- Right side - Result count and Execution time -->
+        <div class="flex items-center space-x-4">
+          ${this.resultCount > 0 ? html`
+            <div class="status-slot flex items-center text-blue-400 font-mono">
+              <span>📊 ${formattedCount} results</span>
+            </div>
+          ` : html``}
+          ${this.executionTimeMS > 0 ? html`
             <div class="status-slot flex items-center text-green-400 font-mono">
-              <span>${this.slots.find(slot => slot.id === 'execution-time')?.content}</span>
+              <span>⏱️ ${formattedTime}</span>
             </div>
           ` : html``}
         </div>
