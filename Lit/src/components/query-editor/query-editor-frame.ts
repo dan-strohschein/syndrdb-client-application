@@ -8,7 +8,9 @@ import { ConnectionContext, connectionContext } from '../../context/connectionCo
 import { Connect } from 'vite';
 import { ElectronAPI } from '../../types/electron-api';
 import { LanguageServiceV2, ParsedStatement } from '../code-editor/syndrQL-language-serviceV2/index';
+import { GraphQLLanguageService } from '../code-editor/graphql-language-service/index';
 import { DEFAULT_CONFIG } from '../../config/config-types';
+import '../json-tree-view/json-tree-view';
 
 @customElement('query-editor-frame')
 export class QueryEditorFrame extends LitElement {
@@ -47,16 +49,27 @@ export class QueryEditorFrame extends LitElement {
     @state()
     private queryResult: QueryResult | null = null;
 
+    /** Active results view: 'text' (default) or 'json' (tree). */
+    @state()
+    private resultsTab: 'text' | 'json' = 'text';
+
     @state()
     private executing = false;
 
+    /** Which editor tab is currently active (tracked via tab-changed event). */
+    @state()
+    private activeQueryTab: 'syndrql' | 'graphql' = 'syndrql';
+
     private languageService: LanguageServiceV2;
+    private graphqlLanguageService: GraphQLLanguageService;
 
     constructor() {
         super();
-        // Initialize language service
+        // Initialize language services
         this.languageService = new LanguageServiceV2(DEFAULT_CONFIG);
         this.languageService.initialize();
+        this.graphqlLanguageService = new GraphQLLanguageService();
+        this.graphqlLanguageService.initialize();
         
         // Initialize context provider once
         this._queryContextProvider = {
@@ -124,86 +137,37 @@ export class QueryEditorFrame extends LitElement {
     
     
     private async executeQuery() {
+        // Prevent double execution
+        if (this.executing) {
+            console.warn('Query already executing, skipping duplicate request');
+            return;
+        }
+
+        // Get the query text from the correct code editor based on active tab
+        const queryEditorContainer = this.querySelector('query-editor-tab-container') as any;
+        const editorSelector = this.activeQueryTab === 'graphql'
+            ? '#graphql-editor code-editor'
+            : '#syndrql-editor code-editor';
+        const codeEditor = queryEditorContainer?.querySelector(editorSelector) as any;
+
+        if (codeEditor && codeEditor.getText) {
+            this.query = codeEditor.getText();
+        }
+
         if (!this.query || !this.query.trim()) {
             console.warn('No query to execute');
             return;
         }
 
         this.executing = true;
-        
+
         try {
-            // Validate the query using Language Service V2
-            console.log('Validating SyndrQL query with V2:', this.query);
-            const validationResult = await this.languageService.validate(this.query);
-            
-            if (!validationResult.valid) {
-                const errorMessages = validationResult.errors.map(e => e.message).join(', ');
-                throw new Error(`Query validation failed: ${errorMessages}`);
-            }
-            
-            // Parse statements from the validated query
-            const statements = this.languageService.parseStatements(this.query);
-            
-            if (statements.length === 0) {
-                throw new Error('No valid statements found in query');
-            }
-            
-            console.log(`Found ${statements.length} statement(s) to execute:`, statements.map((s: ParsedStatement) => s.text));
-            
-            // Execute statements in order
-            let finalResult: QueryResult | null = null;
-            const allResults: QueryResult[] = [];
-            
-            for (let i = 0; i < statements.length; i++) {
-                const statement = statements[i].text;
-                console.log(`Executing statement ${i + 1}/${statements.length}:`, statement);
-                
-                let result: QueryResult;
-                
-                // If we have a connectionId and databaseName, use context-aware execution
-                if (this.connectionId && this.databaseName) {
-                    // Set database context first if needed
-                    await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
-                    // Execute with context
-                    result = await connectionManager.executeQueryWithContext(this.connectionId, statement);
-                } else if (this.connectionId) {
-                    // Execute on specific connection without database context
-                    result = await connectionManager.executeQueryOnConnectionId(this.connectionId, statement);
-                } else {
-                    // Fallback to general execute method
-                    result = await connectionManager.executeQuery(statement);
-                }
-                
-                allResults.push(result);
-                finalResult = result; // Keep the last result as the final result
-                
-                // If any statement fails, stop execution
-                if (!result.success) {
-                    throw new Error(`Statement ${i + 1} failed: ${result.error}`);
-                }
-                
-                console.log(`Statement ${i + 1} completed successfully`);
-            }
-            
-            // If we executed multiple statements, create a combined result
-            if (statements.length > 1) {
-                const totalExecutionTime = allResults.reduce((sum, result) => sum + (result.executionTime || 0), 0);
-                const totalDocumentCount = allResults.reduce((sum, result) => sum + (result.documentCount || 0), 0);
-                
-                this.queryResult = {
-                    success: true,
-                    data: finalResult?.data,
-                    executionTime: totalExecutionTime,
-                    documentCount: totalDocumentCount,
-                    ResultCount: finalResult?.ResultCount
-                };
+            if (this.activeQueryTab === 'graphql') {
+                await this.executeGraphQLQuery();
             } else {
-                // Single statement result
-                this.queryResult = finalResult;
+                await this.executeSyndrQLQuery();
             }
-            
-            console.log('All statements executed successfully');
-            
+
             // Dispatch query-executed event to update status bar
             if (this.queryResult) {
                 this.dispatchEvent(new CustomEvent('query-executed', {
@@ -215,7 +179,6 @@ export class QueryEditorFrame extends LitElement {
                     bubbles: true
                 }));
             }
-            
         } catch (error) {
             console.error('Query execution failed:', error);
             this.queryResult = {
@@ -226,6 +189,115 @@ export class QueryEditorFrame extends LitElement {
         }
 
         this.executing = false;
+    }
+
+    /**
+     * Execute a SyndrQL query — validate, parse statements, execute sequentially.
+     */
+    private async executeSyndrQLQuery(): Promise<void> {
+        await this.languageService.initialize();
+        console.log('Validating SyndrQL query with V2:', this.query);
+        const validationResult = await this.languageService.validate(this.query);
+
+        if (!validationResult.valid) {
+            const errorMessages = validationResult.errors.map(e => e.message).join(', ');
+            throw new Error(`Query validation failed: ${errorMessages}`);
+        }
+
+        const statements = this.languageService.parseStatements(this.query);
+
+        if (statements.length === 0) {
+            throw new Error('No valid statements found in query');
+        }
+
+        console.log(`Found ${statements.length} statement(s) to execute:`, statements.map((s: ParsedStatement) => s.text));
+
+        let finalResult: QueryResult | null = null;
+        const allResults: QueryResult[] = [];
+
+        for (let i = 0; i < statements.length; i++) {
+            const statement = statements[i].text;
+            console.log(`Executing statement ${i + 1}/${statements.length}:`, statement);
+
+            let result: QueryResult;
+
+            if (this.connectionId && this.databaseName) {
+                await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
+                result = await connectionManager.executeQueryWithContext(this.connectionId, statement);
+            } else if (this.connectionId) {
+                result = await connectionManager.executeQueryOnConnectionId(this.connectionId, statement);
+            } else {
+                result = await connectionManager.executeQuery(statement);
+            }
+
+            allResults.push(result);
+            finalResult = result;
+
+            if (!result.success) {
+                throw new Error(`Statement ${i + 1} failed: ${result.error}`);
+            }
+
+            console.log(`Statement ${i + 1} completed successfully`);
+        }
+
+        if (statements.length > 1) {
+            const totalExecutionTime = allResults.reduce((sum, r) => sum + (r.executionTime || 0), 0);
+            const totalDocumentCount = allResults.reduce((sum, r) => sum + (r.documentCount || 0), 0);
+
+            this.queryResult = {
+                success: true,
+                data: finalResult?.data,
+                executionTime: totalExecutionTime,
+                documentCount: totalDocumentCount,
+                ResultCount: finalResult?.ResultCount
+            };
+        } else {
+            this.queryResult = finalResult;
+        }
+
+        console.log('All statements executed successfully');
+    }
+
+    /**
+     * Execute a GraphQL query — validate, prefix with `GraphQL::`, send as a single call.
+     */
+    private async executeGraphQLQuery(): Promise<void> {
+        await this.graphqlLanguageService.initialize();
+        console.log('Validating GraphQL query:', this.query);
+        const validationResult = await this.graphqlLanguageService.validate(this.query);
+
+        if (!validationResult.valid) {
+            const errorMessages = validationResult.errors.map(e => e.message).join(', ');
+            throw new Error(`GraphQL validation failed: ${errorMessages}`);
+        }
+
+        // Prefix with GRAPHQL:: and send as a single execution call
+        const prefixedQuery = `GRAPHQL::${this.query}`;
+        console.log('Executing GraphQL query:', prefixedQuery);
+        console.log('GraphQL exec context — connectionId:', this.connectionId, 'databaseName:', this.databaseName);
+
+        let result: QueryResult;
+
+        if (this.connectionId && this.databaseName) {
+            console.log('GraphQL: using executeQueryWithContext');
+            await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
+            result = await connectionManager.executeQueryWithContext(this.connectionId, prefixedQuery);
+        } else if (this.connectionId) {
+            console.log('GraphQL: using executeQueryOnConnectionId');
+            result = await connectionManager.executeQueryOnConnectionId(this.connectionId, prefixedQuery);
+        } else {
+            console.log('GraphQL: using executeQuery (active connection fallback)');
+            result = await connectionManager.executeQuery(prefixedQuery);
+        }
+
+        console.log('GraphQL result:', result);
+
+        if (!result.success) {
+            throw new Error(`GraphQL execution failed: ${result.error}`);
+        }
+
+        this.queryResult = result;
+        console.log('GraphQL query executed successfully');
     }        private async saveQuery() {
         // TODO: Implement query saving functionality
             console.log('Saving query:', this.query);
@@ -262,13 +334,18 @@ export class QueryEditorFrame extends LitElement {
     private handleQueryChange(event: CustomEvent) {
         const { query } = event.detail;
         this.query = query;
-        
+
         // Emit query state change for main panel to track
         this.dispatchEvent(new CustomEvent('query-state-changed', {
             detail: { queryText: query },
             bubbles: true,
             composed: true
         }));
+    }
+
+    private handleTabChanged(event: CustomEvent) {
+        const { activeTab } = event.detail;
+        this.activeQueryTab = activeTab;
     }
 
     private async handleSaveResults() {
@@ -359,15 +436,15 @@ export class QueryEditorFrame extends LitElement {
               </div>
             </div>
             <div class="flex-1 bg-base-100 rounded border border-base-300">
-              <query-editor-tab-container .activeTab='syndrql' .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange}></query-editor-tab-container>
+              <query-editor-tab-container .activeTab='syndrql' .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
             </div>
           </div>
         </div>
         
         <!-- JSON Results (Bottom Half) -->
-        <div class="flex-1 overflow-auto min-h-0 h-1/2">
-          <div class="p-4 h-full flex flex-col">
-            <div class="flex items-center justify-between mb-3">
+        <div class="flex-1 min-h-0 h-1/2 flex flex-col overflow-hidden">
+          <div class="p-4 flex flex-col min-h-0 flex-1">
+            <div class="flex items-center justify-between mb-3 flex-shrink-0">
               <h3 class="text-sm font-semibold text-base-content">
                 Query Results
                 <button class="btn btn-soft btn-secondary btn-sm" 
@@ -393,23 +470,46 @@ export class QueryEditorFrame extends LitElement {
               </div>
             </div>
             
-            <div class="flex-1 bg-base-100 rounded border border-base-300 p-4 overflow-auto">
-              ${this.queryResult ? html`
-                ${this.queryResult.success ? html`
-                  <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(this.queryResult.data, null, 2)}</code></pre>
+            <div class="flex-1 flex flex-col min-h-0 rounded border border-base-300 bg-base-100 overflow-hidden">
+              <div class="flex-1 p-4 overflow-auto min-h-0 min-w-0">
+                ${this.queryResult ? html`
+                  ${this.queryResult.success ? html`
+                    ${this.resultsTab === 'text' ? html`
+                      <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(this.queryResult.data, null, 2)}</code></pre>
+                    ` : html`
+                      <json-tree-view
+                        .data=${this.queryResult.data}
+                        default-expanded-depth="1"
+                      ></json-tree-view>
+                    `}
+                  ` : html`
+                    <div class="text-error">
+                      <div class="font-semibold mb-2">Query Error:</div>
+                      <div class="text-sm">${this.queryResult.error}</div>
+                    </div>
+                  `}
                 ` : html`
-                  <div class="text-error">
-                    <div class="font-semibold mb-2">Query Error:</div>
-                    <div class="text-sm">${this.queryResult.error}</div>
+                  <div class="text-center text-base-content/50 py-8">
+                    <div class="text-4xl mb-2">📊</div>
+                    <div>Query results will appear here</div>
+                    <div class="text-sm mt-1">Execute a query to see results</div>
                   </div>
                 `}
-              ` : html`
-                <div class="text-center text-base-content/50 py-8">
-                  <div class="text-4xl mb-2">📊</div>
-                  <div>Query results will appear here</div>
-                  <div class="text-sm mt-1">Execute a query to see results</div>
-                </div>
-              `}
+              </div>
+              <div class="flex border-t border-base-300 rounded-b bg-base-200/50 flex-shrink-0">
+                <button
+                  class="flex-1 py-2 px-3 text-sm font-medium rounded-b ${this.resultsTab === 'text' ? 'bg-base-100 border border-b-0 border-base-300 -mb-px' : 'text-base-content/70 hover:text-base-content'}"
+                  @click=${() => { this.resultsTab = 'text'; }}
+                >
+                  Text
+                </button>
+                <button
+                  class="flex-1 py-2 px-3 text-sm font-medium rounded-b ${this.resultsTab === 'json' ? 'bg-base-100 border border-b-0 border-base-300 -mb-px' : 'text-base-content/70 hover:text-base-content'}"
+                  @click=${() => { this.resultsTab = 'json'; }}
+                >
+                  JSON
+                </button>
+              </div>
             </div>
           </div>
         </div>

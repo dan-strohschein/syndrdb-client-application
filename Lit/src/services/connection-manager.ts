@@ -1,27 +1,9 @@
 import { SyndrDBDriver, ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
-import { Bundle } from '../types/bundle';
+import { Bundle, BundleDetails } from '../types/bundle';
+import { fieldDefinitionsToArray } from '../lib/bundle-utils';
 import { connectionPool, PooledConnection } from './connection-pool';
 
-export interface BundleDetails {
-  name: string;
-  documentStructure?: DocumentStructure;
-  relationships?: any[];
-  indexes?: any[];
-  rawData?: any; // Store the full SHOW BUNDLE result
-}
-
-export interface DocumentStructure {
-  FieldDefinitions: FieldDefinition[];
-}
-
-export interface FieldDefinition  {
-	Name:         string      ;
-	Type :        string      ;
-	IsRequired:   boolean      ; // Indicates if the field can be null
-	IsUnique:     boolean      ;
-	DefaultValue: any         ; // Optional default value for the field
-}
-
+export type { BundleDetails } from '../types/bundle';
 
 export interface Connection {
   id: string;
@@ -566,23 +548,7 @@ export class ConnectionManager {
         }
         
         if (bundleData.DocumentStructure && bundleData.DocumentStructure.FieldDefinitions) {
-          // console.log('📋 FieldDefinitions found:', bundleData.DocumentStructure.FieldDefinitions);
-          // console.log('📋 FieldDefinitions type:', typeof bundleData.DocumentStructure.FieldDefinitions);
-          // console.log('📋 FieldDefinitions isArray:', Array.isArray(bundleData.DocumentStructure.FieldDefinitions));
-          
-          // Handle FieldDefinitions - it can be either an object with field names as keys, or an array
-          let fieldDefinitionsArray: any[] = [];
-          
-          if (Array.isArray(bundleData.DocumentStructure.FieldDefinitions)) {
-            // Already an array
-            fieldDefinitionsArray = bundleData.DocumentStructure.FieldDefinitions;
-            // console.log('✅ Using FieldDefinitions as array');
-          } else if (bundleData.DocumentStructure.FieldDefinitions && typeof bundleData.DocumentStructure.FieldDefinitions === 'object') {
-            // Convert object to array - the object keys are field names
-            fieldDefinitionsArray = Object.values(bundleData.DocumentStructure.FieldDefinitions);
-            // console.log('🔄 Converted FieldDefinitions object to array:', fieldDefinitionsArray.length, 'fields');
-          }
-          
+          const fieldDefinitionsArray = fieldDefinitionsToArray(bundleData.DocumentStructure.FieldDefinitions);
           bundleDetails.documentStructure = {
             FieldDefinitions: fieldDefinitionsArray
           };
@@ -620,22 +586,8 @@ export class ConnectionManager {
         // console.log('📑 bundleData.Indexes:', bundleData.Indexes);
         // console.log('📑 bundleData.Indexes type:', typeof bundleData.Indexes);
         
-        if (bundleData.Indexes && typeof bundleData.Indexes === 'object' && !Array.isArray(bundleData.Indexes)) {
-          // This is a Go map serialized as JSON object: { "indexName": { "IndexName": "...", "IndexType": "..." } }
-          // console.log('📑 Found Indexes as Go map object, converting to array');
-          const indexesArray = Object.entries(bundleData.Indexes).map(([key, indexData]: [string, any]) => ({
-            IndexName: indexData.IndexName || key, // Use the key as fallback
-            IndexType: indexData.IndexType?.toLowerCase() || 'unknown', // Normalize to lowercase: "hash" or "b-tree"
-            // Include the original key for reference
-            _mapKey: key
-          }));
-          bundleDetails.indexes = indexesArray;
-          // console.log('📑 Converted indexes map to array:', indexesArray);
-        } else if (bundleData.Indexes && Array.isArray(bundleData.Indexes)) {
-          // console.log('📑 Found Indexes as array (unexpected but handling):', bundleData.Indexes);
-          bundleDetails.indexes = bundleData.Indexes;
-        } else {
-          // console.log('❌ No Indexes found in data');
+        if (bundleData.Indexes) {
+          bundleDetails.indexes = ConnectionManager.parseIndexes(bundleData.Indexes);
         }
 
         // Store the bundle details
@@ -650,6 +602,61 @@ export class ConnectionManager {
     } catch (error) {
       console.error('❌ Error fetching bundle details:', error);
       return null;
+    }
+  }
+
+  /**
+   * Normalize server IndexType to canonical form: "btree" -> "b-tree", lowercase otherwise.
+   */
+  private static normalizeIndexType(raw: string): string {
+    const lower = (raw ?? '').toString().toLowerCase();
+    return lower === 'btree' ? 'b-tree' : lower || 'unknown';
+  }
+
+  /**
+   * Convert raw Indexes (Go map or array) from SHOW BUNDLES / SHOW BUNDLE into a normalized array.
+   */
+  private static parseIndexes(rawIndexes: any): Array<{ IndexName: string; IndexType: string; _mapKey?: string }> {
+    if (!rawIndexes || typeof rawIndexes !== 'object') return [];
+    if (Array.isArray(rawIndexes)) {
+      return rawIndexes.map((idx: any) => ({
+        ...idx,
+        IndexName: idx.IndexName ?? idx.indexName ?? '',
+        IndexType: ConnectionManager.normalizeIndexType(idx.IndexType ?? idx.indexType)
+      }));
+    }
+    return Object.entries(rawIndexes).map(([key, indexData]: [string, any]) => ({
+      IndexName: indexData.IndexName ?? indexData.indexName ?? key,
+      IndexType: ConnectionManager.normalizeIndexType(indexData.IndexType ?? indexData.indexType),
+      _mapKey: key
+    }));
+  }
+
+  /**
+   * Seed bundleDetails from SHOW BUNDLES response so the tree can show indexes (including B-tree)
+   * without requiring each bundle to be expanded. Merges indexes into existing details or creates minimal details.
+   */
+  seedBundleDetailsFromShowBundles(connectionId: string, bundles: Bundle[]): void {
+    const connection = this.connections.get(connectionId);
+    if (!connection) return;
+    if (!connection.bundleDetails) connection.bundleDetails = new Map();
+
+    for (const bundle of bundles) {
+      if (!bundle.Name || !bundle.Indexes) continue;
+      const normalized = ConnectionManager.parseIndexes(bundle.Indexes);
+      if (normalized.length === 0) continue;
+
+      const existing = connection.bundleDetails.get(bundle.Name);
+      if (existing) {
+        existing.indexes = normalized;
+      } else {
+        connection.bundleDetails.set(bundle.Name, {
+          name: bundle.Name,
+          indexes: normalized,
+          relationships: [],
+          rawData: undefined
+        });
+      }
     }
   }
 

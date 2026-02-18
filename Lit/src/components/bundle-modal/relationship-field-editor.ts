@@ -1,8 +1,9 @@
 import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { Bundle } from '../../types/bundle';
-import { ConnectionManager } from '../../services/connection-manager';
+import { connectionManager } from '../../services/connection-manager';
 import { BundleManager } from '../../services/bundle-manager';
+import { fieldDefinitionsToArray } from '../../lib/bundle-utils';
 import { repeat } from 'lit/directives/repeat.js';
 import { FieldDefinition } from '../../types/field-definition';
 
@@ -10,18 +11,14 @@ import { FieldDefinition } from '../../types/field-definition';
 /**
  * 
  * Basic syntax
- * UPDATE BUNDLE "BUNDLE_NAME"
-    CREATE RELATIONSHIP "RELATIONSHIP_NAME"
-    FROM BUNDLE "SOURCE_BUNDLE_NAME"
-    TO BUNDLE "TARGET_BUNDLE_NAME"
-    WITH FIELDS ({"FIELDNAME", FIELDTYPE, REQUIRED, UNIQUE}, {"FIELDNAME", FIELDTYPE, REQUIRED, UNIQUE})
- *  Practical Example:
-
-    UPDATE BUNDLE "source_bundle" 
-    CREATE RELATIONSHIP "rel_source_to_target" 
-    FROM BUNDLE "source_bundle" WITH FIELD "id" 
-    TO BUNDLE "target_bundle" WITH FIELD "ref_id" 
-    AS "1TO1"
+ UPDATE BUNDLE "<SourceBundleName>" 
+    ADD RELATIONSHIP ("<RelationshipName>" 
+        {"<RelationshipType>", 
+        "<SourceBundle>", 
+        "<SourceFieldName>", 
+        "<DestinationBundleName>",
+         "<DestinationFieldName>"}
+    );
  * 
  * Update a relationship
  * UPDATE RELATIONSHIP "RELATIONSHIP_NAME"
@@ -42,6 +39,7 @@ export class RelationshipFieldEditor extends LitElement {
     @property({ type: Object })
     relationship: {
         id?: string;
+        Name?: string;
         FieldName?: string;
         DestinationBundleName?: string;
         DestinationFieldName?: string;
@@ -68,12 +66,14 @@ export class RelationshipFieldEditor extends LitElement {
     @state()
     private formData: {
         id?: string;
+        Name?: string;
         FieldName?: string;
         DestinationBundleName?: string;
         DestinationFieldName?: string;
         RelationshipType?: string;
     } = {
         id: '',
+        Name: '',
         FieldName: '',
         DestinationBundleName: '',
         DestinationFieldName: '',
@@ -89,111 +89,85 @@ export class RelationshipFieldEditor extends LitElement {
     private fields: Array<{ name: string; id: string }> = [];
     private destinationBundleFields: Array<{ name: string; id: string }> = [];
 
+    /** Guards against duplicate in-flight bundle loads when connectionId/databaseId change. */
+    private bundlesLoadPending: boolean = false;
+
     // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
         return this;
     }
 
-
-     protected async firstUpdated(_changedProperties: PropertyValues) {
-        console.log('relationship-field-editor firstUpdated called with connectionId:', this.connectionId, 'and databaseId:', this.databaseId);
-        // If connectionId is provided, fetch the connection details
-        // if (this.connectionId) {
-        //     const connectionManager = ConnectionManager.getInstance();
-        //     this.connection = connectionManager.getConnection(this.connectionId);
-        // }
-
-        // If databaseId is provided, fetch the bundles for that database
-        
-    }
-
-
-    protected async updated(changedProperties: PropertyValues) {
-        // Check if the bundle property has changed
-        if (changedProperties.has('connectionId') && this.connectionId) {
-            
-           if (this.connectionId && this.databaseId) {
-                const connectionManager = ConnectionManager.getInstance();
-                this.connection = connectionManager.getConnection(this.connectionId);
-                this.databaseId = this.connection.activeDatabaseId;
-                const bundleManager = new BundleManager();
-                const bundles = await bundleManager.loadBundlesForDatabase(this.connectionId, this.databaseId || '');
-                this.bundles = bundles;
-
-               // this.fields = this.convertFieldDefinitionToArray(this.bundle?.DocumentStructure?.FieldDefinitions[0] || {});
-            }
-        }
-
-        if (changedProperties.has('bundle') && this.bundle) {
-            
-            this.fields = this.convertFieldDefinitionToArray(this.bundle?.DocumentStructure?.FieldDefinitions || {});    
-        }
-    }
-
-       /**
-     * Initialize form data when field property changes
+    /**
+     * Synchronous derived state only. Do not start async work here (Lit's willUpdate is sync).
      */
-     protected async willUpdate(changedProperties: PropertyValues) {
-         super.willUpdate(changedProperties);
+    protected willUpdate(changedProperties: PropertyValues): void {
+        super.willUpdate(changedProperties);
 
-         if (changedProperties.has('relationship') && this.relationship) {
-             // Initialize form data from field
+        if (changedProperties.has('relationship') && this.relationship) {
             this.formData = {
                 id: this.relationship?.id,
+                Name: this.relationship?.Name || '',
                 FieldName: this.relationship?.FieldName || '',
                 DestinationBundleName: this.relationship?.DestinationBundleName || '',
                 DestinationFieldName: this.relationship?.DestinationFieldName || '',
                 RelationshipType: this.relationship?.RelationshipType || '',
             };
-            
-            //this.fields = this.convertFieldDefinitionToArray(this.bundle?.DocumentStructure?.FieldDefinitions[0] || {});
         }
 
-         if (changedProperties.has('bundle') && this.bundle) {
-            
-            this.fields = this.convertFieldDefinitionToArray(this.bundle?.DocumentStructure?.FieldDefinitions || {});    
-        }
-
-         if (changedProperties.has('connectionId') && this.connectionId) {
-            
-           if (this.connectionId) {
-                const connectionManager = ConnectionManager.getInstance();
-                this.connection = connectionManager.getConnection(this.connectionId);
-                this.databaseId = this.connection.activeDatabaseId;
-                const bundleManager = new BundleManager();
-                const bundles = await bundleManager.loadBundlesForDatabase(this.connectionId, this.databaseId || '');
-                this.bundles = bundles;
-                console.log('Loaded bundles for database:', this.databaseId, this.bundles);
-               // this.fields = this.convertFieldDefinitionToArray(this.bundle?.DocumentStructure?.FieldDefinitions[0] || {});
-            }
+        if (changedProperties.has('bundle') && this.bundle) {
+            const raw = this.bundle?.DocumentStructure?.FieldDefinitions ?? this.bundle?.FieldDefinitions;
+            this.fields = fieldDefinitionsToArray(raw).map((fd) => ({ name: fd.Name, id: fd.id ?? crypto.randomUUID() }));
         }
     }
 
-    private convertFieldDefinitionToArray(fieldDefinitions: any) : Array<{name: string, id: string}>{
-        // Handle case where FieldDefinitions is an object instead of array
-        const results: Array<{name: string, id: string}> = [];
-
-        let fieldNames = Object.keys(fieldDefinitions);
-       
-        for (let name of fieldNames) {
-            
-            results.push({
-                ...(fieldDefinitions as any)[name],
-                name: name,
-                id: crypto.randomUUID()
-            });
-
+    protected updated(changedProperties: PropertyValues): void {
+        if (changedProperties.has('connectionId') || changedProperties.has('databaseId')) {
+            this.scheduleBundlesLoad();
         }
+    }
 
-        return results;
+    /**
+     * Load bundles for the current connection/database. Called from updated() when connectionId or databaseId change.
+     * Uses a guard to avoid duplicate in-flight requests; updates state in the promise handler and requestUpdate().
+     */
+    private scheduleBundlesLoad(): void {
+        if (this.bundlesLoadPending || !this.connectionId) return;
+
+        const conn = connectionManager.getConnection(this.connectionId);
+        const dbId = conn?.activeDatabaseId ?? this.databaseId ?? '';
+        if (!dbId) return;
+
+        this.bundlesLoadPending = true;
+        const bundleManager = new BundleManager();
+        bundleManager
+            .loadBundlesForDatabase(this.connectionId!, dbId)
+            .then((bundles) => {
+                this.connection = conn;
+                this.databaseId = dbId;
+                this.bundles = bundles;
+                this.bundlesLoadPending = false;
+                this.requestUpdate();
+            })
+            .catch(() => {
+                this.bundlesLoadPending = false;
+                this.requestUpdate();
+            });
     }
 
     private createRelationshipStatement(): string {
+
+        const relName = this.relationship?.Name || `rel_${this.bundle?.Name}_to_${this.destinationBundle?.Name}`;
+
         return `UPDATE BUNDLE "${this.bundle?.Name}" 
-            CREATE RELATIONSHIP "rel_${this.bundle?.Name}_to_${this.destinationBundle?.Name}" 
-            FROM BUNDLE "${this.bundle?.Name}" WITH FIELD "DocumentID" 
-            TO BUNDLE "${this.destinationBundle?.Name}" WITH FIELD "${this.destinationBundle?.Name}ID" 
-            AS "${this.formData.RelationshipType}"`;
+            ADD RELATIONSHIP ("${relName}" 
+            {        
+            "${this.formData.RelationshipType}",
+            "${this.bundle?.Name}", 
+            "${this.formData.FieldName}", 
+            "${this.destinationBundle?.Name}", 
+            "${this.formData.DestinationFieldName}" 
+            }
+            );`;
     } 
 
 
@@ -235,7 +209,8 @@ console.log('Input changed:', field, value);
             const selectedBundle = this.bundles.find(b => b.Name === value);
             console.log('Selected destination bundle:', selectedBundle, " for value:", value);
             this.destinationBundle = selectedBundle || null;
-            this.destinationBundleFields = this.convertFieldDefinitionToArray(this.destinationBundle?.DocumentStructure?.FieldDefinitions || {});
+            const destRaw = this.destinationBundle?.DocumentStructure?.FieldDefinitions ?? this.destinationBundle?.FieldDefinitions;
+            this.destinationBundleFields = fieldDefinitionsToArray(destRaw).map((fd) => ({ name: fd.Name, id: fd.id ?? crypto.randomUUID() }));
         }
 
 
@@ -243,7 +218,8 @@ console.log('Input changed:', field, value);
         this.dispatchEvent(new CustomEvent('relationship-changed', {
             detail: { 
                 relationshipId: this.relationship?.id || this.formData.id,
-                fieldData: { ...this.formData }
+                fieldData: { ...this.formData },
+                statement: this.createRelationshipStatement() // Include the SQL statement
             },
             bubbles: true,
             composed: true
@@ -261,8 +237,18 @@ console.log('Input changed:', field, value);
     protected render() {
     return html`
     <div class="field-definition-editor border rounded mb-0 bg-base-800 w-full" style="height: 40px;">
+           
             <div class="flex items-center gap-0 p-1">
-                <div class="flex-2 w-1/3">
+                <div class="flex items-center justify-start pl-2 pr-1">
+                    <input 
+                            type="text" 
+                            class="input input-bordered w-full h-8" 
+                            .value="${this.formData.Name}"
+                            @input="${(e: Event) => this.handleInputChange('Name', (e.target as HTMLInputElement).value)}"
+                            placeholder="Field name" 
+                        />
+                </div>
+                <div class="flex" style="flex-grow: 0.46;">
                    <select class="select select-bordered w-full h-8 text-sm"
                      .value="${this.formData.FieldName}"
                      @change="${(e: Event) => this.handleInputChange('FieldName', (e.target as HTMLSelectElement).value)}"
@@ -305,10 +291,10 @@ console.log('Input changed:', field, value);
                      @change="${(e: Event) => this.handleInputChange('RelationshipType', (e.target as HTMLSelectElement).value)}"
                     >
                         <option selected>Relationship Type</option>
-                        <option>One to Many</option>
-                        <option>One to One</option>
-                        <option>Many to One</option>
-                        <option>Many to Many</option>
+                        <option value="1ToMany">One to Many</option>
+                        <option value="1To1">One to One</option>
+                        <option value="ManyTo1">Many to One</option>
+                        <option value="ManyToMany">Many to Many</option>
                         
                     </select>
                 </div>

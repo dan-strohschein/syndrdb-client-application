@@ -48,15 +48,22 @@ export class FieldDefinitionEditor extends LitElement {
          super.willUpdate(changedProperties);
 
          if (changedProperties.has('field') && this.field) {
-             // Initialize form data from field
-            this.formData = {
-                id: this.field.id,
-                Name: this.field.Name || '',
-                Type: this.field.Type || 'STRING',
-                IsRequired: this.field.IsRequired || false,
-                IsUnique: this.field.IsUnique || false,
-                DefaultValue: this.field.DefaultValue || '',
-            };
+             // Only reset formData if this is a different field (different ID)
+             // This prevents resetting during user input when parent updates the same field
+             const previousField = changedProperties.get('field');
+             const isDifferentField = !previousField || previousField.id !== this.field.id;
+             
+             if (isDifferentField) {
+                 // Initialize form data from field
+                this.formData = {
+                    id: this.field.id,
+                    Name: this.field.Name || '',
+                    Type: this.field.Type || 'STRING',
+                    IsRequired: this.field.IsRequired || false,
+                    IsUnique: this.field.IsUnique || false,
+                    DefaultValue: this.field.DefaultValue || '',
+                };
+            }
         }
     }
 
@@ -98,14 +105,14 @@ export class FieldDefinitionEditor extends LitElement {
                         type="text" 
                         class="input input-bordered w-full h-8" 
                         .value="${this.formData.Name}"
-                        @input="${(e: Event) => this.handleInputChange('name', (e.target as HTMLInputElement).value)}"
+                        @input="${(e: Event) => this.handleInputChange('Name', (e.target as HTMLInputElement).value)}"
                         placeholder="Field name" 
                     />
                 </div>
                 <div class="flex-auto" style="flex-grow: 0.46;">
                     <select class="select select-bordered w-full h-8 text-sm"
                      .value="${this.formData.Type}"
-                     @change="${(e: Event) => this.handleInputChange('type', (e.target as HTMLSelectElement).value)}"
+                     @change="${(e: Event) => this.handleInputChange('Type', (e.target as HTMLSelectElement).value)}"
                     >
                         <option disabled selected>Type</option>
                         <option>STRING</option>

@@ -1,0 +1,68 @@
+# SyndrDB Client Application Configuration
+
+# Environment setting: 'development' or 'production'
+# In development mode, grammar files support hot-reloading
+environment: production
+
+# Language Service Configuration
+languageService:
+  # Statement cache buffer size in bytes (default: 5MB)
+  # When cache exceeds this size, oldest statements are evicted
+  statementCacheBufferSize: 5242880
+  
+  # Cache access weight factor for eviction algorithm (0.0 - 1.0)
+  # Higher values prioritize frequently-accessed statements
+  # Lower values prioritize recently-accessed statements
+  # Formula: evictionScore = (statementSize / accessCount) * recencyFactor
+  cacheAccessWeightFactor: 0.7
+  
+  # Cache persistence interval in milliseconds (default: 30000 = 30 seconds)
+  # Background worker saves cache to disk at this interval
+  cachePersistenceInterval: 30000
+  
+  # Suggestion pre-fetching enabled (default: true)
+  # Pre-generates suggestions for common cursor positions during idle time
+  suggestionPrefetchEnabled: true
+  
+  # Suggestion pre-fetch delay in milliseconds (default: 50)
+  # Time to wait after last keystroke before pre-fetching suggestions
+  suggestionPrefetchDelay: 50
+  
+  # Validation debounce delay in milliseconds (default: 1000)
+  # Time to wait after typing stops before validating statements
+  validationDebounceDelay: 1000
+
+# Editor Configuration
+editor:
+  # Enable syntax highlighting
+  syntaxHighlightingEnabled: true
+  
+  # Enable auto-suggestions
+  autoSuggestionsEnabled: true
+  
+  # Enable error squiggles
+  errorHighlightingEnabled: true
+
+# Context Configuration
+context:
+  # Display schema age in status bar
+  displaySchemaAge: true
+  
+  # Schema age warning threshold in minutes (default: 30)
+  # Show warning indicator if schema older than this
+  schemaAgeWarningThreshold: 30
+
+# Performance Monitoring
+# TODO: Performance metrics (validation time, cache hit rate, suggestion latency) must be implemented prior to production launch
+monitoring:
+  enabled: false
+  metricsCollectionInterval: 60000  # 1 minute
+
+# AI Assistant (natural language to SyndrQL)
+# premiumEnabled: when true, show AI panel without license check (stub until LicenseService exists)
+# aiAssistant:
+#   enabled: false
+#   endpoint: ''
+#   requestTimeout: 30000
+#   maxResponseTokens: 2048
+#   premiumEnabled: true

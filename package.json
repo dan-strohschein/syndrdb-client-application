@@ -1,5 +1,14 @@
 {
   "dependencies": {
     "@lit/context": "^1.1.6"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.1.0",
+    "happy-dom": "^20.6.1",
+    "vitest": "^1.1.0"
   }
 }

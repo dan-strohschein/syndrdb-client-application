@@ -12,34 +12,34 @@ export class SidebarPanel extends LitElement {
   @state()
   private connections: Connection[] = [];
 
-  @state()
-  private showConnectionModal = false;
-
   private newConnectionHandler: (() => void) | null = null;
+  private saveConnectionHandler: (() => void) | null = null;
 
   connectedCallback() {
     super.connectedCallback();
-    
-    // Listen for connection manager events
+
     connectionManager.addEventListener('connectionAdded', () => this.updateConnections());
     connectionManager.addEventListener('connectionStatusChanged', () => this.updateConnections());
     connectionManager.addEventListener('connectionRemoved', () => this.updateConnections());
-    
-    // Listen for new connection requests from navigation menu
+
     this.newConnectionHandler = () => {
-      this.openConnectionModal();
+      this.dispatchEvent(new CustomEvent('open-connection-modal', { bubbles: true }));
     };
     document.addEventListener('new-connection-requested', this.newConnectionHandler);
-    
-    // Load saved connections and then update the display
+
+    this.saveConnectionHandler = () => this.updateConnections();
+    document.addEventListener('save-connection', this.saveConnectionHandler);
+
     this.loadSavedConnections();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    // Clean up event listener
     if (this.newConnectionHandler) {
       document.removeEventListener('new-connection-requested', this.newConnectionHandler);
+    }
+    if (this.saveConnectionHandler) {
+      document.removeEventListener('save-connection', this.saveConnectionHandler);
     }
   }
 
@@ -137,23 +137,7 @@ export class SidebarPanel extends LitElement {
   }
 
   private openConnectionModal() {
-    console.log('Opening connection modal...');
-    this.showConnectionModal = true;
-    console.log('showConnectionModal is now:', this.showConnectionModal);
-  }
-
-  private handleCloseModal() {
-    this.showConnectionModal = false;
-  }
-
-  private handleSaveConnection(event: CustomEvent) {
-    const { connectionId, config } = event.detail;
-    console.log('Connection saved with ID:', connectionId);
-    
-    // The connection is already added to the manager, 
-    // so we just need to update our local state
-    this.updateConnections();
-    this.showConnectionModal = false;
+    this.dispatchEvent(new CustomEvent('open-connection-modal', { bubbles: true }));
   }
 
   render() {
@@ -183,13 +167,6 @@ export class SidebarPanel extends LitElement {
         <div class="flex-shrink-0 p-2 border-t border-base-300 text-xs text-base-content/70">
           ${this.connections.filter(c => c.status === 'connected').length} of ${this.connections.length} connected
         </div>
-        
-        <!-- Connection Modal -->
-        <connection-modal 
-          .open=${this.showConnectionModal}
-          @close-modal=${this.handleCloseModal}
-          @save-connection=${this.handleSaveConnection}
-        ></connection-modal>
       </div>
     `;
   }

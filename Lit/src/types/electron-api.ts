@@ -33,8 +33,44 @@ export interface FileDialogAPI {
   }) => Promise<{ canceled: boolean; filePath?: string }>;
 }
 
+/** Request payload for AI assistant generate: prompt + schema from DocumentContext.toCache() + current DB. */
+export interface AIAssistantGenerateRequest {
+  prompt: string;
+  schemaContext: unknown;
+  currentDatabase: string;
+  /** Passed from renderer config so main does not need to load config. */
+  endpoint?: string;
+  requestTimeout?: number;
+}
+
+/** Success: server returned IR. Error: network/parse/server error. */
+export interface AIAssistantGenerateResponseSuccess {
+  success: true;
+  data: AIAssistantResponseData;
+}
+
+export interface AIAssistantGenerateResponseError {
+  success: false;
+  error: string;
+}
+
+export type AIAssistantGenerateResponse = AIAssistantGenerateResponseSuccess | AIAssistantGenerateResponseError;
+
+/** Shape of model server response (IR). Matches domain ai-ir-schema AIAssistantResponse. */
+export interface AIAssistantResponseData {
+  statements: unknown[];
+  explanation?: string;
+  confidence?: number;
+}
+
+export interface AIAssistantElectronAPI {
+  generateQuery: (request: AIAssistantGenerateRequest) => Promise<AIAssistantGenerateResponse>;
+  checkSubscription: () => Promise<{ premium: boolean }>;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
   fileDialog: FileDialogAPI;
+  aiAssistant?: AIAssistantElectronAPI;
 }

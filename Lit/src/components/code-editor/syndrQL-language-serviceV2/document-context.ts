@@ -2,10 +2,14 @@
  * Document Context for SyndrQL Language Service V2
  * Tracks database schema, bundles, fields, relationships, and permissions
  * Server-authoritative with manual refresh capability
+ *
+ * Note: The app's domain model for bundles/fields lives in ../../types/field-definition and
+ * ../../types/bundle. The types below are the language-service-specific schema (e.g. for
+ * suggestions and validation) and may differ in shape.
  */
 
 /**
- * Field definition in a bundle
+ * Field definition in a bundle (language service schema)
  */
 export interface FieldDefinition {
     name: string;

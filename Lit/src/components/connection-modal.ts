@@ -2,25 +2,21 @@ import { html, css, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { connectionManager } from '../services/connection-manager';
 import { ConnectionConfig } from '../drivers/syndrdb-driver';
+import type { Connection } from '../services/connection-manager';
+import { BaseModalMixin } from '../lib/base-modal-mixin';
 
 @customElement('connection-modal')
-export class ConnectionModal extends LitElement {
-  // Disable Shadow DOM to allow global Tailwind CSS
-  createRenderRoot() {
-    return this;
-  }
-
-  @property({ type: Boolean })
-  open = false;
-
+export class ConnectionModal extends BaseModalMixin(LitElement) {
   @property({ type: Boolean })
   editMode = false;
 
   @property({ type: Object })
-  connectionToEdit: any = null;
+  connectionToEdit: Connection | null = null;
 
-  // Add debugging for when open property changes
-  updated(changedProperties: Map<string, any>) {
+  @property({ type: String })
+  connectionId: string | null = null;
+
+  updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has('open')) {
      // console.log('Modal open property changed to:', this.open);
       
@@ -168,8 +164,7 @@ export class ConnectionModal extends LitElement {
     }
   }
 
-  private handleClose() {
-    this.open = false;
+  override handleClose(): void {
     this.editMode = false;
     this.connectionToEdit = null;
     this.testResult = '';
@@ -181,10 +176,7 @@ export class ConnectionModal extends LitElement {
       username: '',
       password: ''
     };
-    
-    this.dispatchEvent(new CustomEvent('close-modal', {
-      bubbles: true
-    }));
+    super.handleClose();
   }
 
   render() {

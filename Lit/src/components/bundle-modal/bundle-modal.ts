@@ -1,78 +1,81 @@
 import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { connectionManager } from '../../services/connection-manager';
-import { FieldsTab } from './fields-tab';
 import { Bundle } from '../../types/bundle';
-import { BundleManager } from '../../services/bundle-manager';
+import type { FieldDefinition } from '../../types/field-definition';
+import { validateIdentifier } from '../../lib/validation';
+import { fieldDefinitionsToArray } from '../../lib/bundle-utils';
+import { buildCreateBundleCommand, buildUpdateBundleCommands } from '../../domain/bundle-commands';
+import { BaseModalMixin } from '../../lib/base-modal-mixin';
 
 @customElement('bundle-modal')
-export class BundleModal extends LitElement {
-
-@property({ type: Boolean })
-  open = false;
-
-@property({ type: String })
+export class BundleModal extends BaseModalMixin(LitElement) {
+  @property({ type: String })
   connectionId: string | null = null;
 
-@property({ type: String })
+  @property({ type: String })
   bundleId: string | null = null;
-  
-@property({ type: String })
+
+  @property({ type: String })
   databaseId: string | null = null;
 
-@property({ type: Object })
+  @property({ type: Object })
   bundle: Bundle | null = null;
 
-@state()
+  @property({ type: String })
+  databaseName: string | null = null;
+
+  @state()
   private errorMessage = '';
 
-@state()
+  @state()
   private isLoading = false;
 
- @state()
- private connection: any = null; 
+  @state()
+  private bundleFormState: { name: string; fieldDefinitions: FieldDefinition[] } = {
+    name: '',
+    fieldDefinitions: [],
+  };
 
- @state()
- private bundles: Array<Bundle> = [];
+  @state()
+  private relationshipStatements: string[] = [];
 
-  // Disable Shadow DOM to allow global Tailwind CSS
-    createRenderRoot() {
-        return this;
+  @state()
+  private connection: unknown = null;
+
+  @state()
+  private bundles: Array<Bundle> = [];
+
+  protected willUpdate(changedProperties: PropertyValues): void {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('bundle')) {
+      if (this.bundle) {
+        this.bundleFormState = {
+          name: this.bundle.Name ?? '',
+          fieldDefinitions: fieldDefinitionsToArray(this.bundle.FieldDefinitions),
+        };
+      } else {
+        this.bundleFormState = { name: '', fieldDefinitions: [] };
+      }
     }
+  }
 
-    private validateBundleName(name: string): { isValid: boolean; message: string } {
-        if (!name || !name.trim()) {
-            return { isValid: false, message: 'Bundle name cannot be empty.' };
-        }
-
-        // Check for valid characters only: alphanumeric, hyphens, and underscores
-        // No spaces or other symbols allowed
-        const validNameRegex = /^[a-zA-Z0-9_-]+$/;
-        if (!validNameRegex.test(name)) {
-            return { 
-                isValid: false, 
-                message: 'Bundle name can only contain letters, numbers, hyphens (-), and underscores (_). No spaces or other symbols allowed.' 
-            };
-        }
-
-        return { isValid: true, message: '' };
-    }
-
-    private handleClose() {
-        this.open = false;
-        this.errorMessage = '';
-        this.isLoading = false;
-        
-        this.dispatchEvent(new CustomEvent('close-modal', {
-            bubbles: true
-        }));
-    }
+  override handleClose(): void {
+    this.errorMessage = '';
+    this.isLoading = false;
+    super.handleClose();
+  }
 
 
 
     private handleBundleChanged(event: CustomEvent) {
         const { name, fieldDefinitions } = event.detail;
+        this.bundleFormState = { name: name ?? '', fieldDefinitions: fieldDefinitions ?? [] };
         this.bundle = { Name: name, FieldDefinitions: fieldDefinitions };
+    }
+
+    private handleRelationshipStatementsChanged(event: CustomEvent<string[]>) {
+        this.relationshipStatements = event.detail ?? [];
     }
 
     private async handleSave() {
@@ -80,110 +83,40 @@ export class BundleModal extends LitElement {
             this.isLoading = true;
             this.errorMessage = '';
 
-            // Check if we have a valid connection
             if (!this.connectionId) {
                 this.errorMessage = 'No active connection found.';
                 this.isLoading = false;
                 return;
             }
 
-            let createCommand = '';
-            // In bundle-modal.ts, you can get a reference to the fields-tab:
-            const fieldsTab = this.querySelector('fields-tab') as FieldsTab;
-            if (fieldsTab) {
-                const bundleData = fieldsTab.getCurrentBundleData();
+            const { name, fieldDefinitions } = this.bundleFormState;
 
-                // Validate bundle name
-                const validation = this.validateBundleName(bundleData.name);
-                if (!validation.isValid) {
-                    this.errorMessage = validation.message;
-                    this.isLoading = false;
-                    return;
-                }
-            
-                // console.log('Current bundle data:', bundleData);
-                createCommand = `CREATE BUNDLE "${bundleData.name}" WITH FIELDS `; //WITH FIELDS (${JSON.stringify(bundleData.fieldDefinitions)})`;
-            
-                // Send CREATE BUNDLE command to server
-                
-                console.log('🗄️ Sending CREATE BUNDLE command:', createCommand);
+            const validation = validateIdentifier(name, { entityName: 'Bundle name' });
+            if (!validation.isValid) {
+                this.errorMessage = validation.message;
+                this.isLoading = false;
+                return;
+            }
 
+            const createCommand = this.bundle
+                ? buildUpdateBundleCommands(this.bundle, this.bundleFormState, this.relationshipStatements)
+                : buildCreateBundleCommand(name, fieldDefinitions);
 
-                // Ok, we need to transform the statement to match the expected format
-                // Remove the [ ] since its not an array
-                // then remove the id and the string value from each field definition
-                
-                    
-                // Parse the JSON array of field definitions
-                // let fieldDefinitions: Array<any> = [];
-                // try {
-                //     fieldDefinitions = JSON.parse(fieldsPart);
-                // } catch (e) {
-                //     console.error('Error parsing field definitions:', e);
-                //     this.errorMessage = 'Failed to parse field definitions.';
-                //     this.isLoading = false;
-                //     return;
-                // }
-                let fieldStrings = Array<string>();
-                createCommand += '(';
-                // Transform each field definition to remove id and string value
-                bundleData.fieldDefinitions.forEach((field) => 
-                {
-                    
-                    let fieldString = `{"${field.Name}", ${field.Type.toUpperCase()}, `;
-                    if (field.IsRequired) {
-                        fieldString += ' TRUE';
-                    } else {
-                        fieldString += ' FALSE';
-                    }
-                    fieldString += ', ';
-                    if (field.IsUnique) {
-                        fieldString += ' TRUE';
-                    } else {
-                        fieldString += ' FALSE';
-                    }
-                    fieldString += ', ';
-                    if (field.DefaultValue !== undefined && field.DefaultValue !== null && field.DefaultValue !== '') {                       
-                        fieldString += `  ${field.DefaultValue}`;
-                    }
-                    fieldString += '} ';
-                    fieldStrings.push(fieldString);
-                });
+            console.log('Final command to execute:', createCommand);
 
+            const result = await connectionManager.executeQueryWithContext(this.connectionId, createCommand);
 
-            
-                fieldStrings.forEach((fs, index) => {
-                    createCommand += fs;
-                    if (index < fieldStrings.length - 1) {
-                        createCommand += ', ';
-                    }
-                });
-                createCommand += ');';
-                //console.log('Transformed field definitions:', transformedFields);
-                //console.log('Final CREATE BUNDLE command:', createCommand);
-                const result = await connectionManager.executeQueryWithContext(this.connectionId, createCommand);
-                
-                if (result.success) {
-                    console.log('✅ Bundle created successfully:', bundleData.name);
-                    
-                    // Refresh connection metadata to update the databases list
-                    await connectionManager.refreshMetadata(this.connectionId);
-                    
-                    // Dispatch success event
-                    this.dispatchEvent(new CustomEvent('bundle-created', {
-                        detail: { 
-                            bundleName: bundleData.name,
-                            connectionId: this.connectionId 
-                        },
-                        bubbles: true
-                    }));
-                    
-                    // Close modal
-                    this.handleClose();
-                } else {
-                    console.error('❌ Failed to create bundle:', result);
-                    this.errorMessage = result.error || 'Failed to create bundle. Please try again.';
-                }    //finally {
+            if (result.success) {
+                console.log('✅ Bundle created successfully:', name);
+                await connectionManager.refreshMetadata(this.connectionId);
+                this.dispatchEvent(new CustomEvent('bundle-created', {
+                    detail: { bundleName: name, connectionId: this.connectionId },
+                    bubbles: true
+                }));
+                this.handleClose();
+            } else {
+                console.error('❌ Failed to create bundle:', result);
+                this.errorMessage = result.error || 'Failed to create bundle. Please try again.';
             }
         } catch (error) {
             console.error('❌ Error creating bundle:', error);
@@ -240,10 +173,10 @@ export class BundleModal extends LitElement {
                             </label>
                             <div class="tab-content bg-base-100 border-base-300 p-6">
                                 <relationships-tab
-                                  
                                     .bundle="${this.bundle}"
                                     .connectionId="${this.connectionId}"
                                     .databaseId="${this.databaseId}"
+                                    @relationship-statements-changed=${this.handleRelationshipStatementsChanged}
                                 ></relationships-tab>
                             </div>
 
@@ -271,9 +204,9 @@ export class BundleModal extends LitElement {
                         <button 
                             type="submit"
                             class="btn btn-primary ${this.isLoading ? 'loading' : ''}" 
-                            ?disabled="${this.isLoading || !this.bundle?.Name || this.bundle?.FieldDefinitions?.length === 0}"
+                            ?disabled="${this.isLoading || !this.bundleFormState.name || this.bundleFormState.fieldDefinitions.length === 0}"
                         >
-                            ${this.isLoading ? 'Creating...' : 'Create Bundle'}
+                            ${this.isLoading ? 'Saving...' : (this.bundle ? 'Update Bundle' : 'Add New Bundle')}
                         </button>
                     </div>
                 </form>

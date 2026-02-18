@@ -1,34 +1,9 @@
 import { Bundle } from "../types/bundle";
-import { Connection, ConnectionManager } from "./connection-manager";
-
-
-
-export interface BundleDetails {
-  name: string;
-  documentStructure?: DocumentStructure;
-  relationships?: any[];
-  indexes?: any[];
-  rawData?: any; // Store the full SHOW BUNDLE result
-}
-
-export interface DocumentStructure {
-  FieldDefinitions: FieldDefinition[];
-}
-
-export interface FieldDefinition  {
-    Name:         string      ;
-    Type :        string      ;
-    IsRequired:   boolean      ; // Indicates if the field can be null
-    IsUnique:     boolean      ;
-    DefaultValue: any         ; // Optional default value for the field
-}
-
-
+import { connectionManager } from "./connection-manager";
+import { fieldDefinitionsToArray } from "../lib/bundle-utils";
 
 export class BundleManager {
 
-private connectionManager = ConnectionManager.getInstance();
-private connections: Map<string, Connection> = this.connectionManager.getAllConnections()
   private eventListeners: Map<string, Function[]> = new Map();
 
 
@@ -58,14 +33,14 @@ constructor() {}
    * Load bundles for a specific database
    */
   async loadBundlesForDatabase(connectionId: string, databaseName: string): Promise<Bundle[]> {
-    const connection = this.connectionManager.getConnection(connectionId); // Ensure connection is loaded
+    const connection = connectionManager.getConnection(connectionId); // Ensure connection is loaded
     if (!connection || connection.status !== 'connected') {
       throw new Error('Connection is not available');
     }
 
     try {
       // Set database context first
-      await this.connectionManager.setDatabaseContext(connectionId, databaseName);
+      await connectionManager.setDatabaseContext(connectionId, databaseName);
       
       const bundlesCommand = `SHOW BUNDLES;`; // No need for "FOR database" when context is set
       console.log('📦 Loading bundles for database:', databaseName, 'with command:', bundlesCommand);
@@ -89,7 +64,7 @@ constructor() {}
                 newBundle.DocumentStructure = rawBundle.DocumentStructure;
                 newBundle.Indexes = rawBundle.Indexes;
                 newBundle.Relationships = rawBundle.Relationships;
-                newBundle.FieldDefinitions = rawBundle.DocumentStructure?.FieldDefinitions || [];
+                newBundle.FieldDefinitions = fieldDefinitionsToArray(rawBundle.DocumentStructure?.FieldDefinitions);
                 newBundle.BundleId = rawBundle.BundleID || rawBundle.BundleId; // Handle both casings
                 newBundle.CreatedAt = rawBundle.CreatedAt;
                 newBundle.UpdatedAt = rawBundle.UpdatedAt;
@@ -103,7 +78,7 @@ constructor() {}
                 newBundle.DocumentStructure = rawBundle.BundleMetadata.DocumentStructure;
                 newBundle.Indexes = rawBundle.BundleMetadata.Indexes;
                 newBundle.Relationships = rawBundle.BundleMetadata.Relationships;
-                newBundle.FieldDefinitions = rawBundle.BundleMetadata.DocumentStructure?.FieldDefinitions || [];
+                newBundle.FieldDefinitions = fieldDefinitionsToArray(rawBundle.BundleMetadata.DocumentStructure?.FieldDefinitions);
                 newBundle.BundleId = rawBundle.BundleMetadata.BundleId;
                 newBundle.CreatedAt = rawBundle.BundleMetadata.CreatedAt;
                 newBundle.UpdatedAt = rawBundle.BundleMetadata.UpdatedAt;
@@ -125,9 +100,10 @@ constructor() {}
         connection.databaseBundles = new Map();
       }
       connection.databaseBundles.set(databaseName, bundles);
-      
- //     console.log('✅ Loaded', bundles.length, 'bundles for database', databaseName, ':', bundles);
-      
+
+      // Seed bundleDetails with indexes from SHOW BUNDLES so the tree shows Hash/B-Tree without expanding each bundle
+      connectionManager.seedBundleDetailsFromShowBundles(connectionId, bundles);
+
       this.emit('connectionStatusChanged', connection);
       return bundles;
       

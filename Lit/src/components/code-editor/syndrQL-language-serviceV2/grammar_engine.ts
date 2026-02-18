@@ -3,10 +3,10 @@
  * Loads and manages JSON-based grammar definitions with versioning support
  */
 
-import ddlGrammarJSON from './ddl_grammar.json' assert { type: 'json' };
-import dmlGrammarJSON from './dml_grammar.json' assert { type: 'json' };
-import dolGrammarJSON from './dol_grammar.json' assert { type: 'json' };
-import migrationGrammarJSON from './migration_grammar.json' assert { type: 'json' };
+import ddlGrammarJSON from './ddl_grammar.json';
+import dmlGrammarJSON from './dml_grammar.json';
+import dolGrammarJSON from './dol_grammar.json';
+import migrationGrammarJSON from './migration_grammar.json';
 import { configLoader } from '../../../config/config-loader.js';
 import { TokenType } from './token_types.js';
 
@@ -478,11 +478,10 @@ export class GrammarEngine {
             // Handle different symbol types
             if ('token' in symbol) {
                 // Token symbol - check if it matches
-                // Contextual tokens (lowercase like field_reference, bundle_reference) 
-                // match any identifier or string token
-                const isContextualToken = this.isRuleReference(symbol.token);
-                const matches = isContextualToken 
-                    ? (token.Type === TokenType.TOKEN_IDENT || token.Type === TokenType.TOKEN_STRING)
+                // Contextual tokens (lowercase like field_reference, bundle_reference, literal)
+                // match identifier/string; 'literal' also matches number and boolean
+                const matches = this.isRuleReference(symbol.token)
+                    ? this.tokenMatchesContextualSymbol(token.Type, symbol.token)
                     : (token.Type === symbol.token);
                 
                 if (!matches) {
@@ -642,9 +641,8 @@ export class GrammarEngine {
             if ('token' in symbol) {
                 // Contextual tokens (lowercase like field_reference, bundle_reference) 
                 // match any identifier or string token
-                const isContextualToken = this.isRuleReference(symbol.token);
-                const matches = isContextualToken 
-                    ? (token.Type === TokenType.TOKEN_IDENT || token.Type === TokenType.TOKEN_STRING)
+                const matches = this.isRuleReference(symbol.token)
+                    ? this.tokenMatchesContextualSymbol(token.Type, symbol.token)
                     : (token.Type === symbol.token);
                 
                 if (!matches) {
@@ -772,12 +770,9 @@ export class GrammarEngine {
             
             // Try to match this symbol with the current token
             if ('token' in symbol) {
-                // Check if this is a contextual token type (lowercase, like field_reference)
-                // These match any identifier or string token
-                const isContextualToken = this.isRuleReference(symbol.token);
-                
-                const matches = isContextualToken 
-                    ? (token.Type === TokenType.TOKEN_IDENT || token.Type === TokenType.TOKEN_STRING)
+                // Contextual tokens (e.g. field_reference, literal) match identifier/string; literal also number/boolean
+                const matches = this.isRuleReference(symbol.token)
+                    ? this.tokenMatchesContextualSymbol(token.Type, symbol.token)
                     : (token.Type === symbol.token);
                 
                 if (matches) {
@@ -901,12 +896,8 @@ export class GrammarEngine {
             
             // Try to match symbol
             if ('token' in symbol) {
-                // Check if this is a contextual token type (lowercase, like field_reference)
-                // These match any identifier or string token
-                const isContextualToken = this.isRuleReference(symbol.token);
-                
-                const matches = isContextualToken 
-                    ? (token.Type === TokenType.TOKEN_IDENT || token.Type === TokenType.TOKEN_STRING)
+                const matches = this.isRuleReference(symbol.token)
+                    ? this.tokenMatchesContextualSymbol(token.Type, symbol.token)
                     : (token.Type === symbol.token);
                 
                 if (matches) {
@@ -1075,6 +1066,20 @@ export class GrammarEngine {
         // Rule references are lowercase and may contain underscores
         // Keywords are uppercase (SELECT, FROM, CREATE, etc.)
         return tokenValue === tokenValue.toLowerCase() && /^[a-z_]+$/.test(tokenValue);
+    }
+
+    /**
+     * Check if a token type matches a contextual symbol (e.g. bundle_reference, literal).
+     * For 'literal', accepts IDENT, STRING, NUMBER, and boolean keywords (TRUE/FALSE).
+     * For other contextual refs (bundle_reference, field_reference), accepts IDENT and STRING only.
+     */
+    private tokenMatchesContextualSymbol(tokenType: string, symbolToken: string): boolean {
+        if (symbolToken === 'literal') {
+            return tokenType === TokenType.TOKEN_IDENT || tokenType === TokenType.TOKEN_STRING ||
+                tokenType === TokenType.TOKEN_NUMBER || tokenType === TokenType.TOKEN_TRUE ||
+                tokenType === TokenType.TOKEN_FALSE;
+        }
+        return tokenType === TokenType.TOKEN_IDENT || tokenType === TokenType.TOKEN_STRING;
     }
 
     /**

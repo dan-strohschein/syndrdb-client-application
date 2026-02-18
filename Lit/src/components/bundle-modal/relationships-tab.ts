@@ -19,6 +19,9 @@ export class RelationshipsTab extends LitElement {
     @state()
     private relationships: Array<Relationship> = [];
 
+    @state()
+    private relationshipStatements: Map<string, string> = new Map(); // Store statements by relationship ID
+
  @state()
     private formData: {
         relationships: Array<Relationship>;
@@ -44,6 +47,7 @@ export class RelationshipsTab extends LitElement {
             this.formData = {
                 relationships: this.relationships
             };
+            this.relationshipStatements = new Map();
         }
 
         super.willUpdate(changedProperties);
@@ -70,16 +74,22 @@ export class RelationshipsTab extends LitElement {
         this.relationships = [...this.relationships, newRelationship];
         this.formData.relationships = this.relationships;
         this.requestUpdate();
+        this.emitRelationshipStatements();
     }
 
     private handleRelationshipChanged(event: CustomEvent) {
-        const { fieldId, fieldData } = event.detail;
-        console.log('Relationships changed:', fieldId, fieldData);
+        const { relationshipId, fieldData, statement } = event.detail;
+        console.log('Relationships changed:', relationshipId, fieldData);
+
+        // Store the SQL statement for this relationship
+        if (statement) {
+            this.relationshipStatements.set(relationshipId, statement);
+        }
 
         // Find and update the relationship in the relationships array by ID
-        const relationshipIndex = this.relationships.findIndex(relationship => relationship.RelationshipID === fieldId);
+        const relationshipIndex = this.relationships.findIndex(relationship => relationship.RelationshipID === relationshipId);
         if (relationshipIndex !== -1) {
-            this.relationships[relationshipIndex] = { ...fieldData, RelationshipID: fieldId }; // Preserve the ID
+            this.relationships[relationshipIndex] = { ...fieldData, RelationshipID: relationshipId }; // Preserve the ID
             this.formData.relationships = this.relationships;
             this.requestUpdate();
         }
@@ -88,20 +98,32 @@ export class RelationshipsTab extends LitElement {
             bubbles: true,
             composed: true
         }));
+        this.emitRelationshipStatements();
         event.stopPropagation();
     }
 
     private handleDeleteRelationship(event: CustomEvent) {
-        const { fieldId } = event.detail;
-        console.log('Deleting relationship:', fieldId);
+        const { relationshipId } = event.detail;
+        console.log('Deleting relationship:', relationshipId);
+
+        // Remove the relationship statement
+        this.relationshipStatements.delete(relationshipId);
 
         // Remove the relationship with the matching ID using immutable update
-        this.relationships = this.relationships.filter(relationship => relationship.RelationshipID !== fieldId);
+        this.relationships = this.relationships.filter(relationship => relationship.RelationshipID !== relationshipId);
         this.formData.relationships = this.relationships;
         this.requestUpdate();
-        
-        // Stop the event from bubbling further
+        this.emitRelationshipStatements();
         event.stopPropagation();
+    }
+
+    private emitRelationshipStatements(): void {
+        const statements = Array.from(this.relationshipStatements.values());
+        this.dispatchEvent(new CustomEvent('relationship-statements-changed', {
+            detail: statements,
+            bubbles: true,
+            composed: true
+        }));
     }
 
     render() {

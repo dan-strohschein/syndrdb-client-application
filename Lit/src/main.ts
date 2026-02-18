@@ -1,5 +1,7 @@
-import { html, css, LitElement } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { html, LitElement } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import type { ModalState } from './types/modal-props';
+import type { Bundle } from './types/bundle';
 import './components/sidebar-panel';
 import './components/main-panel';
 import './components/connection-tree/connection-tree';
@@ -154,74 +156,71 @@ export class AppRoot extends LitElement {
     this.addEventListener('query-executed', (event: Event) => {
       this.handleQueryExecuted(event as CustomEvent);
     });
+
+    this.addEventListener('close-modal', () => {
+      this.handleCloseModal();
+    });
+
+    this.addEventListener('open-connection-modal', () => {
+      this.modalState = { type: 'connection', props: { open: true } };
+    });
+
+    this.addEventListener('ai-assistant-toggle-requested', () => {
+      this.aiPanelOpen = !this.aiPanelOpen;
+    });
+  }
+
+  @state()
+  private aiPanelOpen = false;
+
+  @state()
+  private modalState: ModalState = { type: 'none' };
+
+  @state()
+  private statusBarState: { executionTimeMS: number; resultCount: number } = {
+    executionTimeMS: 0,
+    resultCount: 0,
+  };
+
+  private handleCloseModal(): void {
+    this.modalState = { type: 'none' };
   }
 
   private handleEditConnection(event: CustomEvent) {
-    console.log('🎯 App root received edit-connection event');
-    console.log('Event detail:', event.detail);
-    
-    // Get the actual connection object from connection manager
     const { connectionId } = event.detail;
-    
-    // Import connection manager to get the connection object
     import('./services/connection-manager').then(({ connectionManager }) => {
       const connection = connectionManager.getConnection(connectionId);
-      
       if (!connection) {
         console.error('❌ Connection not found:', connectionId);
         return;
       }
-      
-      // Find the connection-modal element and open it for editing
-      const connectionModal = this.querySelector('connection-modal');
-      if (connectionModal) {
-        console.log('📤 Opening connection modal for editing connection:', connection.name);
-        (connectionModal as any).open = true;
-        (connectionModal as any).editMode = true;
-        (connectionModal as any).connectionToEdit = connection;
-        (connectionModal as any).requestUpdate();
-      } else {
-        console.error('❌ Could not find connection-modal element');
-      }
-    }).catch(error => {
+      this.modalState = {
+        type: 'connection',
+        props: { open: true, editMode: true, connectionToEdit: connection },
+      };
+    }).catch((error) => {
       console.error('❌ Error importing connection manager:', error);
     });
   }
 
   private handleEditDatabase(event: CustomEvent) {
-    console.log('🗄️ App root received edit-database event');
-    console.log('Event detail:', event.detail);
-    
     const { connectionId, databaseName } = event.detail;
-    
-    // Find the database-modal element and open it for editing
-    const databaseModal = this.querySelector('database-modal');
-    if (databaseModal) {
-      console.log('📤 Opening database modal for editing database:', databaseName);
-      (databaseModal as any).open = true;
-      (databaseModal as any).editMode = true;
-      (databaseModal as any).connectionId = connectionId;
-      (databaseModal as any).databaseToEdit = { name: databaseName };
-      (databaseModal as any).requestUpdate();
-    } else {
-      console.error('❌ Could not find database-modal element');
-    }
+    this.modalState = {
+      type: 'database',
+      props: {
+        open: true,
+        editMode: true,
+        connectionId,
+        databaseToEdit: { name: databaseName },
+      },
+    };
   }
 
   private handleDeleteConnection(event: CustomEvent) {
-   // console.log('🎯 App root received delete-connection event');
-   // console.log('Event detail:', event.detail);
-    
-    // Find the connection-modal element and open it for deletion confirmation
-    const connectionModal = this.querySelector('connection-modal');
-    if (connectionModal) {
-      console.log('📤 Opening connection modal for deleting connection:', event.detail.connectionName);
-      (connectionModal as any).open = true;
-      (connectionModal as any).connectionId = event.detail?.connectionId;
-      (connectionModal as any).requestUpdate();
-    } else {
-      console.error('❌ Could not find connection-modal element');
-    }
+    this.modalState = {
+      type: 'connection',
+      props: { open: true, connectionId: event.detail?.connectionId },
+    };
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
@@ -241,161 +240,67 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private async handleNewDatabaseRequest(event: CustomEvent) {
-   // console.log('🎯 App root received new-database-requested event');
-   // console.log('Event detail:', event.detail);
-
-    // Find the database-modal element and open it
-    const databaseModal = this.querySelector('database-modal');
-    if (databaseModal) {
-      console.log('📤 Opening database modal');
-      (databaseModal as any).open = true;
-      (databaseModal as any).connectionId = event.detail?.connectionId;
-      (databaseModal as any).requestUpdate();
-    } else {
-      console.error('❌ Could not find database-modal element');
-    }
+  private handleNewDatabaseRequest(event: CustomEvent) {
+    this.modalState = {
+      type: 'database',
+      props: { open: true, connectionId: event.detail?.connectionId },
+    };
   }
 
-private async handleNewBundleRequest(event: CustomEvent) {
-   // console.log('🎯 App root received new-bundle-requested event');
-   // console.log('Event detail:', event.detail);
-
-    // Validate event data
+  private handleNewBundleRequest(event: CustomEvent) {
     const { connectionId, databaseName } = event.detail || {};
-    
     if (!connectionId) {
       console.error('❌ New bundle request missing connectionId');
       this.showBundleError('Cannot create bundle: Missing connection information');
       return;
     }
-
-    // Find the bundle-modal element
-    const bundleModal = this.querySelector('bundle-modal');
-    if (!bundleModal) {
-      console.error('❌ Could not find bundle-modal element');
-      this.showBundleError('System error: Bundle creator not available');
-      return;
-    }
-
-    try {
-    //  console.log('📤 Opening bundle modal for new bundle creation');
-      (bundleModal as any).open = true;
-      (bundleModal as any).editMode = false; // Ensure we're in create mode
-      (bundleModal as any).connectionId = connectionId;
-      (bundleModal as any).databaseName = databaseName; // Pass database context if available
-      (bundleModal as any).bundleId = null; // Clear any existing bundle ID
-      (bundleModal as any).bundle = null; // Clear any existing bundle data
-      (bundleModal as any).requestUpdate();
-      
-    //  console.log('✅ Bundle modal opened successfully for new bundle creation');
-      
-    } catch (error) {
-      console.error('❌ Error opening bundle modal for new bundle:', error);
-      this.showBundleError('Failed to open bundle creator');
-    }
+    this.modalState = {
+      type: 'bundle',
+      props: {
+        open: true,
+        connectionId,
+        databaseName: databaseName ?? null,
+        bundleId: null,
+        bundle: null,
+      },
+    };
   }
 
-private async handleEditBundleRequest(event: CustomEvent) {
-   // console.log('🎯 App root received edit-bundle-requested event');
-   // console.log('Event detail:', event.detail);
-
-    // Validate event data
-    const { bundleId, bundle, connectionId, bundleName } = event.detail || {};
-    
+  private handleEditBundleRequest(event: CustomEvent) {
+    const { bundleId, bundle, connectionId } = event.detail || {};
     if (!bundleId && !bundle) {
-      console.error('❌ Edit bundle request missing both bundleId and bundle data');
       this.showBundleError('Cannot edit bundle: Missing bundle identifier or data');
       return;
     }
-
     if (!connectionId) {
-      console.error('❌ Edit bundle request missing connectionId');
       this.showBundleError('Cannot edit bundle: Missing connection information');
       return;
     }
 
-    // Find the bundle-modal element
-    const bundleModal = this.querySelector('bundle-modal');
-    if (!bundleModal) {
-      console.error('❌ Could not find bundle-modal element');
-      this.showBundleError('System error: Bundle editor not available');
-      return;
-    }
-
-    // Enhanced logging for debugging
-    // console.log('� Bundle data validation:', {
-    //   hasBundleId: !!bundleId,
-    //   hasBundleObject: !!bundle,
-    //   hasConnectionId: !!connectionId,
-    //   bundleName: bundleName || bundle?.name || 'Unknown',
-    //   bundleObjectKeys: bundle ? Object.keys(bundle) : 'No bundle object'
-    // });
-
-    try {
-      // Set modal properties with validation
-      (bundleModal as any).open = true;
-      (bundleModal as any).editMode = true; // Ensure we're in edit mode
-      (bundleModal as any).connectionId = connectionId;
-      (bundleModal as any).bundle = bundle;
-
-      // Pass both bundleId and bundle for redundancy
-      if (bundleId) {
-        (bundleModal as any).bundleId = bundleId;
-        // console.log('✅ Bundle ID passed to modal:', bundleId);
-      }
-      
-      if (bundle) {
-        // Validate bundle object has minimum required properties
-        if (this.validateBundleObject(bundle)) {
-          (bundleModal as any).bundle = bundle;
-          // console.log('✅ Bundle object validated and passed to modal');
-        } else {
-          console.warn('⚠️ Bundle object validation failed, modal will need to fetch data using bundleId');
-          (bundleModal as any).bundle = null; // Clear invalid bundle
-        }
-      } else if (bundleId) {
-        // No bundle object provided, but we have bundleId - modal should fetch the data
-        // console.log('ℹ️ No bundle object provided, modal will fetch data using bundleId:', bundleId);
-        (bundleModal as any).bundle = null;
-      }
-      
-      (bundleModal as any).requestUpdate();
-    //  console.log('📤 Bundle modal opened successfully for editing');
-      
-    } catch (error) {
-      console.error('❌ Error opening bundle modal:', error);
-      this.showBundleError('Failed to open bundle editor');
-    }
+    const validatedBundle: Bundle | null =
+      bundle && this.validateBundleObject(bundle) ? bundle : null;
+    this.modalState = {
+      type: 'bundle',
+      props: {
+        open: true,
+        connectionId,
+        bundleId: bundleId ?? undefined,
+        bundle: validatedBundle ?? null,
+      },
+    };
   }
 
   /**
    * Validate that a bundle object has the minimum required properties
    */
-  private validateBundleObject(bundle: any): boolean {
+  private validateBundleObject(bundle: unknown): bundle is Bundle {
     if (!bundle || typeof bundle !== 'object') {
-      console.warn('⚠️ Bundle validation: Not an object');
       return false;
     }
-
-    // Check for essential bundle properties
-    const requiredFields = ['Name']; // Add other required fields as needed
-    const optionalFields = ['BundleId', 'DocumentStructure', 'Indexes', 'Relationships']; // Log these for debugging
-
-    for (const field of requiredFields) {
-      if (!bundle[field]) {
-        console.warn(`⚠️ Bundle validation: Missing required field '${field}'`);
-        return false;
-      }
+    const obj = bundle as Record<string, unknown>;
+    if (!obj['Name']) {
+      return false;
     }
-
-    // Log optional fields for debugging
-    // console.log('🔍 Bundle object fields:', {
-    //   required: requiredFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
-    //   optional: optionalFields.reduce((acc, field) => ({ ...acc, [field]: !!bundle[field] }), {}),
-    //   totalFields: Object.keys(bundle).length
-    // });
-
     return true;
   }
 
@@ -403,18 +308,7 @@ private async handleEditBundleRequest(event: CustomEvent) {
    * Show bundle-related error messages to the user
    */
   private showBundleError(message: string): void {
-    // console.log('🔍 Attempting to show bundle error:', message);
-    
-    const errorModal = this.querySelector('error-modal');
-    if (errorModal) {
-      (errorModal as any).open = true;
-      (errorModal as any).errorMessage = message;
-      (errorModal as any).requestUpdate();
-      console.log('✅ Bundle error displayed to user');
-    } else {
-      console.error('❌ Could not find error-modal, falling back to alert');
-      alert(`Bundle Error: ${message}`);
-    }
+    this.modalState = { type: 'error', props: { open: true, errorMessage: message } };
   }
 
   private async handleDatabaseCreated(event: CustomEvent) {
@@ -435,64 +329,26 @@ private async handleEditBundleRequest(event: CustomEvent) {
     }
   }
 
-  private handleAboutModalRequest(event: CustomEvent) {
- //   console.log('🎯 App root received about-modal-requested event');
-    
-    // Find the about-modal element and open it
-    const aboutModal = this.querySelector('about-modal');
-    if (aboutModal) {
-      console.log('📤 Opening about modal');
-      (aboutModal as any).open();
-    } else {
-      console.error('❌ Could not find about-modal element');
-    }
+  private handleAboutModalRequest() {
+    this.modalState = { type: 'about', props: { open: true } };
   }
 
-  private handleAddUserRequest(event: CustomEvent) {
-    // console.log('🎯 App root received add-user event');
-    // console.log('Event detail:', event.detail);
-    
-    // Find the user-modal element and open it for creating a new user
-    const userModal = this.querySelector('user-modal');
-    if (userModal) {
-      console.log('📤 Opening user modal for new user');
-      (userModal as any).user = null; // Clear any existing user data
-      (userModal as any).open = true;
-      (userModal as any).isOpen = true;
-      (userModal as any).requestUpdate();
-    } else {
-      console.error('❌ Could not find user-modal element');
-    }
+  private handleAddUserRequest() {
+    this.modalState = { type: 'user', props: { open: true, user: null } };
   }
 
   private handleEditUserRequest(event: CustomEvent) {
-    // console.log('🎯 App root received edit-user event');
-    // console.log('Event detail:', event.detail);
-    
-    // Find the user-modal element and open it for editing
-    const userModal = this.querySelector('user-modal');
-    if (userModal) {
-      console.log('📤 Opening user modal for editing user:', event.detail.userName);
-      
-      // Create a mock user object based on the userName
-      // In a real app, you would fetch the full user data from the server
-      const userData = {
-        name: event.detail.userName,
-        userId: event.detail.userName, // Assuming userName is the userId
-        password: '', // Password fields are usually not populated for security
-        isActive: true,
-        isLockedOut: false,
-        failedLoginAttempts: 0,
-        lockoutExpiresOn: null
-      };
-      
-      (userModal as any).user = userData;
-      (userModal as any).open = true;
-      (userModal as any).isOpen = true;
-      (userModal as any).requestUpdate();
-    } else {
-      console.error('❌ Could not find user-modal element');
-    }
+    const userName = event.detail?.userName as string;
+    const userData = {
+      name: userName,
+      userId: userName,
+      password: '',
+      isActive: true,
+      isLockedOut: false,
+      failedLoginAttempts: 0,
+      lockoutExpiresOn: null,
+    };
+    this.modalState = { type: 'user', props: { open: true, user: userData } };
   }
 
   private handleConnectDatabase(event: CustomEvent) {
@@ -543,56 +399,26 @@ private async handleEditBundleRequest(event: CustomEvent) {
   }
 
   private handleConnectionError(event: CustomEvent) {
-    // console.log('🎯 App root received connection-error event');
-    // console.log('Event detail:', event.detail);
-    
     const { connectionName, error } = event.detail;
     const errorMessage = error || 'Unknown connection error occurred.';
-    
-    //console.log('🔍 Attempting to find error-modal element...');
-    
-    // Find the error modal and show it with the error message
-    const errorModal = this.querySelector('error-modal');
-    
-  //  console.log('🔍 Error modal element found:', !!errorModal);
-    
-    if (errorModal) {
-      console.log('📤 Showing error modal with message:', errorMessage);
-      (errorModal as any).open = true;
-      (errorModal as any).errorMessage = `Failed to connect to "${connectionName}": ${errorMessage}`;
-      (errorModal as any).requestUpdate();
-    //  console.log('✅ Error modal should now be visible');
-    } else {
-      console.error('❌ Could not find error-modal element');
-      // Fallback: show an alert for debugging
-      alert(`Connection Error: Failed to connect to "${connectionName}": ${errorMessage}`);
-    }
+    this.modalState = {
+      type: 'error',
+      props: {
+        open: true,
+        errorMessage: `Failed to connect to "${connectionName}": ${errorMessage}`,
+      },
+    };
   }
   
   /**
    * Handle query execution results and update status bar
    */
   private handleQueryExecuted(event: CustomEvent) {
-      // console.log('⏱️ App root received query-executed event');
-      // console.log('Query result detail:', event.detail);
-      
     const { executionTime, ResultCount } = event.detail;
-    
-    // Find the status bar and update execution time and result count
-    const statusBar = this.querySelector('#main-status-bar') as any;
-    if (statusBar) {
-      if (executionTime !== undefined) {
-        statusBar.executionTimeMS = executionTime;
-        // console.log('✅ Updated status bar with execution time:', executionTime, 'ms');
-      }
-      
-      if (ResultCount !== undefined) {
-        statusBar.resultCount = ResultCount;
-        // console.log('✅ Updated status bar with result count:', ResultCount);
-      }
-    } else {
-      console.warn('⚠️ Could not find status bar element');
-    }
+    this.statusBarState = {
+      executionTimeMS: executionTime !== undefined ? executionTime : this.statusBarState.executionTimeMS,
+      resultCount: ResultCount !== undefined ? ResultCount : this.statusBarState.resultCount,
+    };
   }
 
   render() {
@@ -606,31 +432,57 @@ private async handleEditBundleRequest(event: CustomEvent) {
        
           
         
-        <div class="flex-1 flex">
-          <!-- Sidebar (30%) -->
-          <sidebar-panel class="w-[30%] bg-base-200"></sidebar-panel>
-          
-          <!-- Main Content (70%) -->
-          <main-panel class="w-[70%] bg-base-100"></main-panel>
+        <div class="flex-1 flex min-w-0">
+          <!-- Sidebar: Connections -->
+          <sidebar-panel class="w-[30%] min-w-0 flex-shrink-0 bg-base-200"></sidebar-panel>
+          <!-- Center: Code editor (query tabs + results) -->
+          <main-panel class="flex-1 min-w-0 bg-base-100" .aiPanelOpen=${this.aiPanelOpen}></main-panel>
         </div>
         
         <!-- Status Bar at the bottom -->
-        <status-bar id="main-status-bar"></status-bar>
-        
-        <!-- About Modal -->
-        <about-modal></about-modal>
-        
-        <!-- User Modal -->
-        <user-modal></user-modal>
+        <status-bar
+          id="main-status-bar"
+          .executionTimeMS=${this.statusBarState.executionTimeMS}
+          .resultCount=${this.statusBarState.resultCount}
+        ></status-bar>
 
-        <!-- Database Modal -->
-        <database-modal></database-modal>
-
-        <!-- Bundle Modal -->
-        <bundle-modal></bundle-modal>
-
-        <!-- Error Modal -->
-        <error-modal></error-modal>
+        <!-- Modals: bound from modalState (no querySelector, no casts) -->
+        <connection-modal
+          .open=${this.modalState.type === 'connection'}
+          .editMode=${this.modalState.type === 'connection' ? (this.modalState.props.editMode ?? false) : false}
+          .connectionToEdit=${this.modalState.type === 'connection' ? this.modalState.props.connectionToEdit ?? null : null}
+          .connectionId=${this.modalState.type === 'connection' ? this.modalState.props.connectionId ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></connection-modal>
+        <about-modal
+          .open=${this.modalState.type === 'about'}
+          @close-modal=${this.handleCloseModal}
+        ></about-modal>
+        <user-modal
+          .open=${this.modalState.type === 'user'}
+          .user=${this.modalState.type === 'user' ? this.modalState.props.user ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></user-modal>
+        <database-modal
+          .open=${this.modalState.type === 'database'}
+          .connectionId=${this.modalState.type === 'database' ? this.modalState.props.connectionId ?? null : null}
+          .editMode=${this.modalState.type === 'database' ? (this.modalState.props.editMode ?? false) : false}
+          .databaseToEdit=${this.modalState.type === 'database' ? this.modalState.props.databaseToEdit ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></database-modal>
+        <bundle-modal
+          .open=${this.modalState.type === 'bundle'}
+          .connectionId=${this.modalState.type === 'bundle' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'bundle' ? this.modalState.props.databaseName ?? null : null}
+          .bundleId=${this.modalState.type === 'bundle' ? this.modalState.props.bundleId ?? null : null}
+          .bundle=${this.modalState.type === 'bundle' ? this.modalState.props.bundle ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></bundle-modal>
+        <error-modal
+          .open=${this.modalState.type === 'error'}
+          .errorMessage=${this.modalState.type === 'error' ? this.modalState.props.errorMessage ?? '' : ''}
+          @close-modal=${this.handleCloseModal}
+        ></error-modal>
     </div>    
     `;
   }

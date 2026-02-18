@@ -161,6 +161,10 @@ class ConfigLoader {
       monitoring: {
         ...DEFAULT_CONFIG.monitoring,
         ...(loaded.monitoring || {})
+      },
+      aiAssistant: {
+        ...(DEFAULT_CONFIG.aiAssistant || {}),
+        ...(loaded.aiAssistant || {})
       }
     };
   }
@@ -198,6 +202,14 @@ class ConfigLoader {
     // Validate context config
     if (config.context.schemaAgeWarningThreshold <= 0) {
       throw new Error('schemaAgeWarningThreshold must be greater than 0');
+    }
+
+    // Validate AI assistant config (optional)
+    if (config.aiAssistant?.requestTimeout !== undefined && config.aiAssistant.requestTimeout <= 0) {
+      throw new Error('aiAssistant.requestTimeout must be greater than 0');
+    }
+    if (config.aiAssistant?.maxResponseTokens !== undefined && config.aiAssistant.maxResponseTokens <= 0) {
+      throw new Error('aiAssistant.maxResponseTokens must be greater than 0');
     }
 
     console.log('✅ Configuration validated successfully');

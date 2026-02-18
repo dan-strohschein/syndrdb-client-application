@@ -3,6 +3,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { connectionManager } from '../../services/connection-manager';
 import { FieldDefinition } from '../../types/field-definition';
+import { validateIdentifier } from '../../lib/validation';
+import { fieldDefinitionsToArray } from '../../lib/bundle-utils';
 import './field-definition-editor.js';
 import { Bundle } from '../../types/bundle';
 
@@ -39,6 +41,9 @@ export class FieldsTab extends LitElement {
     @state()
     private fields: Array<FieldDefinition> = [];
 
+    @state()
+    private isEditing = false; // Track if user is actively editing
+
     // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
         return this;
@@ -69,57 +74,16 @@ export class FieldsTab extends LitElement {
      * Use willUpdate instead of firstUpdated to avoid scheduling additional updates
      */
     protected willUpdate(changedProperties: PropertyValues): void {
-        // Only process bundle data if the bundle property has changed
-        if (changedProperties.has('bundle') && this.bundle) {
-            console.log('Fields tab willUpdate, bundle changed:', this.bundle);
+        // Only process bundle data if the bundle property has changed AND we're not currently editing
+        // This prevents recreating fields (with new IDs) during user input
+        if (changedProperties.has('bundle') && this.bundle && !this.isEditing) {
+         //   console.log('Fields tab willUpdate, bundle changed:', this.bundle);
             
             this.formData.name = this.bundle.Name || '';
-            
-            // Use the correct path: bundle.FieldDefinitions (not DocumentStructure.FieldDefinitions)
-            const fieldDefinitions = this.bundle.FieldDefinitions || [];
-            if (Array.isArray(fieldDefinitions)) {
-                this.fields = fieldDefinitions.map(field => ({
-                    ...field,
-                    id: crypto.randomUUID()
-                }));
-            } else {
-                // Handle case where FieldDefinitions is an object instead of array
-                let fieldNames = Object.keys(fieldDefinitions);
-                this.fields = [];
-                for (let name of fieldNames) {
-                    if (name !== 'DocumentID') {
-                        this.fields.push({
-                            ...(fieldDefinitions as any)[name],
-                            name: name,
-                            id: crypto.randomUUID()
-                        });
-                    }
-                }
-            }
+            this.fields = fieldDefinitionsToArray(this.bundle.FieldDefinitions);
         }
     }
 
-
-    /**
-     * Validate bundle name according to the rules:
-     * AlphaNumeric only, with - and _ allowed. Case doesn't matter. No spaces or symbols.
-     */
-    private validateBundleName(name: string): { isValid: boolean; message: string } {
-        if (!name.trim()) {
-            return { isValid: false, message: 'Bundle name is required.' };
-        }
-
-        // Check for valid characters only: alphanumeric, hyphens, and underscores
-        const validNameRegex = /^[a-zA-Z0-9_-]+$/;
-        if (!validNameRegex.test(name)) {
-            return { 
-                isValid: false, 
-                message: 'Bundle name can only contain letters, numbers, hyphens (-), and underscores (_). No spaces or other symbols allowed.' 
-            };
-        }
-
-        return { isValid: true, message: '' };
-    }
 
      private handleInputChange(field: string, value: string | boolean | number | Date) {
         this.formData = {
@@ -161,18 +125,28 @@ export class FieldsTab extends LitElement {
         const { fieldId, fieldData } = event.detail;
         console.log('Field changed:', fieldId, fieldData);
         
+        // Mark that we're actively editing to prevent willUpdate from recreating fields
+        this.isEditing = true;
+        
         // Find and update the field in the fields array by ID
         const fieldIndex = this.fields.findIndex(field => field.id === fieldId);
         if (fieldIndex !== -1) {
             this.fields[fieldIndex] = { ...fieldData, id: fieldId }; // Preserve the ID
             this.formData.fieldDefinitions = this.fields;
-            this.requestUpdate();
+            // Don't call requestUpdate() here - let the child component manage its own rendering
         }
+        
+        // Dispatch bundle-changed but include the field IDs so parent can pass them back
+        // This allows parent to track state without recreating fields
         this.dispatchEvent(new CustomEvent('bundle-changed', {
-            detail: { ...this.formData },
+            detail: { 
+                name: this.formData.name,
+                fieldDefinitions: this.fields // Include IDs so they're preserved
+            },
             bubbles: true,
             composed: true
         }));
+        
         event.stopPropagation();
     }
 
@@ -186,16 +160,6 @@ export class FieldsTab extends LitElement {
         
         // Stop the event from bubbling further
         event.stopPropagation();
-    }
-
-    /**
-     * Get the current bundle data from the form
-     */
-    getCurrentBundleData(): { name: string; fieldDefinitions: FieldDefinition[] } {
-        return {
-            name: this.formData.name,
-            fieldDefinitions: [...this.fields]
-        };
     }
 
     render() {

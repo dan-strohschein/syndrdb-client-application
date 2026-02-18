@@ -31,15 +31,22 @@ import { SuggestionEngine, type Suggestion } from './suggestion-engine';
 import { ContextExpander, PrefetchStrategy } from './context-expander';
 import { StatementParser, type ParsedStatement } from './statement-parser';
 import { FontMetrics } from '../types.js';
-import { 
-    SyntaxTheme, 
-    DEFAULT_SYNDRQL_THEME 
+import {
+    SyntaxTheme,
+    DEFAULT_SYNDRQL_THEME
 } from './rendering-types.js';
-import { 
-    renderSyntaxHighlightedLine, 
+import {
+    renderSyntaxHighlightedLine,
     renderStatementErrorUnderline,
-    organizeTokensByLine 
+    organizeTokensByLine
 } from './renderer.js';
+import type {
+    ILanguageService,
+    ILanguageServiceParsedStatement,
+    ILanguageServiceValidationResult,
+    ILanguageServiceSuggestion,
+    ILanguageServiceDatabaseDefinition,
+} from '../language-service-interface.js';
 
 /**
  * Validation result with enhanced error details
@@ -112,7 +119,7 @@ export interface ServiceStats {
  * Main Language Service V2 API
  * Provides unified access to all language service features
  */
-export class LanguageServiceV2 {
+export class LanguageServiceV2 implements ILanguageService {
     private grammarEngine: GrammarEngine;
     private tokenizer: Tokenizer;
     private cache: StatementCache;
@@ -484,6 +491,14 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
     getCurrentDatabase(): string | null {
         return this.context.getCurrentDatabase();
     }
+
+    /**
+     * Load schema context from cache (e.g. DocumentContext.toCache() or AI assistant schema payload).
+     */
+    loadContextFromCache(cachedData: any): void {
+        this.context.loadFromCache(cachedData);
+    }
+
 
     /**
      * Update database definition in context

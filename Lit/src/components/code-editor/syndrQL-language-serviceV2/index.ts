@@ -4,6 +4,16 @@
  * Exports all public APIs for the modern grammar-driven language service
  */
 
+// Pluggable language service interface
+export type {
+    ILanguageService,
+    ILanguageServiceParsedStatement,
+    ILanguageServiceValidationResult,
+    ILanguageServiceSuggestion,
+    ILanguageServiceError,
+    ILanguageServiceDatabaseDefinition,
+} from '../language-service-interface';
+
 // Main API
 export { LanguageServiceV2, createLanguageService } from './language-service-v2';
 export type { ValidationResult, FormatOptions, RefreshOptions, ServiceStats, ParsedStatement } from './language-service-v2';

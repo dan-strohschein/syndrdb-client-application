@@ -20,7 +20,16 @@ export interface BundleResponse {
 }
 
 export interface DocumentStructure {
-    FieldDefinitions: any;
+    FieldDefinitions: FieldDefinition[];
+}
+
+/** Bundle details from SHOW BUNDLE / API; used by connection-manager and bundle-manager. */
+export interface BundleDetails {
+  name: string;
+  documentStructure?: DocumentStructure;
+  relationships?: any[];
+  indexes?: any[];
+  rawData?: any;
 }
 
 export interface Relationship {

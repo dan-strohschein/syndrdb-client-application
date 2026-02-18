@@ -1,14 +1,11 @@
 import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import "cally";
+import 'cally';
+import { BaseModalMixin } from '../lib/base-modal-mixin';
 
 @customElement('user-modal')
-export class UserModal extends LitElement {
-
-@property({ type: Boolean })
-  open = false;
-
-@property({ type: Object })
+export class UserModal extends BaseModalMixin(LitElement) {
+  @property({ type: Object })
   user: {
     name: string;
     userId: string;
@@ -35,15 +32,10 @@ export class UserModal extends LitElement {
     isActive: true,
     isLockedOut: false,
     failedLoginAttempts: 0,
-    lockoutExpiresOn: null
+    lockoutExpiresOn: null,
   };
 
-    // Disable Shadow DOM to allow global Tailwind CSS
-    createRenderRoot() {
-        return this;
-    }
-
-    willUpdate(changedProperties: PropertyValues) {
+  willUpdate(changedProperties: PropertyValues) {
         super.willUpdate(changedProperties);
         
         // If the user property changed and we have user data, populate the form
@@ -74,9 +66,7 @@ export class UserModal extends LitElement {
     }
 
 
-private handleClose() {
-    this.open = false;
-    
+  override handleClose(): void {
     this.formData = {
       name: '',
       userId: '',
@@ -84,12 +74,9 @@ private handleClose() {
       isActive: true,
       isLockedOut: false,
       failedLoginAttempts: 0,
-      lockoutExpiresOn: null
+      lockoutExpiresOn: null,
     };
-    
-    this.dispatchEvent(new CustomEvent('close-modal', {
-      bubbles: true
-    }));
+    super.handleClose();
   }
 
 private handleInputChange(field: string, value: string | boolean | number | Date) {

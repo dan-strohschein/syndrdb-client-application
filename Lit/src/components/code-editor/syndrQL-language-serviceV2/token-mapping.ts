@@ -56,6 +56,7 @@ const TOKEN_TO_RENDERING_CATEGORY: Map<TokenType, RenderingCategory> = new Map([
   [TokenType.TOKEN_SET, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_TO, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_IN, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_LIMIT, RenderingCategory.KEYWORD],
   
   // DOL Keywords
   [TokenType.TOKEN_GRANT, RenderingCategory.KEYWORD],

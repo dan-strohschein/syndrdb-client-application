@@ -3,11 +3,11 @@
  * Validates SyndrQL grammar JSON files against the defined schema
  */
 
-import grammarSchema from './grammar-schema.json' assert { type: 'json' };
-import ddlGrammarJSON from './ddl_grammar.json' assert { type: 'json' };
-import dmlGrammarJSON from './dml_grammar.json' assert { type: 'json' };
-import dolGrammarJSON from './dol_grammar.json' assert { type: 'json' };
-import migrationGrammarJSON from './migration_grammar.json' assert { type: 'json' };
+import grammarSchema from './grammar-schema.json';
+import ddlGrammarJSON from './ddl_grammar.json';
+import dmlGrammarJSON from './dml_grammar.json';
+import dolGrammarJSON from './dol_grammar.json';
+import migrationGrammarJSON from './migration_grammar.json';
 
 /**
  * Simple JSON Schema validator

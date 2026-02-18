@@ -147,6 +147,14 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleAIAssistantToggle() {
+        this.dispatchEvent(new CustomEvent('ai-assistant-toggle-requested', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -403,6 +411,16 @@ export class NavigationBar extends LitElement {
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleAboutOpen}>Version</a></li>
                                 </ul>
                             ` : ''}
+                        </li>
+                        <li>
+                            <button
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                title="Open AI Assistant"
+                                @click=${this.handleAIAssistantToggle}
+                            >
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>AI</span>
+                            </button>
                         </li>
                     </ul>
                     

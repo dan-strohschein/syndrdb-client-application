@@ -1,6 +1,7 @@
 // Main process SyndrDB service - Handles actual TCP socket connections
 import { Socket } from 'net';
 import { EventEmitter } from 'events';
+import { decompress as zstdDecompress } from 'fzstd';
 import { ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
 
 interface SyndrConnection {
@@ -13,6 +14,7 @@ interface SyndrConnection {
   messageId: number;
   authenticationComplete: boolean;
   messageBuffer: string; // Buffer for incomplete JSON messages
+  binaryBuffer: Buffer; // Accumulates raw bytes for zstd detection
 }
 
 export class SyndrDBMainService extends EventEmitter {
@@ -37,7 +39,8 @@ export class SyndrDBMainService extends EventEmitter {
       messageHandlers: new Map(),
       messageId: 0,
       authenticationComplete: false,
-      messageBuffer: '' // Initialize empty message buffer
+      messageBuffer: '', // Initialize empty message buffer
+      binaryBuffer: Buffer.alloc(0)
     };
 
     this.connections.set(connectionId, connection);
@@ -197,10 +200,22 @@ export class SyndrDBMainService extends EventEmitter {
               documentCount = 0;
               resultCount = 0;
             } else if (response.data) {
-              // Fallback format
+              // Fallback / GraphQL response format
               data = response.data;
-              documentCount = data?.length || 0;
-              resultCount = data?.length || 0;
+              if (Array.isArray(data)) {
+                // Flat array (e.g. fallback format)
+                documentCount = data.length;
+                resultCount = data.length;
+              } else if (typeof data === 'object' && data !== null) {
+                // GraphQL response shape: { "orders": [...], ... }
+                // Extract count from the first array-valued field
+                const firstArray = Object.values(data).find(v => Array.isArray(v)) as any[] | undefined;
+                documentCount = firstArray?.length || 0;
+                resultCount = firstArray?.length || 0;
+              } else {
+                documentCount = 0;
+                resultCount = 0;
+              }
             } else if (response.results) {
               // Alternative fallback format  
               data = response.results;
@@ -278,6 +293,7 @@ export class SyndrDBMainService extends EventEmitter {
     connection.status = 'disconnected';
     connection.messageHandlers.clear();
     connection.messageBuffer = ''; // Clear message buffer
+    connection.binaryBuffer = Buffer.alloc(0);
     this.connections.delete(connectionId);
     this.emitConnectionStatus(connectionId, 'disconnected');
   }
@@ -370,85 +386,128 @@ export class SyndrDBMainService extends EventEmitter {
   }
 
   /**
-   * Handle query data using buffered approach for large responses
+   * Handle query data using buffered approach for large responses.
+   * Detects ZSTD-compressed responses and decompresses transparently.
    */
   private handleQueryData(data: Buffer, connection: SyndrConnection) {
-    const chunk = data.toString();
-    console.log('📊 Query chunk received:', chunk.length, 'bytes');
-    
-    // Add chunk to message buffer
-    connection.messageBuffer += chunk;
-    
-    // Try to extract complete JSON messages from buffer
-    let completeMessages: string[] = [];
-    let remainingBuffer = connection.messageBuffer;
-    
-    // Look for complete JSON objects by counting braces
-    let braceCount = 0;
-    let messageStart = 0;
-    let inString = false;
-    let escaped = false;
-    
-    for (let i = 0; i < remainingBuffer.length; i++) {
-      const char = remainingBuffer[i];
-      
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      
-      if (char === '\\') {
-        escaped = true;
-        continue;
-      }
-      
-      if (char === '"') {
-        inString = !inString;
-        continue;
-      }
-      
-      if (!inString) {
-        if (char === '{') {
-          braceCount++;
-        } else if (char === '}') {
-          braceCount--;
-          
-          // Found complete JSON object
-          if (braceCount === 0) {
-            const completeMessage = remainingBuffer.substring(messageStart, i + 1).trim();
-            if (completeMessage) {
-              completeMessages.push(completeMessage);
+    // Accumulate raw bytes
+    connection.binaryBuffer = Buffer.concat([connection.binaryBuffer, data]);
+
+    // Process as many complete messages as possible from the binary buffer
+    while (connection.binaryBuffer.length > 0) {
+      // Check for ZSTD header (ASCII: "ZSTD:")
+      const ZSTD_PREFIX = Buffer.from('ZSTD:');
+
+      if (connection.binaryBuffer.length >= 5 && connection.binaryBuffer.subarray(0, 5).equals(ZSTD_PREFIX)) {
+        // --- Compressed response path ---
+
+        // Find the newline after "ZSTD:<length>"
+        const headerEnd = connection.binaryBuffer.indexOf(0x0A); // '\n'
+        if (headerEnd === -1) {
+          // Haven't received the full header yet — wait for more data
+          return;
+        }
+
+        // Parse length from "ZSTD:<length>\n"
+        const headerStr = connection.binaryBuffer.subarray(5, headerEnd).toString('ascii');
+        const compressedLength = parseInt(headerStr, 10);
+        if (isNaN(compressedLength) || compressedLength <= 0) {
+          console.error('Invalid ZSTD header length:', headerStr);
+          // Skip past the bad header and try again
+          connection.binaryBuffer = connection.binaryBuffer.subarray(headerEnd + 1);
+          continue;
+        }
+
+        // Total frame size: header + \n + compressed bytes + trailing \n
+        const frameSize = headerEnd + 1 + compressedLength + 1;
+        if (connection.binaryBuffer.length < frameSize) {
+          // Haven't received the full compressed payload yet — wait for more data
+          return;
+        }
+
+        // Extract the compressed bytes
+        const compressedStart = headerEnd + 1;
+        const compressedBytes = connection.binaryBuffer.subarray(compressedStart, compressedStart + compressedLength);
+
+        // Decompress
+        try {
+          const decompressed = zstdDecompress(new Uint8Array(compressedBytes));
+          const jsonText = Buffer.from(decompressed).toString('utf-8');
+          console.log('📊 Decompressed ZSTD response:', compressedLength, 'bytes ->', jsonText.length, 'bytes');
+
+          // Parse and route the decompressed JSON
+          const response = JSON.parse(jsonText);
+          this.handleMessage(connection.id, response);
+        } catch (err) {
+          console.error('📊 Failed to decompress/parse ZSTD response:', err);
+        }
+
+        // Consume the frame from the buffer
+        connection.binaryBuffer = connection.binaryBuffer.subarray(frameSize);
+
+      } else {
+        // --- Uncompressed JSON response path (backwards compatible) ---
+
+        // Convert accumulated buffer to string and feed into existing brace-counting parser
+        const chunk = connection.binaryBuffer.toString('utf-8');
+        connection.binaryBuffer = Buffer.alloc(0);
+
+        connection.messageBuffer += chunk;
+
+        // Extract complete JSON objects using brace-counting
+        const completeMessages: string[] = [];
+        let braceCount = 0;
+        let messageStart = 0;
+        let inString = false;
+        let escaped = false;
+
+        for (let i = 0; i < connection.messageBuffer.length; i++) {
+          const char = connection.messageBuffer[i];
+
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escaped = true;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                const completeMessage = connection.messageBuffer.substring(messageStart, i + 1).trim();
+                if (completeMessage) {
+                  completeMessages.push(completeMessage);
+                }
+                messageStart = i + 1;
+              }
             }
-            messageStart = i + 1;
           }
         }
-      }
-    }
-    
-    // Update buffer with remaining incomplete data
-    connection.messageBuffer = remainingBuffer.substring(messageStart);
-    
-    console.log('📊 Extracted', completeMessages.length, 'complete messages, buffer remaining:', connection.messageBuffer.length, 'bytes');
-    
-    // Process each complete message
-    for (const messageText of completeMessages) {
-      console.log('📊 Processing complete query response:', messageText.substring(0, 200) + (messageText.length > 200 ? '...' : ''));
-      
-      // Parse as JSON for query responses
-      try {
-        const response = JSON.parse(messageText);
-        console.log('📊 Parsed query JSON:', {
-          hasResult: 'Result' in response,
-          hasResultCount: 'ResultCount' in response,
-          resultCount: response.ResultCount,
-          dataSize: response.Result?.length || 0
-        });
-        
-        // Route to query handler
-        this.handleMessage(connection.id, response);
-      } catch (parseError) {
-        console.error('📊 Failed to parse query response as JSON:', parseError);
-        console.log('📊 Raw message that failed:', messageText);
+
+        connection.messageBuffer = connection.messageBuffer.substring(messageStart);
+
+        for (const messageText of completeMessages) {
+          try {
+            const response = JSON.parse(messageText);
+            this.handleMessage(connection.id, response);
+          } catch (parseError) {
+            console.error('📊 Failed to parse query response as JSON:', parseError);
+          }
+        }
+
+        // Exit the while loop — uncompressed path consumed the entire buffer
+        break;
       }
     }
   }
@@ -489,7 +548,7 @@ export class SyndrDBMainService extends EventEmitter {
    * Build SyndrDB connection string
    */
   private buildConnectionString(config: ConnectionConfig): string {
-    return `syndrdb://${config.hostname}:${config.port}:${config.database}:${config.username}:${config.password}`;
+    return `syndrdb://${config.hostname}:${config.port}:${config.database}:${config.username}:${config.password}:compress=zstd`;
   }
 
   /**

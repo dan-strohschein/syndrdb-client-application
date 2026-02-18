@@ -59,10 +59,29 @@ function createWindow(): void {
   }
 
   // Load the app
+  const devServerUrl = 'http://localhost:5173';
+  const fallbackPath = join(__dirname, 'index.html');
+
   if (isDev) {
-    console.log('Development mode: Loading from http://localhost:5173');
-    mainWindow.loadURL('http://localhost:5173');
+    console.log('Development mode: Loading from', devServerUrl);
+    mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools();
+
+    // If dev server isn't running (e.g. user ran `npm run electron` instead of `npm run electron:dev`),
+    // fall back to built files so the app still loads after `npm run build`.
+    mainWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      const isDevServerFailure = validatedURL && (validatedURL === devServerUrl || validatedURL === devServerUrl + '/' || validatedURL.startsWith(devServerUrl + '/'));
+      if (isDevServerFailure) {
+        if (existsSync(fallbackPath)) {
+          console.warn('Dev server unreachable. Loading built app from', fallbackPath);
+          console.warn('For live reload, use: npm run electron:dev');
+          mainWindow.loadFile(fallbackPath);
+        } else {
+          console.warn('Dev server unreachable and no built files found.');
+          console.warn('Run "npm run build" then "npm run electron", or use "npm run electron:dev" to start the dev server.');
+        }
+      }
+    });
   } else {
     console.log('Production mode: Loading from file system');
     mainWindow.loadFile(join(__dirname, 'index.html'));
@@ -389,6 +408,23 @@ function setupSyndrDBService(): void {
       console.error('IPC file-dialog:show-save error:', error);
       return { canceled: true, filePath: '' };
     }
+  });
+
+  // AI Assistant IPC handlers (stub: check-subscription returns premium true; generate uses main service)
+  const { generateQuery: aiAssistantGenerateQuery } = require('./electron/ai-assistant-main-service.cjs');
+  ipcMain.handle('ai-assistant:generate-query', async (_, request) => {
+    try {
+      return await aiAssistantGenerateQuery(request);
+    } catch (error) {
+      console.error('IPC ai-assistant:generate-query error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+  ipcMain.handle('ai-assistant:check-subscription', async () => {
+    return { premium: true };
   });
 
   console.log('SyndrDB service initialized with IPC handlers');

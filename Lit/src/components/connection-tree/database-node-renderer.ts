@@ -625,7 +625,8 @@ export class DatabaseNodeRenderer {
     const btreeIndexesNodeId = generateBTreeIndexesNodeId(connection.id, databaseName, bundleName);
     const expanded = isExpanded(btreeIndexesNodeId);
     const bundleDetails = connection.bundleDetails?.get(bundleName);
-    const btreeIndexCount = bundleDetails?.indexes?.filter((idx: any) => idx.IndexType === 'b-tree').length || 0;
+    const isBTree = (idx: any) => idx.IndexType === 'b-tree' || idx.IndexType === 'btree';
+    const btreeIndexCount = bundleDetails?.indexes?.filter(isBTree).length || 0;
 
     return html`
       <!-- B-Tree Indexes Container Node -->
@@ -651,7 +652,7 @@ export class DatabaseNodeRenderer {
       ${expanded && bundleDetails?.indexes ? html`
         <div class="ml-6 space-y-1">
           ${bundleDetails.indexes
-            .filter((idx: any) => idx.IndexType === 'b-tree')
+            .filter((idx: any) => idx.IndexType === 'b-tree' || idx.IndexType === 'btree')
             .map((index: any, i: number) => html`
             <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
                  @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id + '-btree-index-' + i, 'B-Tree Index ' + (i + 1), 'index', bundle)}>

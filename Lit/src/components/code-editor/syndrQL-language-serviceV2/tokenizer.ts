@@ -472,6 +472,7 @@ const keywords = new Map<string, TokenType>([
     ['SET', TokenType.TOKEN_SET],
     ['TO', TokenType.TOKEN_TO],
     ['IN', TokenType.TOKEN_IN],
+    ['LIMIT', TokenType.TOKEN_LIMIT],
     
     // DOL Keywords
     ['GRANT', TokenType.TOKEN_GRANT],

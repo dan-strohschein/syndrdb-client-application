@@ -34,6 +34,7 @@ export enum TokenType {
     TOKEN_SET = 'SET',
     TOKEN_TO = 'TO',
     TOKEN_IN = 'IN',
+    TOKEN_LIMIT = 'LIMIT',
     
     // SyndrQL Keywords - DOL
     TOKEN_GRANT = 'GRANT',

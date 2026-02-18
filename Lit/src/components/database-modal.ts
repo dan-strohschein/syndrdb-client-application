@@ -1,86 +1,48 @@
 import { html, css, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { connectionManager } from '../services/connection-manager';
+import { validateIdentifier } from '../lib/validation';
+import { BaseModalMixin } from '../lib/base-modal-mixin';
 
 @customElement('database-modal')
-export class DatabaseModal extends LitElement {
-
-@property({ type: Boolean })
-  open = false;
-
-@property({ type: String })
+export class DatabaseModal extends BaseModalMixin(LitElement) {
+  @property({ type: String })
   connectionId: string | null = null;
 
-@property({ type: Object })
+  @property({ type: Object })
   database: {
     name: string;
   } | null = null;
 
-@property({ type: Boolean })
+  @property({ type: Boolean })
   editMode = false;
 
-@property({ type: Object })
+  @property({ type: Object })
   databaseToEdit: {
     name: string;
   } | null = null;
 
-@state()
+  @state()
   private formData: {
     name: string;
   } = {
     name: '',
   };
 
-@state()
+  @state()
   private errorMessage = '';
 
-@state()
+  @state()
   private isLoading = false;
 
-  // Disable Shadow DOM to allow global Tailwind CSS
-    createRenderRoot() {
-        return this;
-    }
-
-    /**
-     * Validate database name according to the rules:
-     * AlphaNumeric only, with - and _ allowed. Case doesn't matter. No spaces or symbols.
-     */
-    private validateDatabaseName(name: string): { isValid: boolean; message: string } {
-        if (!name.trim()) {
-            return { isValid: false, message: 'Database name is required.' };
-        }
-
-        // Check for valid characters only: alphanumeric, hyphens, and underscores
-        const validNameRegex = /^[a-zA-Z0-9_-]+$/;
-        if (!validNameRegex.test(name)) {
-            return { 
-                isValid: false, 
-                message: 'Database name can only contain letters, numbers, hyphens (-), and underscores (_). No spaces or other symbols allowed.' 
-            };
-        }
-
-        return { isValid: true, message: '' };
-    }
-
-    private handleClose() {
-        this.open = false;
-        this.errorMessage = '';
-        this.isLoading = false;
-        
-        // Reset form data
-        this.formData = {
-            name: '',
-        };
-        
-        // Reset edit mode state
-        this.editMode = false;
-        this.databaseToEdit = null;
-        
-        this.dispatchEvent(new CustomEvent('close-modal', {
-            bubbles: true
-        }));
-    }
+  override handleClose(): void {
+    this.errorMessage = '';
+    this.isLoading = false;
+    this.formData = { name: '' };
+    this.editMode = false;
+    this.databaseToEdit = null;
+    super.handleClose();
+  }
     
     private prepopulateForm() {
         if (this.editMode && this.databaseToEdit) {
@@ -108,7 +70,7 @@ export class DatabaseModal extends LitElement {
             this.errorMessage = '';
 
             // Validate database name
-            const validation = this.validateDatabaseName(this.formData.name);
+            const validation = validateIdentifier(this.formData.name, { entityName: 'Database name' });
             if (!validation.isValid) {
                 this.errorMessage = validation.message;
                 this.isLoading = false;

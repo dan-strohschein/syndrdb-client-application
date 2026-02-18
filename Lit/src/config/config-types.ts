@@ -27,12 +27,25 @@ export interface MonitoringConfig {
   metricsCollectionInterval: number;
 }
 
+/**
+ * AI Assistant (SyndrQL-from-NL) configuration.
+ * premiumEnabled: when true (default), show AI panel without license check (stub).
+ */
+export interface AIAssistantConfig {
+  enabled?: boolean;
+  endpoint?: string;
+  requestTimeout?: number;
+  maxResponseTokens?: number;
+  premiumEnabled?: boolean;
+}
+
 export interface AppConfig {
   environment: 'production' | 'development';
   languageService: LanguageServiceConfig;
   editor: EditorConfig;
   context: ContextConfig;
   monitoring: MonitoringConfig;
+  aiAssistant?: AIAssistantConfig;
 }
 
 /**
@@ -60,5 +73,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   monitoring: {
     enabled: false,
     metricsCollectionInterval: 60000 // 1 minute
+  },
+  aiAssistant: {
+    enabled: false,
+    endpoint: '',
+    requestTimeout: 30000, // 30 seconds
+    maxResponseTokens: 2048,
+    premiumEnabled: true // stub: show AI panel without license check
   }
 };

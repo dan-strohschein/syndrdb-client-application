@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:main && vite build",
-    "build:main": "npx tsc main.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/main.js dist/main.cjs && npx tsc src/electron/preload.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/preload.js dist/electron/preload.cjs && npx tsc src/electron/syndrdb-main-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/syndrdb-main-service.js dist/electron/syndrdb-main-service.cjs && npx tsc src/electron/connection-storage-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/connection-storage-service.js dist/electron/connection-storage-service.cjs",
+    "build:main": "npx tsc main.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/main.js dist/main.cjs && npx tsc src/electron/preload.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/preload.js dist/electron/preload.cjs && npx tsc src/electron/syndrdb-main-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/syndrdb-main-service.js dist/electron/syndrdb-main-service.cjs && npx tsc src/electron/connection-storage-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/connection-storage-service.js dist/electron/connection-storage-service.cjs && npx tsc src/electron/secure-storage.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && npx tsc src/electron/ai-assistant-main-service.ts --outDir dist --module CommonJS --target ES2022 --esModuleInterop --allowSyntheticDefaultImports && mv dist/electron/ai-assistant-main-service.js dist/electron/ai-assistant-main-service.cjs",
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run dev\" \"npm run build:main && wait-on http://localhost:5173 && electron .\"",
@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "cally": "^0.8.0",
+    "fzstd": "^0.1.1",
     "geist": "^1.5.1",
     "lit": "^3.0.0"
   },

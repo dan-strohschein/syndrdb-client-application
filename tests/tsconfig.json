@@ -1,0 +1,22 @@
+{
+  "extends": "../Lit/tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "types": ["vitest/globals", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../Lit/src/*"],
+      "@tests/*": ["./*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.test.ts",
+    "../Lit/src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "e2e"
+  ]
+}

@@ -25,8 +25,6 @@ export class ConfirmationModal extends LitElement {
   };
 
 
-  @state() isOpen = false;
-
    // Disable Shadow DOM to allow global Tailwind CSS
     createRenderRoot() {
         return this;
@@ -56,7 +54,7 @@ export class ConfirmationModal extends LitElement {
 
 
     render() {
-        if (!this.isOpen) {
+        if (!this.open) {
             return html``;
         }
 

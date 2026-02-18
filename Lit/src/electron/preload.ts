@@ -33,9 +33,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   fileDialog: {
-    showOpenDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => 
+    showOpenDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-open', options),
-    showSaveDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => 
+    showSaveDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-save', options)
+  },
+
+  aiAssistant: {
+    generateQuery: (request: import('../types/electron-api').AIAssistantGenerateRequest) =>
+      ipcRenderer.invoke('ai-assistant:generate-query', request),
+    checkSubscription: () => ipcRenderer.invoke('ai-assistant:check-subscription')
   }
 } as ElectronAPI);
