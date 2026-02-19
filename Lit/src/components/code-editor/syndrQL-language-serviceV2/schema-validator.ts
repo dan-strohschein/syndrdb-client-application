@@ -9,21 +9,36 @@ import dmlGrammarJSON from './dml_grammar.json';
 import dolGrammarJSON from './dol_grammar.json';
 import migrationGrammarJSON from './migration_grammar.json';
 
+/** Shape of a node in a JSON Schema document (simplified for internal validator) */
+export interface JsonSchemaNode {
+  type?: string | string[];
+  properties?: Record<string, JsonSchemaNode>;
+  required?: string[];
+  items?: JsonSchemaNode;
+  minItems?: number;
+  oneOf?: JsonSchemaNode[];
+  $ref?: string;
+  pattern?: string;
+  minimum?: number;
+  definitions?: Record<string, JsonSchemaNode>;
+  [key: string]: unknown;
+}
+
 /**
  * Simple JSON Schema validator
  * Implements basic validation without external dependencies
  */
 export class SchemaValidator {
-  private schema: any;
+  private schema: JsonSchemaNode;
 
-  constructor(schema: any) {
+  constructor(schema: JsonSchemaNode) {
     this.schema = schema;
   }
 
   /**
    * Validate data against the schema
    */
-  validate(data: any): { valid: boolean; errors: string[] } {
+  validate(data: unknown): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     this.validateValue(data, this.schema, '', errors);
     return {
@@ -35,11 +50,12 @@ export class SchemaValidator {
   /**
    * Recursively validate a value against a schema
    */
-  private validateValue(value: any, schema: any, path: string, errors: string[]): void {
+  private validateValue(value: unknown, schema: JsonSchemaNode, path: string, errors: string[]): void {
     // Handle type validation
     if (schema.type) {
       if (Array.isArray(schema.type)) {
-        const matchesType = schema.type.some((t: string) => this.checkType(value, t));
+        const typeArr = schema.type as string[];
+        const matchesType = typeArr.some((t: string) => this.checkType(value, t));
         if (!matchesType) {
           errors.push(`${path}: expected one of types [${schema.type.join(', ')}], got ${typeof value}`);
         }
@@ -58,18 +74,19 @@ export class SchemaValidator {
       }
 
       if (schema.items) {
-        value.forEach((item, index) => {
-          this.validateValue(item, schema.items, `${path}[${index}]`, errors);
+        (value as unknown[]).forEach((item, index) => {
+          this.validateValue(item, schema.items!, `${path}[${index}]`, errors);
         });
       }
     }
 
     // Handle object validation
     if (schema.type === 'object' && typeof value === 'object' && value !== null) {
+      const obj = value as Record<string, unknown>;
       // Check required fields
       if (schema.required) {
         for (const requiredField of schema.required) {
-          if (!(requiredField in value)) {
+          if (!(requiredField in obj)) {
             errors.push(`${path}: missing required field '${requiredField}'`);
           }
         }
@@ -78,8 +95,8 @@ export class SchemaValidator {
       // Validate properties
       if (schema.properties) {
         for (const [key, propSchema] of Object.entries(schema.properties)) {
-          if (key in value) {
-            this.validateValue(value[key], propSchema, `${path}.${key}`, errors);
+          if (key in obj) {
+            this.validateValue(obj[key], propSchema, `${path}.${key}`, errors);
           }
         }
       }
@@ -87,7 +104,7 @@ export class SchemaValidator {
 
     // Handle oneOf validation
     if (schema.oneOf) {
-      const matchingSchemas = schema.oneOf.filter((subSchema: any) => {
+      const matchingSchemas = schema.oneOf.filter((subSchema: JsonSchemaNode) => {
         const subErrors: string[] = [];
         this.validateValue(value, subSchema, path, subErrors);
         return subErrors.length === 0;
@@ -128,7 +145,7 @@ export class SchemaValidator {
   /**
    * Check if a value matches the expected type
    */
-  private checkType(value: any, type: string): boolean {
+  private checkType(value: unknown, type: string): boolean {
     switch (type) {
       case 'string':
         return typeof value === 'string';
@@ -152,8 +169,8 @@ export class SchemaValidator {
 /**
  * Validate grammar file against schema
  */
-export function validateGrammar(grammar: any, grammarName: string): { valid: boolean; errors: string[] } {
-  const validator = new SchemaValidator(grammarSchema);
+export function validateGrammar(grammar: unknown, grammarName: string): { valid: boolean; errors: string[] } {
+  const validator = new SchemaValidator(grammarSchema as unknown as JsonSchemaNode);
   const result = validator.validate(grammar);
 
   if (!result.valid) {

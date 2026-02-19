@@ -35,6 +35,7 @@ import './components/code-editor/suggestion-complete/suggestion-dropdown';
 // Import configuration and validation systems
 import { configLoader } from './config/config-loader.js';
 import { validateAllGrammars } from './components/code-editor/syndrQL-language-serviceV2/schema-validator.js';
+import { connectionManager } from './services/connection-manager';
 
 /**
  * Initialize application configuration and validation
@@ -99,12 +100,12 @@ export class AppRoot extends LitElement {
 
     // Listen for about modal requests
     this.addEventListener('about-modal-requested', (event: Event) => {
-      this.handleAboutModalRequest(event as CustomEvent);
+      this.handleAboutModalRequest();
     });
     
     // Listen for add-user events
     this.addEventListener('add-user', (event: Event) => {
-      this.handleAddUserRequest(event as CustomEvent);
+      this.handleAddUserRequest();
     });
     
     // Listen for edit-user events
@@ -188,19 +189,15 @@ export class AppRoot extends LitElement {
 
   private handleEditConnection(event: CustomEvent) {
     const { connectionId } = event.detail;
-    import('./services/connection-manager').then(({ connectionManager }) => {
-      const connection = connectionManager.getConnection(connectionId);
-      if (!connection) {
-        console.error('❌ Connection not found:', connectionId);
-        return;
-      }
-      this.modalState = {
-        type: 'connection',
-        props: { open: true, editMode: true, connectionToEdit: connection },
-      };
-    }).catch((error) => {
-      console.error('❌ Error importing connection manager:', error);
-    });
+    const connection = connectionManager.getConnection(connectionId);
+    if (!connection) {
+      console.error('❌ Connection not found:', connectionId);
+      return;
+    }
+    this.modalState = {
+      type: 'connection',
+      props: { open: true, editMode: true, connectionToEdit: connection },
+    };
   }
 
   private handleEditDatabase(event: CustomEvent) {

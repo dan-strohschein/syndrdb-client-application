@@ -4,13 +4,27 @@ import { EventEmitter } from 'events';
 import { decompress as zstdDecompress } from 'fzstd';
 import { ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
 
+/** Shape of a parsed response from the SyndrDB server */
+export interface SyndrDBResponse {
+  success?: boolean;
+  error?: string;
+  Result?: unknown;
+  ResultCount?: number;
+  data?: unknown;
+  id?: string;
+  message?: string;
+  status?: string;
+  results?: unknown[];
+  [key: string]: unknown;
+}
+
 interface SyndrConnection {
   id: string;
   config: ConnectionConfig;
   socket: Socket | null;
   status: 'connected' | 'disconnected' | 'connecting' | 'error' | 'authenticating';
   lastError?: string;
-  messageHandlers: Map<string, (response: any) => void>;
+  messageHandlers: Map<string, (response: SyndrDBResponse) => void>;
   messageId: number;
   authenticationComplete: boolean;
   messageBuffer: string; // Buffer for incomplete JSON messages
@@ -190,11 +204,12 @@ export class SyndrDBMainService extends EventEmitter {
             let documentCount = 0;
             let resultCount = 0;
             
-            if (response.Result && response.ResultCount >= 0) {
+            if (response.Result && response.ResultCount != null && response.ResultCount >= 0) {
               // SyndrDB format
               data = response.Result;
-              documentCount = response.ResultCount || data?.length || 0;
-              resultCount = response.ResultCount || data?.length || 0;
+              const count = response.ResultCount || (Array.isArray(data) ? data.length : 0);
+              documentCount = count;
+              resultCount = count;
             } else if (response.Result === null && response.ResultCount === 0) {
               data = null;
               documentCount = 0;
@@ -209,7 +224,7 @@ export class SyndrDBMainService extends EventEmitter {
               } else if (typeof data === 'object' && data !== null) {
                 // GraphQL response shape: { "orders": [...], ... }
                 // Extract count from the first array-valued field
-                const firstArray = Object.values(data).find(v => Array.isArray(v)) as any[] | undefined;
+                const firstArray = Object.values(data).find((v): v is unknown[] => Array.isArray(v));
                 documentCount = firstArray?.length || 0;
                 resultCount = firstArray?.length || 0;
               } else {
@@ -217,10 +232,11 @@ export class SyndrDBMainService extends EventEmitter {
                 resultCount = 0;
               }
             } else if (response.results) {
-              // Alternative fallback format  
+              // Alternative fallback format
               data = response.results;
-              documentCount = data?.length || 0;
-              resultCount = data?.length || 0;
+              const resultsLength = Array.isArray(data) ? data.length : 0;
+              documentCount = resultsLength;
+              resultCount = resultsLength;
             } else {
               // Single response format
               data = [response];
@@ -230,7 +246,7 @@ export class SyndrDBMainService extends EventEmitter {
             
             resolve({
               success: true,
-              data: data,
+              data: data as Record<string, unknown>[],
               executionTime,
               documentCount,
               ResultCount: resultCount,
@@ -515,7 +531,7 @@ export class SyndrDBMainService extends EventEmitter {
   /**
    * Handle incoming messages from SyndrDB server
    */
-  private handleMessage(connectionId: string, response: any) {
+  private handleMessage(connectionId: string, response: SyndrDBResponse) {
     const connection = this.connections.get(connectionId);
     if (!connection) return;
 

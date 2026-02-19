@@ -2,19 +2,19 @@
  * Database node renderer for the connection tree - New hierarchical structure
  */
 import { html, TemplateResult } from 'lit';
-import { Connection, BundleDetails } from '../../services/connection-manager';
-import { 
+import { Connection, BundleDetails, connectionManager } from '../../services/connection-manager';
+import {
   generateDatabasesNodeId,
-  generateDatabaseNodeId, 
+  generateDatabaseNodeId,
   generateBundlesNodeId,
-  generateBundleNodeId, 
+  generateBundleNodeId,
   generateFieldsNodeId,
   generateIndexesNodeId,
   generateHashIndexesNodeId,
   generateBTreeIndexesNodeId,
   generateRelationshipsNodeId,
   formatCountBadge,
-  getNodeIcon 
+  getNodeIcon
 } from './tree-utils';
 import { TreeDataService } from './tree-data-service';
 import { UserManagementRenderer } from './user-management-renderer';
@@ -23,7 +23,7 @@ import { Bundle } from '../../types/bundle';
 
 export class DatabaseNodeRenderer {
 
-  private static bundleManager = new BundleManager();
+  private static bundleManager = new BundleManager(connectionManager);
 
   /**
    * Render the Databases container node and its children

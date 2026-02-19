@@ -1,7 +1,8 @@
 import { SyndrDBDriver, ConnectionConfig, QueryResult } from '../drivers/syndrdb-driver';
-import { Bundle, BundleDetails } from '../types/bundle';
+import { Bundle, BundleDetails, BundleIndex, Relationship } from '../types/bundle';
 import { fieldDefinitionsToArray } from '../lib/bundle-utils';
 import { connectionPool, PooledConnection } from './connection-pool';
+import { TypedEventEmitter } from '../lib/typed-event-emitter';
 
 export type { BundleDetails } from '../types/bundle';
 
@@ -17,25 +18,30 @@ export interface Connection {
   databaseBundles?: Map<string, Bundle[]>; // Map of database name to its bundles
   bundleDetails?: Map<string, BundleDetails>; // Map of bundle name to its details
   currentDatabase?: string; // Track the current database context
-  
 }
 
-export class ConnectionManager {
+/** Typed event map for ConnectionManager */
+export interface ConnectionEventMap {
+  connectionAdded: Connection;
+  connectionStatusChanged: Connection;
+  connectionRemoved: string;
+  connectionsChanged: Map<string, Connection>;
+  activeConnectionChanged: Connection;
+  databaseContextChanged: { connectionId: string; databaseName: string };
+  bundlesLoaded: { connectionId: string; databaseName: string; bundles: Bundle[] };
+}
+
+export class ConnectionManager extends TypedEventEmitter<ConnectionEventMap> {
   private connections: Map<string, Connection> = new Map();
   private activeConnectionId: string | null = null;
-  private eventListeners: Map<string, Function[]> = new Map();
   private static instance: ConnectionManager;
 
   constructor() {
+    super();
     // Initialize connection manager
     this.connections = new Map();
     this.activeConnectionId = null;
-    this.eventListeners = new Map();
     ConnectionManager.instance = this;
-  }
-
-  static getNewInstance(): ConnectionManager {
-    return new this();
   }
 
   static getInstance(): ConnectionManager {
@@ -50,23 +56,10 @@ export class ConnectionManager {
   }
 
   /**
-   * Add event listener for connection events
+   * Add event listener for connection events (backward-compatible alias for on())
    */
-  addEventListener(event: string, callback: Function) {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event)?.push(callback);
-  }
-
-  /**
-   * Emit event to listeners
-   */
-  private emit(event: string, data?: any) {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      listeners.forEach(callback => callback(data));
-    }
+  addEventListener<K extends keyof ConnectionEventMap>(event: K, callback: (data: ConnectionEventMap[K]) => void): void {
+    this.on(event, callback);
   }
 
   /**
@@ -188,7 +181,7 @@ export class ConnectionManager {
         // SyndrDB returns Result: ["database1", "database2", ...]
         // The data field now contains the Result array directly
         if (Array.isArray(databasesResult.data)) {
-          connection.databases = databasesResult.data.map((dbName: any) => {
+          connection.databases = databasesResult.data.map((dbName: Record<string, unknown>) => {
             // Database names should be strings directly
             return typeof dbName === 'string' ? dbName : String(dbName);
           });
@@ -210,9 +203,10 @@ export class ConnectionManager {
         
         if (usersResult.success && usersResult.data) {
           if (Array.isArray(usersResult.data)) {
-            connection.users = usersResult.data.map((user: any) => {
+            connection.users = usersResult.data.map((user: Record<string, unknown>) => {
               // User data might be objects or strings
-              return user.Name || user.Username || user.name || user.username || String(user);
+              const u = user as Record<string, string>;
+              return u.Name || u.Username || u.name || u.username || String(user);
             });
           } else {
             connection.users = [];
@@ -532,23 +526,22 @@ export class ConnectionManager {
           documentStructure: undefined,
           relationships: [],
           indexes: [],
-          rawData: result.data
+          rawData: result.data as unknown as Record<string, unknown>
         };
 
         // Parse fields from DocumentStructure
-        const data = result.data as any;
-        // console.log('🔍 Raw data from SHOW BUNDLE:', JSON.stringify(data, null, 2));
-        // console.log('🔍 Available properties in data:', Object.keys(data));
-        
+        // SHOW BUNDLE returns a single object (the first/only result), not an array
+        const data = (Array.isArray(result.data) ? result.data[0] : result.data) as Record<string, unknown>;
+
         // Handle new structure where bundle data might be under BundleMetadata
-        let bundleData = data;
+        let bundleData: Record<string, unknown> = data;
         if (data.BundleMetadata) {
-          // console.log('📦 Found BundleMetadata, using nested structure');
-          bundleData = data.BundleMetadata;
+          bundleData = data.BundleMetadata as Record<string, unknown>;
         }
-        
-        if (bundleData.DocumentStructure && bundleData.DocumentStructure.FieldDefinitions) {
-          const fieldDefinitionsArray = fieldDefinitionsToArray(bundleData.DocumentStructure.FieldDefinitions);
+
+        const docStructure = bundleData.DocumentStructure as Record<string, unknown> | undefined;
+        if (docStructure && docStructure.FieldDefinitions) {
+          const fieldDefinitionsArray = fieldDefinitionsToArray(docStructure.FieldDefinitions);
           bundleDetails.documentStructure = {
             FieldDefinitions: fieldDefinitionsArray
           };
@@ -567,12 +560,11 @@ export class ConnectionManager {
         
         if (bundleData.Relationships && typeof bundleData.Relationships === 'object' && !Array.isArray(bundleData.Relationships)) {
           // This is a Go map serialized as JSON object: { "relationshipName": { "RelationshipName": "...", ... } }
-          // console.log('🔗 Found Relationships as Go map object, converting to array');
-          const relationshipsArray = Object.entries(bundleData.Relationships).map(([key, relationshipData]: [string, any]) => ({
-            ...relationshipData, // Spread all properties from the relationship object
-            _mapKey: key // Include the original map key for reference
+          const relationshipsArray = Object.entries(bundleData.Relationships as Record<string, unknown>).map(([key, relationshipData]) => ({
+            ...(relationshipData as Record<string, unknown>),
+            _mapKey: key
           }));
-          bundleDetails.relationships = relationshipsArray;
+          bundleDetails.relationships = relationshipsArray as unknown as Relationship[];
           // console.log('🔗 Converted relationships map to array:', relationshipsArray);
         } else if (bundleData.Relationships && Array.isArray(bundleData.Relationships)) {
           // console.log('🔗 Found Relationships as array (unexpected but handling):', bundleData.Relationships);
@@ -616,18 +608,17 @@ export class ConnectionManager {
   /**
    * Convert raw Indexes (Go map or array) from SHOW BUNDLES / SHOW BUNDLE into a normalized array.
    */
-  private static parseIndexes(rawIndexes: any): Array<{ IndexName: string; IndexType: string; _mapKey?: string }> {
+  private static parseIndexes(rawIndexes: unknown): BundleIndex[] {
     if (!rawIndexes || typeof rawIndexes !== 'object') return [];
     if (Array.isArray(rawIndexes)) {
-      return rawIndexes.map((idx: any) => ({
-        ...idx,
-        IndexName: idx.IndexName ?? idx.indexName ?? '',
-        IndexType: ConnectionManager.normalizeIndexType(idx.IndexType ?? idx.indexType)
+      return rawIndexes.map((idx: Record<string, unknown>) => ({
+        IndexName: (idx.IndexName ?? idx.indexName ?? '') as string,
+        IndexType: ConnectionManager.normalizeIndexType((idx.IndexType ?? idx.indexType ?? '') as string)
       }));
     }
-    return Object.entries(rawIndexes).map(([key, indexData]: [string, any]) => ({
-      IndexName: indexData.IndexName ?? indexData.indexName ?? key,
-      IndexType: ConnectionManager.normalizeIndexType(indexData.IndexType ?? indexData.indexType),
+    return Object.entries(rawIndexes as Record<string, Record<string, unknown>>).map(([key, indexData]) => ({
+      IndexName: (indexData.IndexName ?? indexData.indexName ?? key) as string,
+      IndexType: ConnectionManager.normalizeIndexType((indexData.IndexType ?? indexData.indexType ?? '') as string),
       _mapKey: key
     }));
   }
@@ -710,4 +701,4 @@ export class ConnectionManager {
 }
 
 // Global connection manager instance
-export const connectionManager = new ConnectionManager();
+export const connectionManager = ConnectionManager.getInstance();

@@ -1,13 +1,13 @@
 /**
  * Data fetching service for the connection tree
  */
-import { Connection, BundleDetails } from '../../services/connection-manager';
+import { Connection, BundleDetails, connectionManager } from '../../services/connection-manager';
 import { BundleManager }from '../../services/bundle-manager';
 import { Bundle } from '../../types/bundle';
 
 export class TreeDataService {
 
-  private static bundleManager = new BundleManager();
+  private static bundleManager = new BundleManager(connectionManager);
 
   /**
    * Fetch bundle details for a specific bundle

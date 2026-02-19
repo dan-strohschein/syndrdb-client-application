@@ -1,14 +1,6 @@
 // SyndrDB Driver - Handles TCP connections and protocol communication
-import { SyndrDBElectronAPI } from '../types/electron-api';
-
-// Type declaration for Electron API (when available)
-declare global {
-  interface Window {
-    electronAPI?: {
-      syndrdb: SyndrDBElectronAPI;
-    };
-  }
-}
+// Note: Window.electronAPI type is declared globally in types/electron-api.ts
+import '../types/electron-api';
 
 export interface ConnectionConfig {
   name: string;
@@ -21,7 +13,7 @@ export interface ConnectionConfig {
 
 export interface QueryResult {
   success: boolean;
-  data?: any[];
+  data?: Record<string, unknown>[];
   error?: string;
   executionTime?: number;
   documentCount?: number;
@@ -85,7 +77,7 @@ export class SyndrDBDriver {
       let timeout: NodeJS.Timeout;
       let resolved = false;
       
-      const statusHandler = (data: any) => {
+      const statusHandler = (data: { connectionId: string; status: string; error?: string }) => {
         if (resolved) return; // Prevent multiple resolutions
         
         // console.log('🔊 Received connection status event:', data);

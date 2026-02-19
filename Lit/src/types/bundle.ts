@@ -1,5 +1,12 @@
 import { FieldDefinition } from "./field-definition";
 
+export interface BundleIndex {
+    IndexName: string;
+    IndexType: string;
+    Fields?: string[];
+    _mapKey?: string;
+}
+
 export interface Bundle {
     BundleId?: string;
     Name: string;
@@ -8,9 +15,9 @@ export interface Bundle {
     DocumentCount?: number;
     CreatedAt?: string;
     UpdatedAt?: string;
-    Relationships?: Array<any>;
-    Indexes?: Array<any>;
-} 
+    Relationships?: Array<Relationship>;
+    Indexes?: Array<BundleIndex>;
+}
 
 
 export interface BundleResponse {
@@ -27,9 +34,9 @@ export interface DocumentStructure {
 export interface BundleDetails {
   name: string;
   documentStructure?: DocumentStructure;
-  relationships?: any[];
-  indexes?: any[];
-  rawData?: any;
+  relationships?: Relationship[];
+  indexes?: BundleIndex[];
+  rawData?: Record<string, unknown>;
 }
 
 export interface Relationship {

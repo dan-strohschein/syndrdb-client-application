@@ -12,16 +12,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     executeQuery: (connectionId: string, query: string) => ipcRenderer.invoke('syndrdb:execute-query', connectionId, query),
     
     // Event listeners for connection status updates
-    onConnectionStatus: (callback: (data: any) => void) => {
+    onConnectionStatus: (callback: (data: { connectionId: string; status: string; error?: string }) => void) => {
       console.log('🎧 Setting up connection status listener');
       ipcRenderer.on('syndrdb:connection-status', (_, data) => {
         console.log('🎧 IPC event received in preload:', data);
         callback(data);
       });
     },
-    removeConnectionStatusListener: (callback: Function) => {
+    removeConnectionStatusListener: (callback: (...args: unknown[]) => void) => {
       console.log('🎧 Removing connection status listener');
-      ipcRenderer.off('syndrdb:connection-status', callback as any);
+      ipcRenderer.off('syndrdb:connection-status', callback);
     }
   } as SyndrDBElectronAPI,
 

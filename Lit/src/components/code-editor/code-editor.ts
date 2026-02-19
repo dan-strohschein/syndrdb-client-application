@@ -44,9 +44,11 @@ import { SuggestionController } from './suggestion-controller.js';
 import { StatementValidationController } from './statement-validation-controller.js';
 import { Position, FontMetrics, KeyCommand, EditorTheme, ScrollOffset, Coordinates, MouseEventData, CharacterPosition } from './types.js';
 import { LanguageServiceV2, type SyntaxTheme, DEFAULT_SYNDRQL_THEME } from './syndrQL-language-serviceV2/index.js';
-import type { ILanguageService } from './language-service-interface.js';
+import type { ILanguageService, ILanguageServiceError } from './language-service-interface.js';
 import type { Suggestion } from './suggestion-controller.js';
 import { DEFAULT_CONFIG } from '../../config/config-types.js';
+import type { Bundle } from '../../types/bundle';
+import type { FieldDefinition } from '../../types/field-definition';
 import './error-pop-up/error-pop-up.js';
 import './line-numbers/line-numbers.js';
 import './suggestion-complete/suggestion-dropdown.js';
@@ -251,7 +253,7 @@ export class CodeEditor extends LitElement {
           const r = this.statementValidationController.getValidationResult(key);
           if (!r) return undefined;
           return {
-            errors: (r.errors ?? []).map((e: any) => ({
+            errors: (r.errors ?? []).map((e: { message: string; code?: string; suggestion?: string }) => ({
               message: e.message,
               code: e.code,
               suggestion: e.suggestion,
@@ -263,8 +265,8 @@ export class CodeEditor extends LitElement {
         getCanvas: () => this.canvas,
         getLines: () => this.documentModel.getLines(),
         getErrorPopup: () => {
-          const el = this.querySelector('error-pop-up') as any;
-          return el ? { show: (x, y, msg) => el.show(x, y, msg), hide: () => el.hide() } : null;
+          const el = this.querySelector('error-pop-up') as HTMLElement & { show: (x: number, y: number, msg: unknown) => void; hide: () => void } | null;
+          return el ? { show: (x: number, y: number, msg: unknown) => el.show(x, y, msg), hide: () => el.hide() } : null;
         },
       });
 
@@ -400,29 +402,28 @@ export class CodeEditor extends LitElement {
       });
 
       // Listen for bundles loaded events to update context data
-      connectionManager.addEventListener('bundlesLoaded', async ({ databaseName, bundles }: { databaseName: string, bundles: any[] }) => {
+      connectionManager.addEventListener('bundlesLoaded', async ({ databaseName, bundles }: { databaseName: string, bundles: Bundle[] }) => {
  //       console.log(`🎯 CodeEditor: Received bundlesLoaded event for "${databaseName}" with ${bundles.length} bundles`);
-        
+
         if (this.languageService) {
           // Convert bundles to DatabaseDefinition format
-          const bundleDefs: any[] = bundles.map((bundle: any) => {
-            const bundleName = bundle.Name || bundle.name;
-            
+          const bundleDefs = bundles.map((bundle: Bundle) => {
+            const bundleName = bundle.Name;
+
             // Extract fields from DocumentStructure.FieldDefinitions
-            const fieldsMap = new Map();
-            
+            const fieldsMap = new Map<string, { name: string; type: string; constraints: { nullable?: boolean; unique?: boolean; primary?: boolean; default?: string | number | boolean | null } }>();
+
             const fieldDefs = bundle.DocumentStructure?.FieldDefinitions;
-            
+
             if (fieldDefs) {
-              for (const [fieldName, fieldDef] of Object.entries(fieldDefs)) {
-                const field = fieldDef as any;
-                fieldsMap.set(fieldName, {
-                  name: field.Name || fieldName,
+              for (const field of fieldDefs) {
+                fieldsMap.set(field.Name, {
+                  name: field.Name,
                   type: field.Type || 'text',
                   constraints: {
-                    nullable: !field.Required,
-                    unique: field.Unique === true,
-                    primary: fieldName === 'DocumentID',
+                    nullable: !field.IsRequired,
+                    unique: field.IsUnique === true,
+                    primary: field.Name === 'DocumentID',
                     default: field.DefaultValue
                   }
                 });
@@ -436,7 +437,7 @@ export class CodeEditor extends LitElement {
               database: databaseName,
               fields: fieldsMap,
               relationships: new Map(),
-              indexes: bundle.Indexes || []
+              indexes: (bundle.Indexes || []).map(idx => idx.IndexName)
             };
           });
 
@@ -712,7 +713,7 @@ export class CodeEditor extends LitElement {
       const validationResult = this.statementValidationController.getValidationResult(statementKey);
       const errors =
         validationResult?.errors?.length
-          ? (validationResult!.errors as any[]).map((err: any) => ({
+          ? validationResult!.errors.map((err: ILanguageServiceError) => ({
               message: err.message,
               code: err.code,
               suggestion: err.suggestion,
@@ -1592,7 +1593,7 @@ export class CodeEditor extends LitElement {
       const tokenMatch = textUpToCursor.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
       
       // Get the insert text
-      const insertText = suggestion.insertText || (suggestion as any).value || suggestion.label;
+      const insertText = suggestion.insertText || suggestion.label;
       
       // Only replace if we have a non-empty partial token
       if (tokenMatch && tokenMatch[1] && tokenMatch[1].length > 0) {

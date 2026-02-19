@@ -68,9 +68,28 @@ export interface AIAssistantElectronAPI {
   checkSubscription: () => Promise<{ premium: boolean }>;
 }
 
+export interface FileSystemAPI {
+  readFile: (path: string) => Promise<string>;
+  writeFile: (path: string, data: string) => Promise<void>;
+  createDirectory: (path: string) => Promise<void>;
+  deleteFile: (path: string) => Promise<void>;
+  deleteDirectory: (path: string) => Promise<void>;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
   fileDialog: FileDialogAPI;
   aiAssistant?: AIAssistantElectronAPI;
+  readFile?: FileSystemAPI['readFile'];
+  writeFile?: FileSystemAPI['writeFile'];
+  createDirectory?: FileSystemAPI['createDirectory'];
+  deleteFile?: FileSystemAPI['deleteFile'];
+  deleteDirectory?: FileSystemAPI['deleteDirectory'];
+}
+
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+  }
 }

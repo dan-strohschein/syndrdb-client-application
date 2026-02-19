@@ -73,7 +73,7 @@ export class AIAssistantService {
     const data = response.data;
     let syndrql: string;
     try {
-      syndrql = compileAIResponse(data);
+      syndrql = compileAIResponse(data as import('../domain/ai-ir-schema').AIAssistantResponse);
     } catch (err) {
       return {
         syndrql: '',
@@ -88,7 +88,7 @@ export class AIAssistantService {
     try {
       const lang = new LanguageServiceV2(DEFAULT_CONFIG);
       await lang.initialize();
-      lang.loadContextFromCache(schemaContext);
+      lang.loadContextFromCache(schemaContext as Partial<import('../components/code-editor/syndrQL-language-serviceV2/document-context').CachedContextData>);
       if (currentDatabase) {
         lang.setCurrentDatabase(currentDatabase);
       }

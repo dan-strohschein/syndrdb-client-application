@@ -5,6 +5,8 @@
 
 import { CachedStatement, CacheMetrics } from './statement-cache.js';
 import { AppConfig } from '../../../config/config-types.js';
+// Import for Window.electronAPI global type
+import '../../../types/electron-api';
 
 /**
  * Cache index structure
@@ -84,14 +86,14 @@ export class CachePersistence {
     async loadCacheFromDisk(documentId: string): Promise<{ statements: Map<string, CachedStatement>; metrics: CacheMetrics } | null> {
         try {
             // Check if we have electron API available
-            if (typeof window === 'undefined' || !(window as any).electronAPI) {
+            if (typeof window === 'undefined' || !window.electronAPI) {
                 console.warn('⚠️ Electron API not available, skipping cache load');
                 return null;
             }
 
             // Read cache index
             const indexPath = `${this.cacheDirectory}/cache-index.json`;
-            const indexData = await (window as any).electronAPI.readFile(indexPath);
+            const indexData = await window.electronAPI!.readFile!(indexPath);
             const index: CacheIndex = JSON.parse(indexData);
 
             // Check version compatibility
@@ -109,7 +111,7 @@ export class CachePersistence {
 
             // Load cache file
             const cachePath = `${this.cacheDirectory}/${docEntry.filename}`;
-            const cacheData = await (window as any).electronAPI.readFile(cachePath);
+            const cacheData = await window.electronAPI!.readFile!(cachePath);
             const persistedCache: PersistedCache = JSON.parse(cacheData);
 
             // Convert array back to Map
@@ -141,7 +143,7 @@ export class CachePersistence {
         documentIds: () => string[]
     ): Promise<void> {
         try {
-            if (typeof window === 'undefined' || !(window as any).electronAPI) {
+            if (typeof window === 'undefined' || !window.electronAPI) {
                 return;
             }
 
@@ -151,7 +153,7 @@ export class CachePersistence {
             }
 
             // Create cache directory if it doesn't exist
-            await (window as any).electronAPI.createDirectory(this.cacheDirectory);
+            await window.electronAPI!.createDirectory!(this.cacheDirectory);
 
             const index: CacheIndex = {
                 version: CACHE_FORMAT_VERSION,
@@ -183,7 +185,7 @@ export class CachePersistence {
 
                 // Write cache file
                 const cachePath = `${this.cacheDirectory}/${filename}`;
-                await (window as any).electronAPI.writeFile(cachePath, JSON.stringify(persistedCache, null, 2));
+                await window.electronAPI!.writeFile!(cachePath, JSON.stringify(persistedCache, null, 2));
 
                 // Add to index
                 index.documents.push({
@@ -195,7 +197,7 @@ export class CachePersistence {
 
             // Write index file
             const indexPath = `${this.cacheDirectory}/cache-index.json`;
-            await (window as any).electronAPI.writeFile(indexPath, JSON.stringify(index, null, 2));
+            await window.electronAPI!.writeFile!(indexPath, JSON.stringify(index, null, 2));
 
             console.log(`💾 Persisted cache for ${ids.length} documents`);
         } catch (error) {
@@ -224,14 +226,14 @@ export class CachePersistence {
      */
     async deleteCacheForDocument(documentId: string): Promise<void> {
         try {
-            if (typeof window === 'undefined' || !(window as any).electronAPI) {
+            if (typeof window === 'undefined' || !window.electronAPI) {
                 return;
             }
 
             const filename = this.generateCacheFilename(documentId);
             const cachePath = `${this.cacheDirectory}/${filename}`;
             
-            await (window as any).electronAPI.deleteFile(cachePath);
+            await window.electronAPI!.deleteFile!(cachePath);
             console.log(`🗑️ Deleted cache for document ${documentId}`);
         } catch (error) {
             console.error('❌ Error deleting cache:', error);
@@ -243,11 +245,11 @@ export class CachePersistence {
      */
     private async deleteCacheDirectory(): Promise<void> {
         try {
-            if (typeof window === 'undefined' || !(window as any).electronAPI) {
+            if (typeof window === 'undefined' || !window.electronAPI) {
                 return;
             }
 
-            await (window as any).electronAPI.deleteDirectory(this.cacheDirectory);
+            await window.electronAPI!.deleteDirectory!(this.cacheDirectory);
             console.log('🗑️ Deleted cache directory');
         } catch (error) {
             console.error('❌ Error deleting cache directory:', error);

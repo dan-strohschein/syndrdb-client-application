@@ -4,6 +4,8 @@
  */
 
 import { AppConfig, DEFAULT_CONFIG } from './config-types.js';
+// Import for Window.electronAPI global type
+import '../types/electron-api';
 
 /**
  * Simple YAML parser for configuration file
@@ -13,11 +15,11 @@ class SimpleYAMLParser {
   /**
    * Parse YAML string into JavaScript object
    */
-  parse(yamlContent: string): any {
+  parse(yamlContent: string): Record<string, unknown> {
     const lines = yamlContent.split('\n');
-    const result: any = {};
-    const stack: { obj: any; indent: number }[] = [{ obj: result, indent: -1 }];
-    let currentObj = result;
+    const result: Record<string, unknown> = {};
+    const stack: { obj: Record<string, unknown>; indent: number }[] = [{ obj: result, indent: -1 }];
+    let currentObj: Record<string, unknown> = result;
     let currentIndent = 0;
 
     for (let line of lines) {
@@ -46,7 +48,7 @@ class SimpleYAMLParser {
 
         if (value === '') {
           // Nested object
-          const nestedObj: any = {};
+          const nestedObj: Record<string, unknown> = {};
           currentObj[key] = nestedObj;
           stack.push({ obj: nestedObj, indent });
         } else {
@@ -62,7 +64,7 @@ class SimpleYAMLParser {
   /**
    * Parse individual value from YAML
    */
-  private parseValue(value: string): any {
+  private parseValue(value: string): string | number | boolean | null {
     // Remove comments from value
     const commentIndex = value.indexOf('#');
     if (commentIndex !== -1) {
@@ -113,8 +115,8 @@ class ConfigLoader {
   async loadConfig(configPath: string): Promise<AppConfig> {
     try {
       // In Electron, use fs to read file (only if readFile method exists)
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.readFile) {
-        const yamlContent = await (window as any).electronAPI.readFile(configPath);
+      if (typeof window !== 'undefined' && window.electronAPI?.readFile) {
+        const yamlContent = await window.electronAPI.readFile(configPath);
         const parsed = this.parser.parse(yamlContent);
         this.config = this.mergeWithDefaults(parsed);
       } else {
@@ -143,28 +145,28 @@ class ConfigLoader {
   /**
    * Merge loaded config with defaults to ensure all fields are present
    */
-  private mergeWithDefaults(loaded: any): AppConfig {
+  private mergeWithDefaults(loaded: Record<string, unknown>): AppConfig {
     return {
-      environment: loaded.environment || DEFAULT_CONFIG.environment,
+      environment: (loaded.environment as AppConfig['environment']) || DEFAULT_CONFIG.environment,
       languageService: {
         ...DEFAULT_CONFIG.languageService,
-        ...(loaded.languageService || {})
+        ...((loaded.languageService as Record<string, unknown>) || {})
       },
       editor: {
         ...DEFAULT_CONFIG.editor,
-        ...(loaded.editor || {})
+        ...((loaded.editor as Record<string, unknown>) || {})
       },
       context: {
         ...DEFAULT_CONFIG.context,
-        ...(loaded.context || {})
+        ...((loaded.context as Record<string, unknown>) || {})
       },
       monitoring: {
         ...DEFAULT_CONFIG.monitoring,
-        ...(loaded.monitoring || {})
+        ...((loaded.monitoring as Record<string, unknown>) || {})
       },
       aiAssistant: {
         ...(DEFAULT_CONFIG.aiAssistant || {}),
-        ...(loaded.aiAssistant || {})
+        ...((loaded.aiAssistant as Record<string, unknown>) || {})
       }
     };
   }

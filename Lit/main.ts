@@ -11,9 +11,9 @@ import { existsSync } from 'fs';
 
 // __dirname is automatically available in CommonJS/Node.js
 
-let mainWindow: BrowserWindow;
-let syndrdbService: any; // Will be dynamically loaded
-let connectionStorage: any; // Will be dynamically loaded
+let mainWindow: BrowserWindow | null = null;
+let syndrdbService: import('./src/electron/syndrdb-main-service').SyndrDBMainService | null = null;
+let connectionStorage: { loadConnections: () => Promise<unknown[]>; saveConnection: (c: unknown) => Promise<unknown>; overwriteConnection: (c: unknown) => Promise<unknown>; deleteConnection: (n: string) => Promise<unknown> } | null = null;
 
 // More robust development detection
 const isDev = process.env.NODE_ENV === 'development' || 
@@ -75,7 +75,7 @@ function createWindow(): void {
         if (existsSync(fallbackPath)) {
           console.warn('Dev server unreachable. Loading built app from', fallbackPath);
           console.warn('For live reload, use: npm run electron:dev');
-          mainWindow.loadFile(fallbackPath);
+          mainWindow!.loadFile(fallbackPath);
         } else {
           console.warn('Dev server unreachable and no built files found.');
           console.warn('Run "npm run build" then "npm run electron", or use "npm run electron:dev" to start the dev server.');
@@ -89,12 +89,12 @@ function createWindow(): void {
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    mainWindow!.show();
   });
 
   // Handle window closed
   mainWindow.on('closed', () => {
-    mainWindow = null as any;
+    mainWindow = null;
   });
 }
 
@@ -265,7 +265,7 @@ function setupSyndrDBService(): void {
   console.log('✅ Connection storage initialized:', !!connectionStorage);
 
   // Listen for connection status changes and forward to renderer
-  syndrdbService.on('connection-status', (data: any) => {
+  syndrdbService!.on('connection-status', (data: { connectionId: string; status: string; error?: string }) => {
     console.log('🔄 Main process received connection status event:', data);
     if (mainWindow && !mainWindow.isDestroyed()) {
       console.log('📤 Forwarding to renderer via IPC');
@@ -278,7 +278,7 @@ function setupSyndrDBService(): void {
   console.log('🔌 Setting up IPC handlers...');
   ipcMain.handle('syndrdb:connect', async (event, config) => {
     try {
-      return await syndrdbService.connect(config);
+      return await syndrdbService!.connect(config);
     } catch (error) {
       console.error('IPC syndrdb:connect error:', error);
       return { 
@@ -290,7 +290,7 @@ function setupSyndrDBService(): void {
 
   ipcMain.handle('syndrdb:disconnect', async (event, connectionId) => {
     try {
-      await syndrdbService.disconnect(connectionId);
+      await syndrdbService!.disconnect(connectionId);
       return { success: true };
     } catch (error) {
       console.error('IPC syndrdb:disconnect error:', error);
@@ -303,7 +303,7 @@ function setupSyndrDBService(): void {
 
   ipcMain.handle('syndrdb:test-connection', async (event, config) => {
     try {
-      return await syndrdbService.testConnection(config);
+      return await syndrdbService!.testConnection(config);
     } catch (error) {
       console.error('IPC syndrdb:test-connection error:', error);
       return false;
@@ -320,7 +320,7 @@ function setupSyndrDBService(): void {
     });
     try {
       console.log('🔥 Main process received execute-query IPC:', { connectionId, query });
-      const result = await syndrdbService.executeQuery(connectionId, query);
+      const result = await syndrdbService!.executeQuery(connectionId, query);
       console.log('🔥 Main process execute-query result:', result);
       return result;
     } catch (error) {
@@ -338,7 +338,7 @@ function setupSyndrDBService(): void {
   // Connection Storage IPC Handlers
   ipcMain.handle('connection-storage:load', async () => {
     try {
-      return await connectionStorage.loadConnections();
+      return await connectionStorage!.loadConnections();
     } catch (error) {
       console.error('IPC connection-storage:load error:', error);
       return [];
@@ -347,7 +347,7 @@ function setupSyndrDBService(): void {
 
   ipcMain.handle('connection-storage:save', async (_, connection) => {
     try {
-      return await connectionStorage.saveConnection(connection);
+      return await connectionStorage!.saveConnection(connection);
     } catch (error) {
       console.error('IPC connection-storage:save error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -356,7 +356,7 @@ function setupSyndrDBService(): void {
 
   ipcMain.handle('connection-storage:overwrite', async (_, connection) => {
     try {
-      return await connectionStorage.overwriteConnection(connection);
+      return await connectionStorage!.overwriteConnection(connection);
     } catch (error) {
       console.error('IPC connection-storage:overwrite error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -365,7 +365,7 @@ function setupSyndrDBService(): void {
 
   ipcMain.handle('connection-storage:delete', async (_, name) => {
     try {
-      return await connectionStorage.deleteConnection(name);
+      return await connectionStorage!.deleteConnection(name);
     } catch (error) {
       console.error('IPC connection-storage:delete error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

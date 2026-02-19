@@ -20,12 +20,13 @@
  */
 
 import type { AppConfig } from '../../../config/config-types';
+import type { SchemaServerApi } from '../../../services/schema-server-api';
 import { GrammarEngine } from './grammar_engine';
 import { Tokenizer, type Token } from './tokenizer';
 import { TokenType } from './token_types';
 import { StatementCache } from './statement-cache';
 import { ErrorAnalyzer, type EnhancedErrorDetail, ErrorCategory } from './error-analyzer';
-import { DocumentContext, type DatabaseDefinition, type BundleDefinition, ContextState } from './document-context';
+import { DocumentContext, type DatabaseDefinition, type BundleDefinition, type CachedContextData, ContextState } from './document-context';
 import { CrossStatementValidator } from './cross-statement-validator';
 import { SuggestionEngine, type Suggestion } from './suggestion-engine';
 import { ContextExpander, PrefetchStrategy } from './context-expander';
@@ -130,6 +131,7 @@ export class LanguageServiceV2 implements ILanguageService {
     private contextExpander: ContextExpander;
     private statementParser: StatementParser;
     
+    private serverApi: SchemaServerApi | null = null;
     private initialized = false;
     private currentDocument = '';
     
@@ -457,23 +459,36 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
      */
     async refreshContext(options: RefreshOptions = {}): Promise<void> {
         this.ensureInitialized();
-        
+
         try {
-            // Refresh from server - TODO: inject serverApi
-            // await this.context.refreshFromServer(serverApi);
-            
+            // Refresh from server if serverApi is available
+            if (this.serverApi) {
+                await this.context.refreshFromServer(this.serverApi);
+            }
+
             // Apply prefetch strategy if specified
             if (options.prefetchStrategy) {
                 this.contextExpander.setPrefetchStrategy(options.prefetchStrategy);
             }
-            
-            // Warmup cache with current database - TODO: requires database, bundle, context, serverApi
-            // if (this.context.getCurrentDatabase()) {
-            //     await this.contextExpander.warmupCache(...);
-            // }
+
+            // Warmup cache with current database bundles
+            const currentDb = this.context.getCurrentDatabase();
+            if (currentDb && this.serverApi) {
+                const bundles = this.context.getBundles(currentDb);
+                const bundleNames = bundles.map(b => b.name);
+                await this.contextExpander.warmupCache(currentDb, bundleNames, this.context, this.serverApi);
+            }
         } catch (error) {
             throw new Error(`Failed to refresh context: ${error}`);
         }
+    }
+
+    /**
+     * Set the server API for live schema resolution.
+     * Call with null to disconnect.
+     */
+    setServerApi(api: SchemaServerApi | null): void {
+        this.serverApi = api;
     }
 
     /**
@@ -495,7 +510,7 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
     /**
      * Load schema context from cache (e.g. DocumentContext.toCache() or AI assistant schema payload).
      */
-    loadContextFromCache(cachedData: any): void {
+    loadContextFromCache(cachedData: Partial<CachedContextData>): void {
         this.context.loadFromCache(cachedData);
     }
 
@@ -553,8 +568,7 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
      */
     async expandBundle(database: string, bundle: string): Promise<BundleDefinition | null> {
         this.ensureInitialized();
-        // TODO: inject serverApi
-        return this.contextExpander.expandBundle(database, bundle, this.context, null);
+        return this.contextExpander.expandBundle(database, bundle, this.context, this.serverApi);
     }
 
     /**
@@ -817,14 +831,14 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
        // console.log(`🎯 LanguageService: Updating context with ${databases.length} databases`);
         
         // Convert DatabaseDefinition[] to the format expected by loadFromCache
-        const cachedData: any = {
+        const cachedData: Partial<CachedContextData> = {
             databases: {},
             permissions: {},
             migrations: {}
         };
 
         for (const db of databases) {
-            const bundlesObj: any = {};
+            const bundlesObj: CachedContextData['databases'][string]['bundles'] = {};
             
             // Convert Map to object
             for (const [bundleName, bundle] of db.bundles.entries()) {
@@ -837,7 +851,7 @@ console.log('📝 [DEBUG] Parsed statements:', statements.map(s => s.text));
                 };
             }
             
-            cachedData.databases[db.name] = {
+            cachedData.databases![db.name] = {
                 name: db.name,
                 bundles: bundlesObj
             };

@@ -4,8 +4,9 @@
  * Optimizes suggestion performance with background loading
  */
 
-import type { DocumentContext, BundleDefinition, FieldDefinition } from './document-context';
-import type { AppConfig } from '../../../config/config-types'; 
+import type { DocumentContext, BundleDefinition, FieldDefinition, Relationship } from './document-context';
+import type { AppConfig } from '../../../config/config-types';
+import type { SchemaServerApi } from '../../../services/schema-server-api';
 
 /**
  * Context load request
@@ -54,7 +55,7 @@ export class ContextExpander {
     private fieldCache: Map<string, CacheEntry<FieldDefinition[]>> = new Map();
     private loadQueue: ContextLoadRequest[] = [];
     private isLoading: boolean = false;
-    private backgroundLoadTimer: any = null;
+    private backgroundLoadTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(appConfig: AppConfig) {
         this.config = {
@@ -73,8 +74,10 @@ export class ContextExpander {
         database: string,
         bundleName: string,
         context: DocumentContext,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): Promise<BundleDefinition | null> {
+        if (!database || !bundleName) return null;
+
         const cacheKey = `${database}:${bundleName}`;
         
         // Check cache first
@@ -125,7 +128,7 @@ export class ContextExpander {
         database: string,
         bundleName: string,
         context: DocumentContext,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): Promise<FieldDefinition[]> {
         const cacheKey = `${database}:${bundleName}:fields`;
         
@@ -179,7 +182,7 @@ export class ContextExpander {
         database: string,
         bundle: BundleDefinition,
         context: DocumentContext,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): void {
         if (this.config.prefetchStrategy === PrefetchStrategy.CONSERVATIVE) {
             return;
@@ -231,7 +234,7 @@ export class ContextExpander {
     private queueBackgroundLoad(
         request: ContextLoadRequest,
         context: DocumentContext,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): void {
         // Add to queue
         this.loadQueue.push(request);
@@ -250,7 +253,7 @@ export class ContextExpander {
     /**
      * Process queued load requests in background
      */
-    private async processLoadQueue(context: DocumentContext, serverApi: any): Promise<void> {
+    private async processLoadQueue(context: DocumentContext, serverApi: SchemaServerApi | null): Promise<void> {
         this.backgroundLoadTimer = null;
 
         if (this.isLoading || this.loadQueue.length === 0) {
@@ -310,8 +313,9 @@ export class ContextExpander {
     private async loadBundleFromServer(
         database: string,
         bundleName: string,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): Promise<BundleDefinition | null> {
+        if (!serverApi) return null;
         try {
             const bundleData = await serverApi.getBundle(database, bundleName);
             const fields = await serverApi.getFields(database, bundleName);
@@ -320,8 +324,8 @@ export class ContextExpander {
             const fieldMap = new Map<string, FieldDefinition>();
             fields.forEach((f: FieldDefinition) => fieldMap.set(f.name, f));
 
-            const relMap = new Map<string, any>();
-            relationships.forEach((r: any) => relMap.set(r.name, r));
+            const relMap = new Map<string, Relationship>();
+            relationships.forEach((r: Relationship) => relMap.set(r.name, r));
 
             return {
                 name: bundleName,
@@ -342,8 +346,9 @@ export class ContextExpander {
     private async loadFieldsFromServer(
         database: string,
         bundleName: string,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): Promise<FieldDefinition[]> {
+        if (!serverApi) return [];
         try {
             return await serverApi.getFields(database, bundleName);
         } catch (error) {
@@ -355,7 +360,7 @@ export class ContextExpander {
     /**
      * Check if cache entry is stale
      */
-    private isCacheStale(entry: CacheEntry<any>): boolean {
+    private isCacheStale<T>(entry: CacheEntry<T>): boolean {
         const age = Date.now() - entry.timestamp;
         return age > this.config.cacheTTL;
     }
@@ -473,7 +478,7 @@ export class ContextExpander {
         database: string,
         bundleNames: string[],
         context: DocumentContext,
-        serverApi: any
+        serverApi: SchemaServerApi | null
     ): Promise<void> {
         const promises = bundleNames.map(bundleName =>
             this.expandBundle(database, bundleName, context, serverApi)

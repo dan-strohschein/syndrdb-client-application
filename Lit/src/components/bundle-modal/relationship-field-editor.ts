@@ -138,7 +138,7 @@ export class RelationshipFieldEditor extends LitElement {
         if (!dbId) return;
 
         this.bundlesLoadPending = true;
-        const bundleManager = new BundleManager();
+        const bundleManager = new BundleManager(connectionManager);
         bundleManager
             .loadBundlesForDatabase(this.connectionId!, dbId)
             .then((bundles) => {

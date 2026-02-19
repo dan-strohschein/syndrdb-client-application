@@ -8,6 +8,8 @@
  * suggestions and validation) and may differ in shape.
  */
 
+import type { SchemaServerApi } from '../../../services/schema-server-api';
+
 /**
  * Field definition in a bundle (language service schema)
  */
@@ -72,6 +74,25 @@ export interface MigrationDefinition {
     dependencies: string[];
     applied: boolean;
     timestamp?: number;
+}
+
+/**
+ * Serialized cache data for DocumentContext (used by toCache/loadFromCache)
+ */
+export interface CachedContextData {
+    databases: Record<string, {
+        name: string;
+        bundles: Record<string, {
+            name: string;
+            database: string;
+            fields: Record<string, FieldDefinition>;
+            relationships: Record<string, Relationship>;
+            indexes: string[];
+        }>;
+    }>;
+    permissions: Record<string, Permission[]>;
+    migrations: Record<string, MigrationDefinition>;
+    lastRefreshTime: number;
 }
 
 /**
@@ -140,7 +161,7 @@ export class DocumentContext {
      * Refresh context from server
      * This should be called manually by user or on document load
      */
-    async refreshFromServer(serverApi: any): Promise<void> {
+    async refreshFromServer(serverApi: SchemaServerApi): Promise<void> {
         this.contextState = ContextState.REFRESHING;
         
         try {
@@ -204,16 +225,16 @@ export class DocumentContext {
     /**
      * Load context from local cache (faster startup)
      */
-    loadFromCache(cachedData: any): void {
+    loadFromCache(cachedData: Partial<CachedContextData>): void {
         try {
             // Restore databases
             this.databases.clear();
             for (const [dbName, dbData] of Object.entries(cachedData.databases || {})) {
-                const db = dbData as any;
+                const db = dbData as { name: string; bundles: Record<string, { name: string; database: string; fields: Record<string, FieldDefinition>; relationships: Record<string, Relationship>; indexes: string[] }> };
                 const bundleMap = new Map<string, BundleDefinition>();
-                
+
                 for (const [bundleName, bundleData] of Object.entries(db.bundles || {})) {
-                    const bundle = bundleData as any;
+                    const bundle = bundleData;
                     bundleMap.set(bundleName, {
                         name: bundle.name,
                         database: dbName,
@@ -252,11 +273,11 @@ export class DocumentContext {
     /**
      * Serialize context for caching
      */
-    toCache(): any {
-        const serializeDatabases = () => {
-            const result: any = {};
+    toCache(): CachedContextData {
+        const serializeDatabases = (): CachedContextData['databases'] => {
+            const result: CachedContextData['databases'] = {};
             for (const [dbName, db] of this.databases.entries()) {
-                const bundles: any = {};
+                const bundles: CachedContextData['databases'][string]['bundles'] = {};
                 for (const [bundleName, bundle] of db.bundles.entries()) {
                     bundles[bundleName] = {
                         name: bundle.name,

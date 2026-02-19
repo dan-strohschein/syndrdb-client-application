@@ -4,5 +4,5 @@ export interface FieldDefinition {
   Type: string;
   IsRequired: boolean;
   IsUnique: boolean;
-  DefaultValue?: any;
+  DefaultValue?: string | number | boolean | null;
 }
