@@ -6,6 +6,17 @@ import { QueryResult } from '../drivers/syndrdb-driver';
 import { queryEditorContext, QueryEditorContext } from '../context/queryEditorContext';
 import { configLoader } from '../config/config-loader';
 import './ai-assistant/ai-assistant-panel';
+import './server-profiler/server-profiler-tab';
+
+interface TabEntry {
+  name: string;
+  type: 'query' | 'profiler';
+  initialQuery?: string;
+  queryState?: string;
+  databaseName?: string;
+  connectionId?: string;
+  profilerConnectionId?: string;
+}
 
 @customElement('main-panel')
 export class MainPanel extends LitElement {
@@ -27,13 +38,7 @@ export class MainPanel extends LitElement {
   private connection: Connection | undefined = undefined;
 
   @state()
-  private queryEditors: Array<{
-    name: string, 
-    initialQuery?: string, 
-    queryState?: string,
-    databaseName?: string,
-    connectionId?: string
-  }> = [];
+  private tabs: TabEntry[] = [];
 
   @property({ type: Boolean })
   aiPanelOpen = false;
@@ -61,9 +66,9 @@ export class MainPanel extends LitElement {
         this.connection = connection;
         this.updateContextProvider();
       },
-      queryEditors: this.queryEditors,
-      setQueryEditors: (editors) => {
-        this.queryEditors = editors;
+      tabs: this.tabs,
+      setTabs: (editors) => {
+        this.tabs = editors as TabEntry[];
         this.updateContextProvider();
       }
     };
@@ -73,13 +78,13 @@ export class MainPanel extends LitElement {
     // Update the context provider properties without replacing the object
     this.queryEditorContextProvider.selectedConnectionId = this._selectedConnectionId;
     this.queryEditorContextProvider.connection = connectionManager.getConnection(this._selectedConnectionId || '');
-    this.queryEditorContextProvider.queryEditors = this.queryEditors;
+    this.queryEditorContextProvider.tabs = this.tabs;
   }
 
   willUpdate(changedProperties: PropertyValues) {
     // Update context provider when relevant state changes
     if (changedProperties.has('_selectedConnectionId') || 
-        changedProperties.has('queryEditors') || 
+        changedProperties.has('tabs') || 
         changedProperties.has('connection')) {
       this.updateContextProvider();
     }
@@ -87,22 +92,26 @@ export class MainPanel extends LitElement {
 
   firstUpdated() {
     // Initialize with default editor if none exist
-    if (this.queryEditors.length === 0) {
-      this.queryEditors = [
-        {name: "Default Query Editor"},
-        
+    if (this.tabs.length === 0) {
+      this.tabs = [
+        { name: "Default Query Editor", type: 'query' },
       ];
     }
-    
+
     // Add event listener for add-query-editor events
     this.addEventListener('add-query-editor', (event: Event) => {
       this.handleAddQueryEditor(event as CustomEvent);
+    });
+
+    // Add event listener for open-profiler-tab events
+    this.addEventListener('open-profiler-tab', () => {
+      this.handleOpenProfilerTab();
     });
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
     const { query, databaseName, connectionId } = event.detail;
-    const editorName = `Query Editor ${this.queryEditors.length + 1}`;
+    const editorName = `Query Editor ${this.tabs.length + 1}`;
     
     // Build initial query with database context
     let initialQuery = '';
@@ -113,13 +122,14 @@ export class MainPanel extends LitElement {
     }
     
     // Create new array to ensure Lit detects the change
-    this.queryEditors = [...this.queryEditors, {
-      name: editorName, 
+    this.tabs = [...this.tabs, {
+      name: editorName,
+      type: 'query',
       initialQuery: initialQuery,
       databaseName: databaseName,
       connectionId: connectionId
     }];
-    this.activeTabIndex = this.queryEditors.length - 1; // Switch to new tab
+    this.activeTabIndex = this.tabs.length - 1; // Switch to new tab
     
     console.log(`Added new query editor: ${editorName} with database context:`, {
       databaseName,
@@ -128,29 +138,38 @@ export class MainPanel extends LitElement {
     });
   }
 
+  private handleOpenProfilerTab() {
+    const profilerCount = this.tabs.filter(t => t.type === 'profiler').length;
+    this.tabs = [...this.tabs, {
+      name: `Server Profiler ${profilerCount + 1}`,
+      type: 'profiler'
+    }];
+    this.activeTabIndex = this.tabs.length - 1;
+  }
+
   private switchToTab(index: number) {
     this.activeTabIndex = index;
     // Lit automatically handles updates for @state properties
   }
 
   private closeTab(index: number) {
-    if (this.queryEditors.length <= 1) {
+    if (this.tabs.length <= 1) {
       // Prevent closing the last tab
       return;
     }
     
     // Create new array to ensure Lit detects the change
-    this.queryEditors = this.queryEditors.filter((_, i) => i !== index);
+    this.tabs = this.tabs.filter((_, i) => i !== index);
     
     // Adjust activeTabIndex if necessary
-    if (this.activeTabIndex >= this.queryEditors.length) {
-      this.activeTabIndex = this.queryEditors.length - 1;
+    if (this.activeTabIndex >= this.tabs.length) {
+      this.activeTabIndex = this.tabs.length - 1;
     }
   }
 
   private handleQueryStateChanged(event: CustomEvent, editorIndex: number) {
     const { queryText } = event.detail;
-    this.queryEditors = this.queryEditors.map((editor, index) =>
+    this.tabs = this.tabs.map((editor, index) =>
       index === editorIndex ? { ...editor, queryState: queryText } : editor
     );
   }
@@ -180,7 +199,7 @@ export class MainPanel extends LitElement {
   }
 
   private get activeEditorDatabase(): string {
-    const editor = this.queryEditors[this.activeTabIndex];
+    const editor = this.tabs[this.activeTabIndex];
     return editor?.databaseName ?? '';
   }
 
@@ -203,31 +222,38 @@ export class MainPanel extends LitElement {
         <div class="flex-1 min-w-0 flex flex-col">
           <!-- Tab Headers -->
           <div class="flex border-b border-base-300 bg-base-200 px-4 flex-shrink-0">
-            ${this.queryEditors.map((editor, index) => html`
+            ${this.tabs.map((tab, index) => html`
               <button
                 class="px-4 py-2 border-b-2 font-medium text-sm transition-colors duration-200 ${this.activeTabIndex === index
                   ? 'border-primary text-primary bg-base-100'
                   : 'border-transparent text-base-content hover:text-primary hover:bg-base-100'}"
                 @click=${() => this.switchToTab(index)}
               >
-                ${editor.name}
+                ${tab.type === 'profiler'
+                  ? html`<i class="fa-solid fa-gauge-high mr-1 text-xs"></i>`
+                  : html`<i class="fa-solid fa-code mr-1 text-xs"></i>`}
+                ${tab.name}
                 <span class="ml-2 text-accent-content hover:text-info"><a @click=${(e: Event) => { e.stopPropagation(); this.closeTab(index); }}><i class="fa-solid fa-xmark"></i></a></span>
               </button>
             `)}
           </div>
           <!-- Tab Content -->
           <div class="flex-1 overflow-hidden relative min-h-0">
-            ${this.queryEditors.map((editor, index) => html`
-              <div class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'visible z-10' : 'invisible z-0'}">
-                ${editor.name === 'Drag & Drop Demo'
-                  ? html`<draggable-demo class="w-full h-full"></draggable-demo>`
+            ${this.tabs.map((tab, index) => html`
+              <div class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'block z-10' : 'hidden'}">
+                ${tab.type === 'profiler'
+                  ? html`<server-profiler-tab
+                           class="w-full h-full"
+                           .connectionId=${tab.profilerConnectionId || ''}
+                           .isActive=${this.activeTabIndex === index}
+                         ></server-profiler-tab>`
                   : html`
                       <query-editor-frame
                         class="w-full h-full"
-                        .tabName=${editor.name}
-                        .initialQuery=${editor.queryState || editor.initialQuery || ''}
-                        .databaseName=${editor.databaseName || ''}
-                        .connectionId=${editor.connectionId || ''}
+                        .tabName=${tab.name}
+                        .initialQuery=${tab.queryState || tab.initialQuery || ''}
+                        .databaseName=${tab.databaseName || ''}
+                        .connectionId=${tab.connectionId || ''}
                         .isActive=${this.activeTabIndex === index}
                         @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}
                       ></query-editor-frame>

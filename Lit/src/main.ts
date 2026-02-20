@@ -27,6 +27,9 @@ import './components/error-modal';
 import './components/backup-modal';
 import './components/restore-modal';
 import './components/status-bar';
+import './components/server-profiler/server-profiler-tab';
+import './components/server-profiler/profiler-connection-picker';
+import './components/server-profiler/profiler-metrics-display';
 
 import './components/dragndrop/draggable-demo';
 import './components/dragndrop/draggable';
@@ -178,6 +181,14 @@ export class AppRoot extends LitElement {
 
     this.addEventListener('ai-assistant-toggle-requested', () => {
       this.aiPanelOpen = !this.aiPanelOpen;
+    });
+
+    // Listen for open-profiler-tab events and forward to main-panel
+    this.addEventListener('open-profiler-tab', () => {
+      const mainPanel = this.querySelector('main-panel');
+      if (mainPanel) {
+        mainPanel.dispatchEvent(new CustomEvent('open-profiler-tab', { bubbles: false }));
+      }
     });
   }
 

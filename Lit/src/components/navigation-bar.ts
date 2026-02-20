@@ -171,6 +171,14 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleOpenProfiler() {
+        this.dispatchEvent(new CustomEvent('open-profiler-tab', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -405,7 +413,7 @@ export class NavigationBar extends LitElement {
                             ${this.openMenu === 'tools' ? html`
                                 <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-40 z-50">
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Query Editor</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Profiler</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenProfiler}>Profiler</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Importer</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Exporter</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Session Manager</a></li>

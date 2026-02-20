@@ -207,6 +207,8 @@ export class RestoreModal extends BaseModalMixin(LitElement) {
           this.successMessage = `Database "${newName}" restored successfully from "${fileName}".\n\nReminder: The restored database is in LOCKED state. Run UNLOCK DATABASE "${newName}"; before attempting writes.`;
         }
         this.restoreComplete = true;
+        // Refresh the connection tree so the restored database appears
+        await connectionManager.refreshMetadata(connId);
       } else {
         this.errorMessage = `Restore failed: ${result.error || 'Unknown error'}`;
       }
