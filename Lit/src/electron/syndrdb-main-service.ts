@@ -29,6 +29,9 @@ interface SyndrConnection {
   authenticationComplete: boolean;
   messageBuffer: string; // Buffer for incomplete JSON messages
   binaryBuffer: Buffer; // Accumulates raw bytes for zstd detection
+  monitorState: 'idle' | 'header_received' | 'streaming';
+  monitorBuffer: string;
+  pendingSnapshotTimestamp: number | null;
 }
 
 export class SyndrDBMainService extends EventEmitter {
@@ -54,7 +57,10 @@ export class SyndrDBMainService extends EventEmitter {
       messageId: 0,
       authenticationComplete: false,
       messageBuffer: '', // Initialize empty message buffer
-      binaryBuffer: Buffer.alloc(0)
+      binaryBuffer: Buffer.alloc(0),
+      monitorState: 'idle',
+      monitorBuffer: '',
+      pendingSnapshotTimestamp: null
     };
 
     this.connections.set(connectionId, connection);
@@ -308,8 +314,11 @@ export class SyndrDBMainService extends EventEmitter {
 
     connection.status = 'disconnected';
     connection.messageHandlers.clear();
-    connection.messageBuffer = ''; // Clear message buffer
+    connection.messageBuffer = '';
     connection.binaryBuffer = Buffer.alloc(0);
+    connection.monitorState = 'idle';
+    connection.monitorBuffer = '';
+    connection.pendingSnapshotTimestamp = null;
     this.connections.delete(connectionId);
     this.emitConnectionStatus(connectionId, 'disconnected');
   }
@@ -404,8 +413,15 @@ export class SyndrDBMainService extends EventEmitter {
   /**
    * Handle query data using buffered approach for large responses.
    * Detects ZSTD-compressed responses and decompresses transparently.
+   * Also detects MONITOR:v1 streaming protocol and routes accordingly.
    */
   private handleQueryData(data: Buffer, connection: SyndrConnection) {
+    // If the connection is in monitor mode, route ALL data to the monitor handler
+    if (connection.monitorState !== 'idle') {
+      this.handleMonitorData(data, connection);
+      return;
+    }
+
     // Accumulate raw bytes
     connection.binaryBuffer = Buffer.concat([connection.binaryBuffer, data]);
 
@@ -525,6 +541,204 @@ export class SyndrDBMainService extends EventEmitter {
         // Exit the while loop — uncompressed path consumed the entire buffer
         break;
       }
+    }
+  }
+
+  /**
+   * Handle data arriving on a connection that is in monitor mode.
+   * Uses brace-counting to extract complete JSON objects (same approach as
+   * the normal query path) so it works regardless of whether the server
+   * uses the MONITOR:v1 line protocol or sends plain JSON frames.
+   * Also recognises SNAPSHOT:<ts> and END:monitor_stopped control lines
+   * if the server uses the streaming wire format.
+   */
+  private handleMonitorData(data: Buffer, connection: SyndrConnection) {
+    // Accumulate into the text buffer
+    connection.monitorBuffer += data.toString('utf-8');
+
+    // --- Handle control lines that appear OUTSIDE JSON objects ----------
+    // Strip any leading non-JSON content (MONITOR:v1 header, SNAPSHOT:, etc.)
+    // and then extract complete JSON objects via brace-counting.
+
+    let buf = connection.monitorBuffer;
+    const completeJsonValues: string[] = [];
+
+    // Outer loop: skip non-JSON text, then extract one JSON value ({...} or [...]), repeat
+    while (buf.length > 0) {
+      // Find the start of the next JSON value — either '{' or '['
+      const objStart = buf.indexOf('{');
+      const arrStart = buf.indexOf('[');
+
+      let jsonStart: number;
+      let openChar: string;
+      let closeChar: string;
+
+      if (objStart === -1 && arrStart === -1) {
+        // No JSON in remaining buffer – scan for control lines
+        this.processMonitorControlLines(buf, connection);
+        buf = '';
+        break;
+      } else if (objStart === -1) {
+        jsonStart = arrStart; openChar = '['; closeChar = ']';
+      } else if (arrStart === -1) {
+        jsonStart = objStart; openChar = '{'; closeChar = '}';
+      } else {
+        // Use whichever comes first
+        if (arrStart < objStart) {
+          jsonStart = arrStart; openChar = '['; closeChar = ']';
+        } else {
+          jsonStart = objStart; openChar = '{'; closeChar = '}';
+        }
+      }
+
+      // Process any text before the JSON start as control lines
+      if (jsonStart > 0) {
+        const prefix = buf.substring(0, jsonStart);
+        this.processMonitorControlLines(prefix, connection);
+        buf = buf.substring(jsonStart);
+      }
+
+      // Bracket/brace counting to find the matching close
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      let endIdx = -1;
+
+      for (let i = 0; i < buf.length; i++) {
+        const ch = buf[i];
+
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\' && inString) { escaped = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+
+        if (!inString) {
+          if (ch === openChar || ch === '{' || ch === '[') depth++;
+          else if (ch === closeChar || ch === '}' || ch === ']') {
+            depth--;
+            if (depth === 0) {
+              endIdx = i;
+              break;
+            }
+          }
+        }
+      }
+
+      if (endIdx === -1) {
+        // Incomplete JSON value – wait for more data
+        break;
+      }
+
+      completeJsonValues.push(buf.substring(0, endIdx + 1));
+      buf = buf.substring(endIdx + 1);
+    }
+
+    connection.monitorBuffer = buf;
+
+    // Emit each complete JSON value as a snapshot
+    for (const jsonText of completeJsonValues) {
+      try {
+        const parsed = JSON.parse(jsonText);
+        const timestamp = connection.pendingSnapshotTimestamp || Date.now();
+        connection.pendingSnapshotTimestamp = null;
+        this.emit('monitor-snapshot', {
+          connectionId: connection.id,
+          timestamp,
+          data: parsed
+        });
+      } catch {
+        console.warn('📡 Monitor: failed to parse JSON:', jsonText.substring(0, 120));
+      }
+    }
+  }
+
+  /**
+   * Scan text for monitor control lines (SNAPSHOT:<ts>, END:monitor_stopped,
+   * MONITOR:v1 header).  Called for non-JSON segments in the monitor buffer.
+   */
+  private processMonitorControlLines(text: string, connection: SyndrConnection) {
+    const lines = text.split('\n');
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+
+      if (line.startsWith('MONITOR:v1')) {
+        console.log('📡 Detected MONITOR:v1 header');
+        continue; // just skip the header
+      }
+
+      if (line.startsWith('SNAPSHOT:')) {
+        const tsStr = line.substring('SNAPSHOT:'.length);
+        connection.pendingSnapshotTimestamp = parseInt(tsStr, 10) || Date.now();
+        continue;
+      }
+
+      if (line === 'END:monitor_stopped') {
+        console.log('📡 Monitor stopped for connection:', connection.id);
+        connection.monitorState = 'idle';
+        connection.monitorBuffer = '';
+        connection.pendingSnapshotTimestamp = null;
+        this.emit('monitor-stopped', { connectionId: connection.id });
+        return;
+      }
+    }
+  }
+
+  /**
+   * Start a monitor stream on a connection. The connection socket behavior changes
+   * to streaming mode — it should use a dedicated connection.
+   */
+  async startMonitor(connectionId: string, command: string): Promise<{ success: boolean; error?: string }> {
+    const connection = this.connections.get(connectionId);
+    if (!connection) {
+      return { success: false, error: 'Connection not found' };
+    }
+    if (connection.status !== 'connected' || !connection.socket) {
+      return { success: false, error: 'Connection not available' };
+    }
+    if (!connection.authenticationComplete) {
+      return { success: false, error: 'Authentication not complete' };
+    }
+
+    try {
+      // Flag the connection as monitoring BEFORE sending the command so that
+      // the very first response frame is routed to the monitor handler
+      // instead of the normal query message-handler lookup.
+      connection.monitorState = 'streaming';
+      connection.monitorBuffer = '';
+      connection.pendingSnapshotTimestamp = null;
+
+      connection.socket.write(command + '\n\x04');
+      console.log('📡 Monitor command sent:', command);
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send monitor command';
+      return { success: false, error: message };
+    }
+  }
+
+  /**
+   * Stop an active monitor stream on a connection.
+   */
+  async stopMonitor(connectionId: string): Promise<{ success: boolean; error?: string }> {
+    const connection = this.connections.get(connectionId);
+    if (!connection) {
+      return { success: false, error: 'Connection not found' };
+    }
+    if (!connection.socket || connection.socket.destroyed) {
+      return { success: false, error: 'No active socket' };
+    }
+
+    try {
+      connection.socket.write('STOP MONITOR;\n\x04');
+      // Reset monitor state so the connection can be used normally again
+      connection.monitorState = 'idle';
+      connection.monitorBuffer = '';
+      connection.pendingSnapshotTimestamp = null;
+      console.log('📡 Stop monitor sent for connection:', connectionId);
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to stop monitor';
+      return { success: false, error: message };
     }
   }
 

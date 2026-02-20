@@ -7,10 +7,11 @@ import { queryEditorContext, QueryEditorContext } from '../context/queryEditorCo
 import { configLoader } from '../config/config-loader';
 import './ai-assistant/ai-assistant-panel';
 import './server-profiler/server-profiler-tab';
+import './session-manager/session-manager-tab';
 
 interface TabEntry {
   name: string;
-  type: 'query' | 'profiler';
+  type: 'query' | 'profiler' | 'session-manager';
   initialQuery?: string;
   queryState?: string;
   databaseName?: string;
@@ -107,6 +108,11 @@ export class MainPanel extends LitElement {
     this.addEventListener('open-profiler-tab', () => {
       this.handleOpenProfilerTab();
     });
+
+    // Add event listener for open-session-manager-tab events
+    this.addEventListener('open-session-manager-tab', () => {
+      this.handleOpenSessionManagerTab();
+    });
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
@@ -147,20 +153,42 @@ export class MainPanel extends LitElement {
     this.activeTabIndex = this.tabs.length - 1;
   }
 
+  private handleOpenSessionManagerTab() {
+    const sessionCount = this.tabs.filter(t => t.type === 'session-manager').length;
+    this.tabs = [...this.tabs, {
+      name: `Session Manager ${sessionCount + 1}`,
+      type: 'session-manager'
+    }];
+    this.activeTabIndex = this.tabs.length - 1;
+  }
+
   private switchToTab(index: number) {
     this.activeTabIndex = index;
     // Lit automatically handles updates for @state properties
   }
 
-  private closeTab(index: number) {
+  private async closeTab(index: number) {
     if (this.tabs.length <= 1) {
       // Prevent closing the last tab
       return;
     }
-    
+
+    const tab = this.tabs[index];
+
+    // For session-manager tabs, stop monitoring and clean up before removing
+    if (tab.type === 'session-manager') {
+      const containers = this.querySelectorAll('.h-full.absolute');
+      const container = containers[index];
+      const sessionTab = container?.querySelector('session-manager-tab') as
+        (HTMLElement & { cleanupMonitor?: () => Promise<void> }) | null;
+      if (sessionTab?.cleanupMonitor) {
+        try { await sessionTab.cleanupMonitor(); } catch { /* ignore */ }
+      }
+    }
+
     // Create new array to ensure Lit detects the change
     this.tabs = this.tabs.filter((_, i) => i !== index);
-    
+
     // Adjust activeTabIndex if necessary
     if (this.activeTabIndex >= this.tabs.length) {
       this.activeTabIndex = this.tabs.length - 1;
@@ -231,6 +259,8 @@ export class MainPanel extends LitElement {
               >
                 ${tab.type === 'profiler'
                   ? html`<i class="fa-solid fa-gauge-high mr-1 text-xs"></i>`
+                  : tab.type === 'session-manager'
+                  ? html`<i class="fa-solid fa-users mr-1 text-xs"></i>`
                   : html`<i class="fa-solid fa-code mr-1 text-xs"></i>`}
                 ${tab.name}
                 <span class="ml-2 text-accent-content hover:text-info"><a @click=${(e: Event) => { e.stopPropagation(); this.closeTab(index); }}><i class="fa-solid fa-xmark"></i></a></span>
@@ -247,6 +277,11 @@ export class MainPanel extends LitElement {
                            .connectionId=${tab.profilerConnectionId || ''}
                            .isActive=${this.activeTabIndex === index}
                          ></server-profiler-tab>`
+                  : tab.type === 'session-manager'
+                  ? html`<session-manager-tab
+                           class="w-full h-full"
+                           .isActive=${this.activeTabIndex === index}
+                         ></session-manager-tab>`
                   : html`
                       <query-editor-frame
                         class="w-full h-full"

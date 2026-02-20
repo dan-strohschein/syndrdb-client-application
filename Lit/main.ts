@@ -275,6 +275,19 @@ function setupSyndrDBService(): void {
     }
   });
 
+  // Forward monitor streaming events to renderer
+  syndrdbService!.on('monitor-snapshot', (data: { connectionId: string; timestamp: number; data: unknown }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('syndrdb:monitor-snapshot', data);
+    }
+  });
+
+  syndrdbService!.on('monitor-stopped', (data: { connectionId: string }) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('syndrdb:monitor-stopped', data);
+    }
+  });
+
   console.log('🔌 Setting up IPC handlers...');
   ipcMain.handle('syndrdb:connect', async (event, config) => {
     try {
@@ -334,6 +347,25 @@ function setupSyndrDBService(): void {
   });
 
   console.log('✅ execute-query IPC handler registered');
+
+  // Monitor streaming IPC handlers
+  ipcMain.handle('syndrdb:start-monitor', async (event, connectionId, command) => {
+    try {
+      return await syndrdbService!.startMonitor(connectionId, command);
+    } catch (error) {
+      console.error('IPC syndrdb:start-monitor error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('syndrdb:stop-monitor', async (event, connectionId) => {
+    try {
+      return await syndrdbService!.stopMonitor(connectionId);
+    } catch (error) {
+      console.error('IPC syndrdb:stop-monitor error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
 
   // Connection Storage IPC Handlers
   ipcMain.handle('connection-storage:load', async () => {

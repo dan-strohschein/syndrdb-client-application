@@ -22,6 +22,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removeConnectionStatusListener: (callback: (...args: unknown[]) => void) => {
       console.log('🎧 Removing connection status listener');
       ipcRenderer.off('syndrdb:connection-status', callback);
+    },
+
+    // Monitor streaming API
+    startMonitor: (connectionId: string, command: string) =>
+      ipcRenderer.invoke('syndrdb:start-monitor', connectionId, command),
+    stopMonitor: (connectionId: string) =>
+      ipcRenderer.invoke('syndrdb:stop-monitor', connectionId),
+    onMonitorSnapshot: (callback: (data: { connectionId: string; timestamp: number; data: unknown }) => void) => {
+      ipcRenderer.on('syndrdb:monitor-snapshot', (_, data) => callback(data));
+    },
+    onMonitorStopped: (callback: (data: { connectionId: string }) => void) => {
+      ipcRenderer.on('syndrdb:monitor-stopped', (_, data) => callback(data));
+    },
+    removeMonitorListeners: () => {
+      ipcRenderer.removeAllListeners('syndrdb:monitor-snapshot');
+      ipcRenderer.removeAllListeners('syndrdb:monitor-stopped');
     }
   } as SyndrDBElectronAPI,
 

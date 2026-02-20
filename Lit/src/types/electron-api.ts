@@ -8,6 +8,13 @@ export interface SyndrDBElectronAPI {
   executeQuery: (connectionId: string, query: string) => Promise<QueryResult>;
   onConnectionStatus: (callback: (data: { connectionId: string; status: string; error?: string }) => void) => void;
   removeConnectionStatusListener: (callback: Function) => void;
+
+  // Monitor (streaming) API
+  startMonitor: (connectionId: string, command: string) => Promise<{ success: boolean; error?: string }>;
+  stopMonitor: (connectionId: string) => Promise<{ success: boolean; error?: string }>;
+  onMonitorSnapshot: (callback: (data: { connectionId: string; timestamp: number; data: unknown }) => void) => void;
+  onMonitorStopped: (callback: (data: { connectionId: string }) => void) => void;
+  removeMonitorListeners: () => void;
 }
 
 export interface ConnectionStorageAPI {

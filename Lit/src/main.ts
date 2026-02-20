@@ -30,6 +30,10 @@ import './components/status-bar';
 import './components/server-profiler/server-profiler-tab';
 import './components/server-profiler/profiler-connection-picker';
 import './components/server-profiler/profiler-metrics-display';
+import './components/session-manager/session-manager-tab';
+import './components/session-manager/session-connection-picker';
+import './components/session-manager/session-list-view';
+import './components/session-manager/session-detail-view';
 
 import './components/dragndrop/draggable-demo';
 import './components/dragndrop/draggable';
@@ -188,6 +192,14 @@ export class AppRoot extends LitElement {
       const mainPanel = this.querySelector('main-panel');
       if (mainPanel) {
         mainPanel.dispatchEvent(new CustomEvent('open-profiler-tab', { bubbles: false }));
+      }
+    });
+
+    // Listen for open-session-manager-tab events and forward to main-panel
+    this.addEventListener('open-session-manager-tab', () => {
+      const mainPanel = this.querySelector('main-panel');
+      if (mainPanel) {
+        mainPanel.dispatchEvent(new CustomEvent('open-session-manager-tab', { bubbles: false }));
       }
     });
   }

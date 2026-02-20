@@ -179,6 +179,14 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleOpenSessionManager() {
+        this.dispatchEvent(new CustomEvent('open-session-manager-tab', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -416,7 +424,7 @@ export class NavigationBar extends LitElement {
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenProfiler}>Profiler</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Importer</a></li>
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Exporter</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Session Manager</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenSessionManager}>Session Manager</a></li>
                                 </ul>
                             ` : ''}
                         </li>
