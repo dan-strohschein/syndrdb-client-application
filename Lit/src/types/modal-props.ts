@@ -62,6 +62,19 @@ export interface AboutModalProps {
   open: boolean;
 }
 
+/** Props passed to backup-modal when opened from root */
+export interface BackupModalProps {
+  open: boolean;
+  connectionId?: string | null;
+  databaseName?: string | null;
+}
+
+/** Props passed to restore-modal when opened from root */
+export interface RestoreModalProps {
+  open: boolean;
+  connectionId?: string | null;
+}
+
 /**
  * Discriminated union: which modal is open and its typed props.
  * Root holds this state and binds to modal components via these types.
@@ -73,4 +86,6 @@ export type ModalState =
   | { type: 'database'; props: DatabaseModalProps }
   | { type: 'bundle'; props: BundleModalProps }
   | { type: 'error'; props: ErrorModalProps }
-  | { type: 'user'; props: UserModalProps };
+  | { type: 'user'; props: UserModalProps }
+  | { type: 'backup'; props: BackupModalProps }
+  | { type: 'restore'; props: RestoreModalProps };

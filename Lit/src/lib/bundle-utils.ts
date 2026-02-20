@@ -7,6 +7,7 @@
  */
 
 import type { FieldDefinition } from '../types/field-definition';
+import type { BundleIndex } from '../types/bundle';
 
 /** Reserved keys to exclude when converting object-shaped FieldDefinitions to array. */
 const RESERVED_FIELD_KEYS = new Set(['DocumentID']);
@@ -45,5 +46,24 @@ export function fieldDefinitionsToArray(fieldDefinitions: unknown): FieldDefinit
       });
   }
 
+  return [];
+}
+
+/**
+ * Normalizes Indexes from API into a single array form.
+ * Handles: null/undefined, array, or object (keyed by index name).
+ *
+ * @param indexes - Raw value from bundle.Indexes
+ * @returns Normalized BundleIndex array
+ */
+export function indexesToArray(indexes: unknown): BundleIndex[] {
+  if (indexes == null) return [];
+  if (Array.isArray(indexes)) return indexes as BundleIndex[];
+  if (typeof indexes === 'object') {
+    return Object.entries(indexes as Record<string, any>).map(([key, value]) => ({
+      ...value,
+      IndexName: value?.IndexName ?? key,
+    }));
+  }
   return [];
 }

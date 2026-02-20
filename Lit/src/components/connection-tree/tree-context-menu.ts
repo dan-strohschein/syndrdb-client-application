@@ -191,6 +191,28 @@ export class TreeContextMenuHandler {
             }));
             console.log('✅ Edit bundle event dispatched successfully');
         break;
+        case CONTEXT_MENU_ACTIONS.BACKUP_DATABASE: {
+            const backupContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            eventDispatcher(new CustomEvent('backup-database-requested', {
+                detail: {
+                    connectionId: backupContext.connectionId,
+                    databaseName: backupContext.databaseName || contextMenu.nodeName
+                },
+                bubbles: true
+            }));
+            break;
+        }
+        case CONTEXT_MENU_ACTIONS.RESTORE_DATABASE: {
+            const restoreContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            eventDispatcher(new CustomEvent('restore-database-requested', {
+                detail: {
+                    connectionId: restoreContext.connectionId,
+                    databaseName: restoreContext.databaseName || contextMenu.nodeName
+                },
+                bubbles: true
+            }));
+            break;
+        }
         case CONTEXT_MENU_ACTIONS.DELETE_BUNDLE:
             console.log('🗄️ Dispatching delete-bundle-requested event from connection tree')
             eventDispatcher(new CustomEvent('delete-bundle-requested', {
@@ -247,6 +269,16 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.QUERY,
         icon: 'fa-plus',
         label: 'New Query Editor'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.BACKUP_DATABASE,
+        icon: 'fa-download',
+        label: 'Backup Database'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.RESTORE_DATABASE,
+        icon: 'fa-upload',
+        label: 'Restore Database'
       });
     } else if (nodeType === NODE_TYPES.USERS) {
       actions.push({

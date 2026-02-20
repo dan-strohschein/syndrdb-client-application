@@ -24,6 +24,8 @@ import './components/bundle-modal/relationship-field-editor'
 import './components/bundle-modal/field-definition-editor';
 import './components/code-editor/code-editor';
 import './components/error-modal';
+import './components/backup-modal';
+import './components/restore-modal';
 import './components/status-bar';
 
 import './components/dragndrop/draggable-demo';
@@ -164,6 +166,14 @@ export class AppRoot extends LitElement {
 
     this.addEventListener('open-connection-modal', () => {
       this.modalState = { type: 'connection', props: { open: true } };
+    });
+
+    this.addEventListener('backup-database-requested', (event: Event) => {
+      this.handleBackupDatabaseRequest(event as CustomEvent);
+    });
+
+    this.addEventListener('restore-database-requested', (event: Event) => {
+      this.handleRestoreDatabaseRequest(event as CustomEvent);
     });
 
     this.addEventListener('ai-assistant-toggle-requested', () => {
@@ -395,6 +405,29 @@ export class AppRoot extends LitElement {
     }, 100); // Small delay to let the context menu close first
   }
 
+  private handleBackupDatabaseRequest(event: CustomEvent) {
+    const { connectionId, databaseName } = event.detail || {};
+    this.modalState = {
+      type: 'backup',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+        databaseName: databaseName ?? null,
+      },
+    };
+  }
+
+  private handleRestoreDatabaseRequest(event: CustomEvent) {
+    const { connectionId } = event.detail || {};
+    this.modalState = {
+      type: 'restore',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+      },
+    };
+  }
+
   private handleConnectionError(event: CustomEvent) {
     const { connectionName, error } = event.detail;
     const errorMessage = error || 'Unknown connection error occurred.';
@@ -480,6 +513,17 @@ export class AppRoot extends LitElement {
           .errorMessage=${this.modalState.type === 'error' ? this.modalState.props.errorMessage ?? '' : ''}
           @close-modal=${this.handleCloseModal}
         ></error-modal>
+        <backup-modal
+          .open=${this.modalState.type === 'backup'}
+          .connectionId=${this.modalState.type === 'backup' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'backup' ? this.modalState.props.databaseName ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></backup-modal>
+        <restore-modal
+          .open=${this.modalState.type === 'restore'}
+          .connectionId=${this.modalState.type === 'restore' ? this.modalState.props.connectionId ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></restore-modal>
     </div>    
     `;
   }

@@ -507,9 +507,11 @@ export class ConnectionManager extends TypedEventEmitter<ConnectionEventMap> {
       connection.bundleDetails = new Map<string, BundleDetails>();
     }
 
-    // Check if we already have the bundle details cached
+    // Check if we already have the *full* bundle details cached.
+    // seedBundleDetailsFromShowBundles may have created a partial entry
+    // (indexes only, no documentStructure), so treat that as a cache miss.
     const existingDetails = connection.bundleDetails.get(bundleName);
-    if (existingDetails) {
+    if (existingDetails?.documentStructure) {
       return existingDetails;
     }
 

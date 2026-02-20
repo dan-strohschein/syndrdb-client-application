@@ -1,6 +1,6 @@
 import { Bundle, DocumentStructure } from "../types/bundle";
 import type { ConnectionManager, Connection } from "./connection-manager";
-import { fieldDefinitionsToArray } from "../lib/bundle-utils";
+import { fieldDefinitionsToArray, indexesToArray } from "../lib/bundle-utils";
 import { TypedEventEmitter } from "../lib/typed-event-emitter";
 
 /** Typed event map for BundleManager */
@@ -49,7 +49,7 @@ export class BundleManager extends TypedEventEmitter<BundleEventMap> {
                 const docStructure = rb.DocumentStructure as DocumentStructure | undefined;
                 newBundle.Name = rb.Name as string;
                 newBundle.DocumentStructure = docStructure;
-                newBundle.Indexes = rb.Indexes as Bundle['Indexes'];
+                newBundle.Indexes = indexesToArray(rb.Indexes);
                 newBundle.Relationships = rb.Relationships as Bundle['Relationships'];
                 newBundle.FieldDefinitions = fieldDefinitionsToArray(docStructure?.FieldDefinitions);
                 newBundle.BundleId = (rb.BundleID || rb.BundleId) as string | undefined;
@@ -65,7 +65,7 @@ export class BundleManager extends TypedEventEmitter<BundleEventMap> {
                   newBundle.Name = meta.Name as string;
                 }
                 newBundle.DocumentStructure = metaDocStructure;
-                newBundle.Indexes = meta.Indexes as Bundle['Indexes'];
+                newBundle.Indexes = indexesToArray(meta.Indexes);
                 newBundle.Relationships = meta.Relationships as Bundle['Relationships'];
                 newBundle.FieldDefinitions = fieldDefinitionsToArray(metaDocStructure?.FieldDefinitions);
                 newBundle.BundleId = meta.BundleId as string | undefined;

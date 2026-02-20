@@ -410,12 +410,12 @@ export class CodeEditor extends LitElement {
           const bundleDefs = bundles.map((bundle: Bundle) => {
             const bundleName = bundle.Name;
 
-            // Extract fields from DocumentStructure.FieldDefinitions
+            // Extract fields — use bundle.FieldDefinitions (already normalised by bundle-manager)
             const fieldsMap = new Map<string, { name: string; type: string; constraints: { nullable?: boolean; unique?: boolean; primary?: boolean; default?: string | number | boolean | null } }>();
 
-            const fieldDefs = bundle.DocumentStructure?.FieldDefinitions;
+            const fieldDefs = bundle.FieldDefinitions;
 
-            if (fieldDefs) {
+            if (Array.isArray(fieldDefs)) {
               for (const field of fieldDefs) {
                 fieldsMap.set(field.Name, {
                   name: field.Name,
@@ -437,7 +437,7 @@ export class CodeEditor extends LitElement {
               database: databaseName,
               fields: fieldsMap,
               relationships: new Map(),
-              indexes: (bundle.Indexes || []).map(idx => idx.IndexName)
+              indexes: (Array.isArray(bundle.Indexes) ? bundle.Indexes : []).map(idx => idx.IndexName)
             };
           });
 

@@ -137,6 +137,22 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleBackupDatabase() {
+        this.dispatchEvent(new CustomEvent('backup-database-requested', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
+    private handleRestoreDatabase() {
+        this.dispatchEvent(new CustomEvent('restore-database-requested', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleNewDatabase() {
         console.log('Navigation bar: handleNewDatabase called');
         this.dispatchEvent(new CustomEvent('new-database-requested', {
@@ -373,8 +389,8 @@ export class NavigationBar extends LitElement {
                             ${this.openMenu === 'database' ? html`
                                 <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
                                     <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleNewDatabase}>New&nbsp;Database</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Backup</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Restore</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleBackupDatabase}>Backup</a></li>
+                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleRestoreDatabase}>Restore</a></li>
                                 </ul>
                             ` : ''}
                         </li>
