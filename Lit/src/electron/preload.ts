@@ -59,5 +59,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     generateQuery: (request: import('../types/electron-api').AIAssistantGenerateRequest) =>
       ipcRenderer.invoke('ai-assistant:generate-query', request),
     checkSubscription: () => ipcRenderer.invoke('ai-assistant:check-subscription')
+  },
+
+  importer: {
+    listPlugins: () => ipcRenderer.invoke('importer:list-plugins'),
+    getFileInfo: (filePath: string) => ipcRenderer.invoke('importer:get-file-info', filePath),
+    parsePreview: (pluginId: string, config: unknown) =>
+      ipcRenderer.invoke('importer:parse-preview', pluginId, config),
+    validateImport: (config: unknown, previewRows: unknown) =>
+      ipcRenderer.invoke('importer:validate-import', config, previewRows),
+    startImport: (config: unknown) => ipcRenderer.invoke('importer:start-import', config),
+    abortImport: () => ipcRenderer.invoke('importer:abort-import'),
+    onImportProgress: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-progress', (_, data) => callback(data));
+    },
+    onImportBatchResult: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-batch-result', (_, data) => callback(data));
+    },
+    onImportComplete: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-complete', (_, data) => callback(data));
+    },
+    onImportError: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-error', (_, data) => callback(data));
+    },
+    removeImportListeners: () => {
+      ipcRenderer.removeAllListeners('importer:import-progress');
+      ipcRenderer.removeAllListeners('importer:import-batch-result');
+      ipcRenderer.removeAllListeners('importer:import-complete');
+      ipcRenderer.removeAllListeners('importer:import-error');
+    }
   }
 } as ElectronAPI);

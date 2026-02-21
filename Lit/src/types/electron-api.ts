@@ -83,11 +83,26 @@ export interface FileSystemAPI {
   deleteDirectory: (path: string) => Promise<void>;
 }
 
+export interface ImporterElectronAPI {
+  listPlugins: () => Promise<import('../tools/importer/types/importer-plugin').ImporterPluginManifest[]>;
+  getFileInfo: (filePath: string) => Promise<import('../tools/importer/types/importer-plugin').FileInfo>;
+  parsePreview: (pluginId: string, config: import('../tools/importer/types/importer-plugin').ParserConfig) => Promise<import('../tools/importer/types/importer-plugin').ParseResult>;
+  validateImport: (config: import('../electron/import-execution-engine').ImportExecutionConfig, previewRows: (string | null)[][]) => Promise<{ validRows: number; invalidRows: number; errors: import('../tools/importer/types/importer-plugin').ImportRowError[] }>;
+  startImport: (config: import('../electron/import-execution-engine').ImportExecutionConfig) => Promise<import('../tools/importer/types/importer-plugin').ImportResult>;
+  abortImport: () => Promise<void>;
+  onImportProgress: (callback: (data: unknown) => void) => void;
+  onImportBatchResult: (callback: (data: unknown) => void) => void;
+  onImportComplete: (callback: (data: unknown) => void) => void;
+  onImportError: (callback: (data: unknown) => void) => void;
+  removeImportListeners: () => void;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
   fileDialog: FileDialogAPI;
   aiAssistant?: AIAssistantElectronAPI;
+  importer?: ImporterElectronAPI;
   readFile?: FileSystemAPI['readFile'];
   writeFile?: FileSystemAPI['writeFile'];
   createDirectory?: FileSystemAPI['createDirectory'];

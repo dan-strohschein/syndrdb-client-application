@@ -34,6 +34,7 @@ import './components/session-manager/session-manager-tab';
 import './components/session-manager/session-connection-picker';
 import './components/session-manager/session-list-view';
 import './components/session-manager/session-detail-view';
+import './tools/importer/components/import-wizard-modal';
 
 import './components/dragndrop/draggable-demo';
 import './components/dragndrop/draggable';
@@ -201,6 +202,11 @@ export class AppRoot extends LitElement {
       if (mainPanel) {
         mainPanel.dispatchEvent(new CustomEvent('open-session-manager-tab', { bubbles: false }));
       }
+    });
+
+    // Listen for import wizard requests
+    this.addEventListener('import-wizard-requested', (event: Event) => {
+      this.handleImportWizardRequest(event as CustomEvent);
     });
   }
 
@@ -451,6 +457,19 @@ export class AppRoot extends LitElement {
     };
   }
 
+  private handleImportWizardRequest(event?: CustomEvent) {
+    const { connectionId, databaseName, bundleName } = event?.detail || {};
+    this.modalState = {
+      type: 'import-wizard',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+        databaseName: databaseName ?? null,
+        bundleName: bundleName ?? null,
+      },
+    };
+  }
+
   private handleConnectionError(event: CustomEvent) {
     const { connectionName, error } = event.detail;
     const errorMessage = error || 'Unknown connection error occurred.';
@@ -547,7 +566,14 @@ export class AppRoot extends LitElement {
           .connectionId=${this.modalState.type === 'restore' ? this.modalState.props.connectionId ?? null : null}
           @close-modal=${this.handleCloseModal}
         ></restore-modal>
-    </div>    
+        <import-wizard-modal
+          .open=${this.modalState.type === 'import-wizard'}
+          .connectionId=${this.modalState.type === 'import-wizard' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'import-wizard' ? this.modalState.props.databaseName ?? null : null}
+          .bundleName=${this.modalState.type === 'import-wizard' ? this.modalState.props.bundleName ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></import-wizard-modal>
+    </div>
     `;
   }
 }

@@ -459,5 +459,90 @@ function setupSyndrDBService(): void {
     return { premium: true };
   });
 
+  // ── Importer IPC handlers ──
+  const { ImporterPluginLoader } = require('./electron/importer-plugin-loader.cjs');
+  const { ImportExecutionEngine } = require('./electron/import-execution-engine.cjs');
+
+  const importerPluginLoader = new ImporterPluginLoader();
+  importerPluginLoader.loadUserPlugins().catch((err: Error) => {
+    console.error('Failed to load user importer plugins:', err);
+  });
+
+  const importExecutionEngine = new ImportExecutionEngine(importerPluginLoader, syndrdbService!);
+
+  ipcMain.handle('importer:list-plugins', async () => {
+    return importerPluginLoader.getManifests();
+  });
+
+  ipcMain.handle('importer:get-file-info', async (_, filePath: string) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const stat = fs.statSync(filePath);
+      return {
+        filePath,
+        fileName: path.basename(filePath),
+        fileSize: stat.size,
+        detectedEncoding: 'utf-8',
+        extension: path.extname(filePath).replace(/^\./, ''),
+      };
+    } catch (error) {
+      console.error('IPC importer:get-file-info error:', error);
+      return { filePath, fileName: '', fileSize: 0, detectedEncoding: 'utf-8', extension: '' };
+    }
+  });
+
+  ipcMain.handle('importer:parse-preview', async (_, pluginId: string, config: unknown) => {
+    try {
+      const plugin = importerPluginLoader.getPlugin(pluginId);
+      if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
+      return await plugin.parsePreview(config as Parameters<typeof plugin.parsePreview>[0]);
+    } catch (error) {
+      console.error('IPC importer:parse-preview error:', error);
+      return {
+        headers: [],
+        rows: [],
+        totalRowCount: 0,
+        detectedTypes: [],
+        warnings: [error instanceof Error ? error.message : 'Unknown error'],
+      };
+    }
+  });
+
+  ipcMain.handle('importer:validate-import', async (_, config: unknown, previewRows: unknown) => {
+    try {
+      return await importExecutionEngine.validateImport(
+        config as Parameters<typeof importExecutionEngine.validateImport>[0],
+        previewRows as (string | null)[][]
+      );
+    } catch (error) {
+      console.error('IPC importer:validate-import error:', error);
+      return { validRows: 0, invalidRows: 0, errors: [{ rowIndex: -1, message: String(error) }] };
+    }
+  });
+
+  ipcMain.handle('importer:start-import', async (_, config: unknown) => {
+    try {
+      return await importExecutionEngine.startImport(
+        config as Parameters<typeof importExecutionEngine.startImport>[0],
+        mainWindow
+      );
+    } catch (error) {
+      console.error('IPC importer:start-import error:', error);
+      return {
+        totalRows: 0,
+        importedRows: 0,
+        skippedRows: 0,
+        failedRows: 0,
+        errors: [{ rowIndex: -1, message: error instanceof Error ? error.message : 'Unknown error' }],
+        elapsedMs: 0,
+      };
+    }
+  });
+
+  ipcMain.handle('importer:abort-import', async () => {
+    importExecutionEngine.abort();
+  });
+
   console.log('SyndrDB service initialized with IPC handlers');
 }
