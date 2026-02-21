@@ -544,5 +544,52 @@ function setupSyndrDBService(): void {
     importExecutionEngine.abort();
   });
 
+  // ── Exporter IPC handlers ──
+  const { ExporterPluginLoader } = require('./electron/exporter-plugin-loader.cjs');
+  const { ExportExecutionEngine } = require('./electron/export-execution-engine.cjs');
+
+  const exporterPluginLoader = new ExporterPluginLoader();
+  exporterPluginLoader.loadUserPlugins().catch((err: Error) => {
+    console.error('Failed to load user exporter plugins:', err);
+  });
+
+  const exportExecutionEngine = new ExportExecutionEngine(exporterPluginLoader, syndrdbService!);
+
+  ipcMain.handle('exporter:list-plugins', async () => {
+    return exporterPluginLoader.getManifests();
+  });
+
+  ipcMain.handle('exporter:export-schema', async (_, ddlScript: string, filePath: string) => {
+    try {
+      return await exportExecutionEngine.exportSchema(ddlScript, filePath);
+    } catch (error) {
+      console.error('IPC exporter:export-schema error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('exporter:start-export', async (_, config: unknown) => {
+    try {
+      return await exportExecutionEngine.exportData(
+        config as Parameters<typeof exportExecutionEngine.exportData>[0],
+        mainWindow
+      );
+    } catch (error) {
+      console.error('IPC exporter:start-export error:', error);
+      return {
+        totalDocuments: 0,
+        bundlesExported: 0,
+        fileSize: 0,
+        filePath: '',
+        elapsedMs: 0,
+        errors: [{ message: error instanceof Error ? error.message : 'Unknown error' }],
+      };
+    }
+  });
+
+  ipcMain.handle('exporter:abort-export', async () => {
+    exportExecutionEngine.abort();
+  });
+
   console.log('SyndrDB service initialized with IPC handlers');
 }

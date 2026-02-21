@@ -88,5 +88,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('importer:import-complete');
       ipcRenderer.removeAllListeners('importer:import-error');
     }
+  },
+
+  exporter: {
+    listPlugins: () => ipcRenderer.invoke('exporter:list-plugins'),
+    exportSchema: (ddlScript: string, filePath: string) =>
+      ipcRenderer.invoke('exporter:export-schema', ddlScript, filePath),
+    startExport: (config: unknown) => ipcRenderer.invoke('exporter:start-export', config),
+    abortExport: () => ipcRenderer.invoke('exporter:abort-export'),
+    onExportProgress: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-progress', (_, data) => callback(data));
+    },
+    onExportComplete: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-complete', (_, data) => callback(data));
+    },
+    onExportError: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-error', (_, data) => callback(data));
+    },
+    removeExportListeners: () => {
+      ipcRenderer.removeAllListeners('exporter:export-progress');
+      ipcRenderer.removeAllListeners('exporter:export-complete');
+      ipcRenderer.removeAllListeners('exporter:export-error');
+    }
   }
 } as ElectronAPI);

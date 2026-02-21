@@ -83,6 +83,17 @@ export interface FileSystemAPI {
   deleteDirectory: (path: string) => Promise<void>;
 }
 
+export interface ExporterElectronAPI {
+  listPlugins: () => Promise<import('../tools/exporter/types/exporter-plugin').ExporterPluginManifest[]>;
+  exportSchema: (ddlScript: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+  startExport: (config: import('../tools/exporter/types/export-config').ExportExecutionConfig) => Promise<import('../tools/exporter/types/exporter-plugin').ExportResult>;
+  abortExport: () => Promise<void>;
+  onExportProgress: (callback: (data: unknown) => void) => void;
+  onExportComplete: (callback: (data: unknown) => void) => void;
+  onExportError: (callback: (data: unknown) => void) => void;
+  removeExportListeners: () => void;
+}
+
 export interface ImporterElectronAPI {
   listPlugins: () => Promise<import('../tools/importer/types/importer-plugin').ImporterPluginManifest[]>;
   getFileInfo: (filePath: string) => Promise<import('../tools/importer/types/importer-plugin').FileInfo>;
@@ -103,6 +114,7 @@ export interface ElectronAPI {
   fileDialog: FileDialogAPI;
   aiAssistant?: AIAssistantElectronAPI;
   importer?: ImporterElectronAPI;
+  exporter?: ExporterElectronAPI;
   readFile?: FileSystemAPI['readFile'];
   writeFile?: FileSystemAPI['writeFile'];
   createDirectory?: FileSystemAPI['createDirectory'];

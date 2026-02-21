@@ -35,6 +35,7 @@ import './components/session-manager/session-connection-picker';
 import './components/session-manager/session-list-view';
 import './components/session-manager/session-detail-view';
 import './tools/importer/components/import-wizard-modal';
+import './tools/exporter/components/export-wizard-modal';
 
 import './components/dragndrop/draggable-demo';
 import './components/dragndrop/draggable';
@@ -207,6 +208,11 @@ export class AppRoot extends LitElement {
     // Listen for import wizard requests
     this.addEventListener('import-wizard-requested', (event: Event) => {
       this.handleImportWizardRequest(event as CustomEvent);
+    });
+
+    // Listen for export wizard requests
+    this.addEventListener('export-wizard-requested', (event: Event) => {
+      this.handleExportWizardRequest(event as CustomEvent);
     });
   }
 
@@ -470,6 +476,18 @@ export class AppRoot extends LitElement {
     };
   }
 
+  private handleExportWizardRequest(event?: CustomEvent) {
+    const { connectionId, databaseName } = event?.detail || {};
+    this.modalState = {
+      type: 'export-wizard',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+        databaseName: databaseName ?? null,
+      },
+    };
+  }
+
   private handleConnectionError(event: CustomEvent) {
     const { connectionName, error } = event.detail;
     const errorMessage = error || 'Unknown connection error occurred.';
@@ -573,6 +591,12 @@ export class AppRoot extends LitElement {
           .bundleName=${this.modalState.type === 'import-wizard' ? this.modalState.props.bundleName ?? null : null}
           @close-modal=${this.handleCloseModal}
         ></import-wizard-modal>
+        <export-wizard-modal
+          .open=${this.modalState.type === 'export-wizard'}
+          .connectionId=${this.modalState.type === 'export-wizard' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'export-wizard' ? this.modalState.props.databaseName ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></export-wizard-modal>
     </div>
     `;
   }
