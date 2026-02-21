@@ -13,6 +13,7 @@ import type { ElectronAPI } from '../../../types/electron-api';
 import { generateFullDDLScript } from '../domain/ddl-script-generator';
 import { buildExportQueries, getCheckedBundles } from '../domain/find-query-builder';
 import { getCheckedNodes } from '../domain/find-query-builder';
+import { getSelectedDatabaseNames } from '../domain/filename-generator';
 import './export-step-type';
 import './export-step-connection';
 import './export-step-format';
@@ -84,6 +85,10 @@ export class ExportWizardModal extends BaseModalMixin(LitElement) {
     } catch (e) {
       console.error('Failed to load exporter plugins:', e);
     }
+  }
+
+  private get selectedDatabaseNames(): string[] {
+    return getSelectedDatabaseNames(this.wizardState.selection.schemaTree);
   }
 
   private get stepLabels(): string[] {
@@ -283,8 +288,9 @@ export class ExportWizardModal extends BaseModalMixin(LitElement) {
               : component === 'format'
               ? html`<export-step-format
                   .state=${this.wizardState.format}
-                  .plugins=${this.wizardState.availablePlugins}
+                  .plugins=${this.wizardState.availablePlugins.filter((p) => p.id !== 'sql-script')}
                   .exportMode=${this.wizardState.type.exportMode}
+                  .selectedDatabaseNames=${this.selectedDatabaseNames}
                   @format-changed=${this.handleFormatChanged}
                 ></export-step-format>`
               : component === 'preview'
@@ -299,6 +305,7 @@ export class ExportWizardModal extends BaseModalMixin(LitElement) {
                   .previewState=${this.wizardState.preview}
                   .exportMode=${this.wizardState.type.exportMode}
                   .connectionId=${this.wizardState.selection.connectionId}
+                  .selectedDatabaseNames=${this.selectedDatabaseNames}
                   @execution-changed=${this.handleExecutionChanged}
                 ></export-step-execute>`}
           </div>

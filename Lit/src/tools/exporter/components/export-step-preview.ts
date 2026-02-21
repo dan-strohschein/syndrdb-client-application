@@ -19,8 +19,7 @@ export class ExportStepPreview extends LitElement {
     this.dispatchEvent(
       new CustomEvent('add-query-editor', {
         detail: {
-          title: 'Export DDL Script',
-          content: this.state.ddlScript,
+          query: this.state.ddlScript,
         },
         bubbles: true,
         composed: true,

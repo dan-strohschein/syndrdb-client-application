@@ -7,6 +7,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { ExecutionStepState, ExportMode, FormatStepState, PreviewStepState } from '../types/wizard-state';
 import type { ExportExecutionConfig } from '../types/export-config';
 import type { ElectronAPI } from '../../../types/electron-api';
+import { connectionManager } from '../../../services/connection-manager';
+import { generateDefaultExportFilename } from '../domain/filename-generator';
 
 @customElement('export-step-execute')
 export class ExportStepExecute extends LitElement {
@@ -15,6 +17,7 @@ export class ExportStepExecute extends LitElement {
   @property({ type: Object }) previewState!: PreviewStepState;
   @property({ type: String }) exportMode: ExportMode = 'schema-only';
   @property({ type: String }) connectionId: string | null = null;
+  @property({ type: Array }) selectedDatabaseNames: string[] = [];
 
   @state() private elapsedTimer: ReturnType<typeof setInterval> | null = null;
   @state() private startTime = 0;
@@ -123,7 +126,31 @@ export class ExportStepExecute extends LitElement {
 
       // Export schema to file
       if (exportSchema && this.previewState.ddlScript) {
-        const schemaPath = this.formatState.schemaFilePath || this.formatState.dataFilePath?.replace(/\.[^.]+$/, '.sql') || 'export.sql';
+        let schemaPath = this.formatState.schemaFilePath
+          || this.formatState.dataFilePath?.replace(/\.[^.]+$/, '.sql')
+          || null;
+
+        // For schema-only mode (no Format step), prompt user for save location
+        if (!schemaPath) {
+          const dbName = this.selectedDatabaseNames[0] || 'export';
+          const defaultFilename = generateDefaultExportFilename(dbName, 'sql');
+
+          const dialogResult = await this.api?.fileDialog?.showSaveDialog({
+            title: 'Save Schema File',
+            defaultPath: defaultFilename,
+            filters: [
+              { name: 'SQL Files', extensions: ['sql'] },
+              { name: 'All Files', extensions: ['*'] },
+            ],
+          });
+
+          if (!dialogResult || dialogResult.canceled || !dialogResult.filePath) {
+            this.stopTimer();
+            this.emitState({ ...this.state, status: 'idle' });
+            return;
+          }
+          schemaPath = dialogResult.filePath;
+        }
 
         const schemaResult = await this.api?.exporter?.exportSchema(
           this.previewState.ddlScript,
@@ -158,9 +185,14 @@ export class ExportStepExecute extends LitElement {
           return;
         }
 
+        // Resolve the renderer-side connection ID (conn_*) to the main-process
+        // connection ID (syndr_*) that SyndrDBMainService uses.
+        const connection = connectionManager.getConnection(this.connectionId);
+        const mainProcessConnectionId = connection?.driver.getConnectionId() || this.connectionId;
+
         const config: ExportExecutionConfig = {
           exportMode: this.exportMode,
-          connectionId: this.connectionId,
+          connectionId: mainProcessConnectionId,
           queries: this.previewState.queries,
           pluginId: this.formatState.selectedPluginId,
           exporterConfig: {
@@ -210,8 +242,7 @@ export class ExportStepExecute extends LitElement {
     this.dispatchEvent(
       new CustomEvent('add-query-editor', {
         detail: {
-          title: 'Exported DDL Script',
-          content: this.previewState.ddlScript,
+          query: this.previewState.ddlScript,
         },
         bubbles: true,
         composed: true,

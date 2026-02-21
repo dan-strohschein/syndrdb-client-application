@@ -12,6 +12,7 @@ import type {
   ExporterPluginManifest,
 } from '../tools/exporter/types/exporter-plugin';
 import { jsonExporter } from './exporters/json-exporter';
+import { sqlScriptExporter } from './exporters/sql-script-exporter';
 
 const USER_PLUGIN_DIR = path.join(os.homedir(), '.syndrdb', 'plugins', 'exporters');
 
@@ -43,6 +44,9 @@ export class ExporterPluginLoader {
   private loadBuiltinPlugins(): void {
     this.plugins.set(jsonExporter.manifest.id, jsonExporter);
     console.log(`Loaded built-in exporter plugin: ${jsonExporter.manifest.name}`);
+
+    this.plugins.set(sqlScriptExporter.manifest.id, sqlScriptExporter);
+    console.log(`Loaded built-in exporter plugin: ${sqlScriptExporter.manifest.name}`);
   }
 
   /** Scan user plugin directory and load valid plugins */

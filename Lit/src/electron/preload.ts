@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fileDialog: {
     showOpenDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-open', options),
-    showSaveDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
+    showSaveDialog: (options?: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-save', options)
   },
 

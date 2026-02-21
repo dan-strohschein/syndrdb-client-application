@@ -4,7 +4,7 @@
  */
 
 import type { SchemaTreeNode } from '../types/wizard-state';
-import type { Bundle, BundleIndex, Relationship } from '../../../types/bundle';
+import type { Bundle, BundleIndex, IndexFieldDef, IndexField, Relationship } from '../../../types/bundle';
 import { buildCreateBundleCommand } from '../../../domain/bundle-commands';
 import { fieldDefinitionsToArray } from '../../../lib/bundle-utils';
 
@@ -37,36 +37,96 @@ export function buildAddRelationshipCommand(relationship: Relationship): string 
 }
 
 /**
+ * Extract index fields from a BundleIndex.
+ *
+ * The server returns Fields as null. The actual field data lives in:
+ *  - HashIndexField.FieldName  (for hash indexes)
+ *  - BTreeIndexField.FieldName (for b-tree indexes)
+ *
+ * Falls back to the Fields array if it's ever populated in the future.
+ */
+function extractIndexFields(index: BundleIndex): IndexFieldDef[] {
+  // 1. Try the Fields array (currently null from server, but future-proof)
+  if (Array.isArray(index.Fields) && index.Fields.length > 0) {
+    return index.Fields.map((f: unknown) => {
+      if (typeof f === 'string') {
+        return { Name: f, Required: false, Unique: false };
+      }
+      const obj = f as Record<string, unknown>;
+      return {
+        Name: (obj.Name ?? obj.name ?? obj.FieldName ?? '') as string,
+        Required: (obj.Required ?? obj.IsRequired ?? false) as boolean,
+        Unique: (obj.Unique ?? obj.IsUnique ?? false) as boolean,
+      };
+    });
+  }
+
+  // 2. Extract from HashIndexField / BTreeIndexField based on index type
+  const indexType = (index.IndexType || '').toLowerCase();
+
+  if ((indexType === 'hash' || indexType === 'hash index') && index.HashIndexField?.FieldName) {
+    return [{
+      Name: index.HashIndexField.FieldName,
+      Required: false,
+      Unique: index.HashIndexField.IsUnique ?? false,
+    }];
+  }
+
+  if ((indexType === 'b-tree' || indexType === 'btree' || indexType === 'b-index') && index.BTreeIndexField?.FieldName) {
+    return [{
+      Name: index.BTreeIndexField.FieldName,
+      Required: false,
+      Unique: index.BTreeIndexField.IsUnique ?? false,
+    }];
+  }
+
+  // 3. Try whichever field ref is populated regardless of type
+  if (index.HashIndexField?.FieldName) {
+    return [{
+      Name: index.HashIndexField.FieldName,
+      Required: false,
+      Unique: index.HashIndexField.IsUnique ?? false,
+    }];
+  }
+  if (index.BTreeIndexField?.FieldName) {
+    return [{
+      Name: index.BTreeIndexField.FieldName,
+      Required: false,
+      Unique: index.BTreeIndexField.IsUnique ?? false,
+    }];
+  }
+
+  return [];
+}
+
+/**
  * Build CREATE INDEX statement for a bundle index.
- * Because BundleIndex only stores IndexName, IndexType, and Fields[] (field names),
- * we use sensible defaults (false, false) for required/unique flags and omit optional clauses.
+ * Uses per-field flags from HashIndexField/BTreeIndexField when available.
  */
 export function buildCreateIndexCommand(bundleName: string, index: BundleIndex): string {
   const indexName = index.IndexName;
   const indexType = (index.IndexType || '').toUpperCase();
-  const fields = index.Fields || [];
+  const fields = extractIndexFields(index);
 
   if (fields.length === 0) {
     return `-- Index "${indexName}" on "${bundleName}" has no fields defined, skipping.`;
   }
 
   const fieldFragments = fields.map(
-    (field) => `{"${field}", false, false}`
+    (field) => `{"${field.Name}", ${field.Required ?? false}, ${field.Unique ?? false}}`
   );
   const fieldList = fieldFragments.join(', ');
 
-  const comment = `-- NOTE: Index field flags (required, unique) default to false. Verify and adjust as needed.`;
-
   if (indexType === 'HASH' || indexType === 'HASH INDEX') {
-    return `${comment}\nCREATE HASH INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
+    return `CREATE HASH INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
   }
 
   if (indexType === 'BRIN' || indexType === 'BRIN INDEX') {
-    return `${comment}\nCREATE BRIN INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
+    return `CREATE BRIN INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
   }
 
   // Default to B-INDEX (B-Tree)
-  return `${comment}\nCREATE B-INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
+  return `CREATE B-INDEX "${indexName}" ON BUNDLE "${bundleName}" WITH FIELDS (${fieldList});`;
 }
 
 /**

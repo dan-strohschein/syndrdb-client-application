@@ -1,9 +1,25 @@
 import { FieldDefinition } from "./field-definition";
 
+/** Per-field definition within an index (matches Go's FieldDefinition JSON output). */
+export interface IndexFieldDef {
+    Name: string;
+    Required?: boolean;
+    Unique?: boolean;
+}
+
+/** Single index field reference (hash or b-tree specific). */
+export interface IndexField {
+    FieldName: string;
+    IsUnique: boolean;
+    Collation?: string;
+}
+
 export interface BundleIndex {
     IndexName: string;
     IndexType: string;
-    Fields?: string[];
+    Fields?: IndexFieldDef[] | null;
+    HashIndexField?: IndexField;
+    BTreeIndexField?: IndexField;
     _mapKey?: string;
 }
 

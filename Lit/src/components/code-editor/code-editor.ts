@@ -115,6 +115,9 @@ export class CodeEditor extends LitElement {
   private cursorVisible: boolean = true;
   private cursorBlinkTimer: number | null = null;
   private readonly cursorBlinkInterval: number = 530; // Monaco's blink rate
+
+  /** Text queued via setText() before documentModel was ready */
+  private _pendingText: string | null = null;
   
   // Core subsystems
   private canvas!: HTMLCanvasElement;
@@ -161,6 +164,14 @@ export class CodeEditor extends LitElement {
         const fontMetrics = this.fontMeasurer.measureFont(this.fontFamily, this.fontSize);
         this.coordinateSystem.setFontMetrics(fontMetrics);
         this.languageService.updateFontMetrics(fontMetrics);
+      }
+    }
+
+    // If initialText changed after initialization, apply it
+    if (changedProperties.has('initialText') && this.isInitialized && this.documentModel) {
+      const prev = changedProperties.get('initialText') as string | undefined;
+      if (this.initialText !== prev) {
+        this.setText(this.initialText);
       }
     }
 
@@ -317,6 +328,12 @@ export class CodeEditor extends LitElement {
 
     // Listen for database context changes from connection manager
     this.setupDatabaseContextListener();
+
+    // Apply any text that was queued via setText() before initialization
+    if (this._pendingText !== null) {
+      this.setText(this._pendingText);
+      this._pendingText = null;
+    }
 
     } catch (error) {
       console.error('Failed to initialize code editor:', error);
@@ -1471,6 +1488,39 @@ export class CodeEditor extends LitElement {
     return this.coordinateSystem.screenToCharacterPosition(screen);
   }
   
+  /**
+   * Replace the entire document text.
+   * Clears all content and inserts the new text.
+   */
+  public setText(text: string): void {
+    if (!this.documentModel) {
+      // Queue text to be applied after initializeEditor() completes
+      this._pendingText = text;
+      return;
+    }
+    // Delete all existing content
+    const lineCount = this.documentModel.getLineCount();
+    if (lineCount > 0) {
+      const lastLine = this.documentModel.getLine(lineCount - 1);
+      this.documentModel.deleteText(
+        { line: 0, column: 0 },
+        { line: lineCount - 1, column: lastLine.length }
+      );
+    }
+    // Insert new text
+    if (text) {
+      this.documentModel.insertText({ line: 0, column: 0 }, text);
+    }
+    // Reset cursor to start
+    this.documentModel.setCursorPosition({ line: 0, column: 0 });
+    if (this.statementValidationController) {
+      this.statementValidationController.updateStatementCache();
+    }
+    this.updateLineCount();
+    this.renderEditor();
+    this.requestUpdate();
+  }
+
   /**
    * Get the full document text.
    * Returns all text from the editor as a single string.

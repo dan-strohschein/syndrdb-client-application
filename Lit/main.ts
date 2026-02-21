@@ -332,9 +332,9 @@ function setupSyndrDBService(): void {
       argumentCount: arguments.length 
     });
     try {
-      console.log('🔥 Main process received execute-query IPC:', { connectionId, query });
+      //console.log('🔥 Main process received execute-query IPC:', { connectionId, query });
       const result = await syndrdbService!.executeQuery(connectionId, query);
-      console.log('🔥 Main process execute-query result:', result);
+     // console.log('🔥 Main process execute-query result:', result);
       return result;
     } catch (error) {
       console.error('IPC syndrdb:execute-query error:', error);
@@ -427,6 +427,7 @@ function setupSyndrDBService(): void {
     try {
       const result = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow()!, {
         title: options?.title || 'Save File',
+        defaultPath: options?.defaultPath || undefined,
         filters: options?.filters || [
           { name: 'SQL Files', extensions: ['sql'] },
           { name: 'Text Files', extensions: ['txt'] },
@@ -443,153 +444,167 @@ function setupSyndrDBService(): void {
   });
 
   // AI Assistant IPC handlers (stub: check-subscription returns premium true; generate uses main service)
-  const { generateQuery: aiAssistantGenerateQuery } = require('./electron/ai-assistant-main-service.cjs');
-  ipcMain.handle('ai-assistant:generate-query', async (_, request) => {
-    try {
-      return await aiAssistantGenerateQuery(request);
-    } catch (error) {
-      console.error('IPC ai-assistant:generate-query error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  });
-  ipcMain.handle('ai-assistant:check-subscription', async () => {
-    return { premium: true };
-  });
+  try {
+    const { generateQuery: aiAssistantGenerateQuery } = require('./electron/ai-assistant-main-service.cjs');
+    ipcMain.handle('ai-assistant:generate-query', async (_, request) => {
+      try {
+        return await aiAssistantGenerateQuery(request);
+      } catch (error) {
+        console.error('IPC ai-assistant:generate-query error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+    ipcMain.handle('ai-assistant:check-subscription', async () => {
+      return { premium: true };
+    });
+  } catch (error) {
+    console.error('❌ Failed to initialize AI assistant system:', error);
+  }
 
   // ── Importer IPC handlers ──
-  const { ImporterPluginLoader } = require('./electron/importer-plugin-loader.cjs');
-  const { ImportExecutionEngine } = require('./electron/import-execution-engine.cjs');
+  try {
+    const { ImporterPluginLoader } = require('./electron/importer-plugin-loader.cjs');
+    const { ImportExecutionEngine } = require('./electron/import-execution-engine.cjs');
 
-  const importerPluginLoader = new ImporterPluginLoader();
-  importerPluginLoader.loadUserPlugins().catch((err: Error) => {
-    console.error('Failed to load user importer plugins:', err);
-  });
+    const importerPluginLoader = new ImporterPluginLoader();
+    importerPluginLoader.loadUserPlugins().catch((err: Error) => {
+      console.error('Failed to load user importer plugins:', err);
+    });
 
-  const importExecutionEngine = new ImportExecutionEngine(importerPluginLoader, syndrdbService!);
+    const importExecutionEngine = new ImportExecutionEngine(importerPluginLoader, syndrdbService!);
 
-  ipcMain.handle('importer:list-plugins', async () => {
-    return importerPluginLoader.getManifests();
-  });
+    ipcMain.handle('importer:list-plugins', async () => {
+      return importerPluginLoader.getManifests();
+    });
 
-  ipcMain.handle('importer:get-file-info', async (_, filePath: string) => {
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const stat = fs.statSync(filePath);
-      return {
-        filePath,
-        fileName: path.basename(filePath),
-        fileSize: stat.size,
-        detectedEncoding: 'utf-8',
-        extension: path.extname(filePath).replace(/^\./, ''),
-      };
-    } catch (error) {
-      console.error('IPC importer:get-file-info error:', error);
-      return { filePath, fileName: '', fileSize: 0, detectedEncoding: 'utf-8', extension: '' };
-    }
-  });
+    ipcMain.handle('importer:get-file-info', async (_, filePath: string) => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const stat = fs.statSync(filePath);
+        return {
+          filePath,
+          fileName: path.basename(filePath),
+          fileSize: stat.size,
+          detectedEncoding: 'utf-8',
+          extension: path.extname(filePath).replace(/^\./, ''),
+        };
+      } catch (error) {
+        console.error('IPC importer:get-file-info error:', error);
+        return { filePath, fileName: '', fileSize: 0, detectedEncoding: 'utf-8', extension: '' };
+      }
+    });
 
-  ipcMain.handle('importer:parse-preview', async (_, pluginId: string, config: unknown) => {
-    try {
-      const plugin = importerPluginLoader.getPlugin(pluginId);
-      if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
-      return await plugin.parsePreview(config as Parameters<typeof plugin.parsePreview>[0]);
-    } catch (error) {
-      console.error('IPC importer:parse-preview error:', error);
-      return {
-        headers: [],
-        rows: [],
-        totalRowCount: 0,
-        detectedTypes: [],
-        warnings: [error instanceof Error ? error.message : 'Unknown error'],
-      };
-    }
-  });
+    ipcMain.handle('importer:parse-preview', async (_, pluginId: string, config: unknown) => {
+      try {
+        const plugin = importerPluginLoader.getPlugin(pluginId);
+        if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
+        return await plugin.parsePreview(config as Parameters<typeof plugin.parsePreview>[0]);
+      } catch (error) {
+        console.error('IPC importer:parse-preview error:', error);
+        return {
+          headers: [],
+          rows: [],
+          totalRowCount: 0,
+          detectedTypes: [],
+          warnings: [error instanceof Error ? error.message : 'Unknown error'],
+        };
+      }
+    });
 
-  ipcMain.handle('importer:validate-import', async (_, config: unknown, previewRows: unknown) => {
-    try {
-      return await importExecutionEngine.validateImport(
-        config as Parameters<typeof importExecutionEngine.validateImport>[0],
-        previewRows as (string | null)[][]
-      );
-    } catch (error) {
-      console.error('IPC importer:validate-import error:', error);
-      return { validRows: 0, invalidRows: 0, errors: [{ rowIndex: -1, message: String(error) }] };
-    }
-  });
+    ipcMain.handle('importer:validate-import', async (_, config: unknown, previewRows: unknown) => {
+      try {
+        return await importExecutionEngine.validateImport(
+          config as Parameters<typeof importExecutionEngine.validateImport>[0],
+          previewRows as (string | null)[][]
+        );
+      } catch (error) {
+        console.error('IPC importer:validate-import error:', error);
+        return { validRows: 0, invalidRows: 0, errors: [{ rowIndex: -1, message: String(error) }] };
+      }
+    });
 
-  ipcMain.handle('importer:start-import', async (_, config: unknown) => {
-    try {
-      return await importExecutionEngine.startImport(
-        config as Parameters<typeof importExecutionEngine.startImport>[0],
-        mainWindow
-      );
-    } catch (error) {
-      console.error('IPC importer:start-import error:', error);
-      return {
-        totalRows: 0,
-        importedRows: 0,
-        skippedRows: 0,
-        failedRows: 0,
-        errors: [{ rowIndex: -1, message: error instanceof Error ? error.message : 'Unknown error' }],
-        elapsedMs: 0,
-      };
-    }
-  });
+    ipcMain.handle('importer:start-import', async (_, config: unknown) => {
+      try {
+        return await importExecutionEngine.startImport(
+          config as Parameters<typeof importExecutionEngine.startImport>[0],
+          mainWindow
+        );
+      } catch (error) {
+        console.error('IPC importer:start-import error:', error);
+        return {
+          totalRows: 0,
+          importedRows: 0,
+          skippedRows: 0,
+          failedRows: 0,
+          errors: [{ rowIndex: -1, message: error instanceof Error ? error.message : 'Unknown error' }],
+          elapsedMs: 0,
+        };
+      }
+    });
 
-  ipcMain.handle('importer:abort-import', async () => {
-    importExecutionEngine.abort();
-  });
+    ipcMain.handle('importer:abort-import', async () => {
+      importExecutionEngine.abort();
+    });
+  } catch (error) {
+    console.error('❌ Failed to initialize importer system:', error);
+  }
 
   // ── Exporter IPC handlers ──
-  const { ExporterPluginLoader } = require('./electron/exporter-plugin-loader.cjs');
-  const { ExportExecutionEngine } = require('./electron/export-execution-engine.cjs');
+  try {
+    const { ExporterPluginLoader } = require('./electron/exporter-plugin-loader.cjs');
+    const { ExportExecutionEngine } = require('./electron/export-execution-engine.cjs');
+    console.log('🔍 DEBUG DEBUG DEBUG  exporter:plugin-loader.cjs loaded');
+    const exporterPluginLoader = new ExporterPluginLoader();
+    console.log('🔍 DEBUG DEBUG DEBUG  exporterPluginLoader loaded');
+    exporterPluginLoader.loadUserPlugins().catch((err: Error) => {
+      console.error('Failed to load user exporter plugins:', err);
+    });
 
-  const exporterPluginLoader = new ExporterPluginLoader();
-  exporterPluginLoader.loadUserPlugins().catch((err: Error) => {
-    console.error('Failed to load user exporter plugins:', err);
-  });
+    const exportExecutionEngine = new ExportExecutionEngine(exporterPluginLoader, syndrdbService!);
 
-  const exportExecutionEngine = new ExportExecutionEngine(exporterPluginLoader, syndrdbService!);
+    ipcMain.handle('exporter:list-plugins', async () => {
+      console.log('🔍 DEBUG DEBUG DEBUG Main process: exporter:list-plugins handler called');
+      return exporterPluginLoader.getManifests();
+    });
 
-  ipcMain.handle('exporter:list-plugins', async () => {
-    return exporterPluginLoader.getManifests();
-  });
+    ipcMain.handle('exporter:export-schema', async (_, ddlScript: string, filePath: string) => {
+      try {
+        return await exportExecutionEngine.exportSchema(ddlScript, filePath);
+      } catch (error) {
+        console.error('IPC exporter:export-schema error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
 
-  ipcMain.handle('exporter:export-schema', async (_, ddlScript: string, filePath: string) => {
-    try {
-      return await exportExecutionEngine.exportSchema(ddlScript, filePath);
-    } catch (error) {
-      console.error('IPC exporter:export-schema error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  });
+    ipcMain.handle('exporter:start-export', async (_, config: unknown) => {
+      try {
+        return await exportExecutionEngine.exportData(
+          config as Parameters<typeof exportExecutionEngine.exportData>[0],
+          mainWindow
+        );
+      } catch (error) {
+        console.error('IPC exporter:start-export error:', error);
+        return {
+          totalDocuments: 0,
+          bundlesExported: 0,
+          fileSize: 0,
+          filePath: '',
+          elapsedMs: 0,
+          errors: [{ message: error instanceof Error ? error.message : 'Unknown error' }],
+        };
+      }
+    });
 
-  ipcMain.handle('exporter:start-export', async (_, config: unknown) => {
-    try {
-      return await exportExecutionEngine.exportData(
-        config as Parameters<typeof exportExecutionEngine.exportData>[0],
-        mainWindow
-      );
-    } catch (error) {
-      console.error('IPC exporter:start-export error:', error);
-      return {
-        totalDocuments: 0,
-        bundlesExported: 0,
-        fileSize: 0,
-        filePath: '',
-        elapsedMs: 0,
-        errors: [{ message: error instanceof Error ? error.message : 'Unknown error' }],
-      };
-    }
-  });
-
-  ipcMain.handle('exporter:abort-export', async () => {
-    exportExecutionEngine.abort();
-  });
+    ipcMain.handle('exporter:abort-export', async () => {
+      exportExecutionEngine.abort();
+    });
+  } catch (error) {
+    console.error('❌ Failed to initialize exporter system:', error);
+  }
 
   console.log('SyndrDB service initialized with IPC handlers');
 }

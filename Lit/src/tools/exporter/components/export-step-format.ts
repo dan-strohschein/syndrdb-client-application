@@ -8,12 +8,14 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { FormatStepState, ExportMode } from '../types/wizard-state';
 import type { ExporterPluginManifest, ExporterConfigField } from '../types/exporter-plugin';
 import type { ElectronAPI } from '../../../types/electron-api';
+import { generateDefaultExportFilename } from '../domain/filename-generator';
 
 @customElement('export-step-format')
 export class ExportStepFormat extends LitElement {
   @property({ type: Object }) state!: FormatStepState;
   @property({ type: Array }) plugins: ExporterPluginManifest[] = [];
   @property({ type: String }) exportMode: ExportMode = 'data-only';
+  @property({ type: Array }) selectedDatabaseNames: string[] = [];
 
   createRenderRoot() {
     return this;
@@ -57,9 +59,12 @@ export class ExportStepFormat extends LitElement {
   private async handleBrowseDataFile() {
     const plugin = this.getSelectedPlugin();
     const ext = plugin?.fileExtension || 'json';
+    const dbName = this.selectedDatabaseNames[0] || 'export';
+    const defaultFilename = generateDefaultExportFilename(dbName, ext);
 
     const result = await this.api?.fileDialog?.showSaveDialog({
       title: 'Save Export File',
+      defaultPath: defaultFilename,
       filters: [
         { name: `${plugin?.name || 'Export'} Files`, extensions: [ext] },
         { name: 'All Files', extensions: ['*'] },
