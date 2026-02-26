@@ -224,6 +224,14 @@ export class SuggestionEngine {
                 if (token.StartPosition > cursorPosition) {
                     return true;
                 }
+                // Token ends exactly at cursor — include if it's punctuation/operator
+                // (these can't be "partially typed" like identifiers or keywords)
+                if (token.EndPosition === cursorPosition && token.StartPosition < cursorPosition) {
+                    const firstChar = token.Value[0];
+                    if (!/^[a-zA-Z_0-9"']/.test(firstChar)) {
+                        return true;
+                    }
+                }
                 // Cursor is inside this token - it's partial, exclude it
                 return false;
             });
@@ -289,6 +297,13 @@ export class SuggestionEngine {
             const completeTokens = tokens.filter(token => {
                 if (token.EndPosition < cursorPosition) return true;
                 if (token.StartPosition > cursorPosition) return true;
+                // Include punctuation/operator tokens that end exactly at cursor
+                if (token.EndPosition === cursorPosition && token.StartPosition < cursorPosition) {
+                    const firstChar = token.Value[0];
+                    if (!/^[a-zA-Z_0-9"']/.test(firstChar)) {
+                        return true;
+                    }
+                }
                 return false;
             });
             
@@ -454,9 +469,9 @@ export class SuggestionEngine {
             },
             {
                 label: 'DELETE',
-                insertText: 'DELETE FROM ${1:bundle_name} WHERE ${2:condition};',
+                insertText: 'DELETE DOCUMENTS FROM "${1:bundle_name}" WHERE "${2:field}" == ${3:value};',
                 detail: 'Delete documents from a bundle',
-                documentation: 'DELETE FROM <bundle> WHERE condition;'
+                documentation: 'DELETE DOCUMENTS FROM "<bundle>" WHERE "<field>" == <value>;'
             },
             {
                 label: 'GRANT',
@@ -568,11 +583,14 @@ export class SuggestionEngine {
     }
 
     /**
-     * Extract current bundle from FROM clause
+     * Extract current bundle from FROM or BUNDLE clause
      */
     private extractCurrentBundle(tokens: Token[]): string | null {
         for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].Value.toUpperCase() === 'FROM' && i + 1 < tokens.length) {
+            const value = tokens[i].Value.toUpperCase();
+            // SELECT ... FROM "bundle_name" / DELETE DOCUMENTS FROM "bundle_name"
+            // ADD DOCUMENT TO BUNDLE "bundle_name" / UPDATE DOCUMENTS IN BUNDLE "bundle_name"
+            if ((value === 'FROM' || value === 'BUNDLE') && i + 1 < tokens.length) {
                 // Strip quotes from bundle name
                 let bundleName = tokens[i + 1].Value;
                 if ((bundleName.startsWith('"') && bundleName.endsWith('"')) ||
@@ -712,6 +730,46 @@ export class SuggestionEngine {
                         insertText: 'field_reference'
                     });
                 }
+                break;
+
+            case 'function_reference':
+                // Suggest aggregate/built-in functions
+                const functions = [
+                    { name: 'COUNT', detail: 'Count documents' },
+                    { name: 'SUM', detail: 'Sum of field values' },
+                    { name: 'AVG', detail: 'Average of field values' },
+                    { name: 'MIN', detail: 'Minimum field value' },
+                    { name: 'MAX', detail: 'Maximum field value' }
+                ];
+                for (const fn of functions) {
+                    suggestions.push({
+                        label: fn.name,
+                        kind: SuggestionKind.FUNCTION,
+                        detail: fn.detail,
+                        priority: 85,
+                        insertText: fn.name
+                    });
+                }
+                break;
+
+            case 'group_by_clause':
+                suggestions.push({
+                    label: 'GROUP BY',
+                    kind: SuggestionKind.KEYWORD,
+                    detail: 'Group results by field',
+                    priority: 80,
+                    insertText: 'GROUP BY'
+                });
+                break;
+
+            case 'order_by_clause':
+                suggestions.push({
+                    label: 'ORDER BY',
+                    kind: SuggestionKind.KEYWORD,
+                    detail: 'Sort results by field',
+                    priority: 80,
+                    insertText: 'ORDER BY'
+                });
                 break;
 
             case 'user_reference':

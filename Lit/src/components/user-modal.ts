@@ -2,6 +2,7 @@ import { html, css, LitElement, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import 'cally';
 import { BaseModalMixin } from '../lib/base-modal-mixin';
+import { ToastNotification } from './toast-notification';
 
 @customElement('user-modal')
 export class UserModal extends BaseModalMixin(LitElement) {
@@ -123,7 +124,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
 
     // Validate inputs
     if (!this.formData.name || !this.formData.password) {
-      alert('Name and Password are required.');
+      ToastNotification.warning('Name and Password are required.');
       return;
     }
 
@@ -131,7 +132,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
       // Check if electronAPI is available
     } catch (error) {
       console.error('Failed to save user:', error);
-      alert('Failed to save user. See console for details.');
+      ToastNotification.error('Failed to save user. See console for details.');
     }
   }
 
@@ -147,7 +148,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
 
     return html`
         <div class="modal ${this.open ? 'modal-open' : ''}">
-            <div class="modal-box w-11/12 max-w-2xl">
+            <div class="modal-box w-11/12 max-w-2xl ${this.modalContainerClass}">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-bold text-lg">${this.user ? 'Edit User' : 'Add New User'}</h3>
@@ -283,7 +284,7 @@ private handleInputChange(field: string, value: string | boolean | number | Date
            
 
             <!-- Modal backdrop -->
-            <div class="modal-backdrop" @click=${this.handleClose}></div>
+            <div class="modal-backdrop ${this.modalBackdropClass}" @click=${this.handleClose}></div>
         </div>    
        
     `;

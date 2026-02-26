@@ -22,8 +22,13 @@ export enum TokenType {
     TOKEN_BUNDLE = 'BUNDLE',
     TOKEN_BUNDLES = 'BUNDLES',
     TOKEN_FIELD = 'FIELD',
+    TOKEN_FIELDS = 'FIELDS',
     TOKEN_INDEX = 'INDEX',
-    
+    TOKEN_RELATIONSHIP = 'RELATIONSHIP',
+    TOKEN_MODIFY = 'MODIFY',
+    TOKEN_NAME = 'NAME',
+    TOKEN_WITH = 'WITH',
+
     // SyndrQL Keywords - DML
     TOKEN_SELECT = 'SELECT',
     TOKEN_ADD = 'ADD',
@@ -35,19 +40,36 @@ export enum TokenType {
     TOKEN_TO = 'TO',
     TOKEN_IN = 'IN',
     TOKEN_LIMIT = 'LIMIT',
-    
+    TOKEN_JOIN = 'JOIN',
+    TOKEN_DOCUMENT = 'DOCUMENT',
+    TOKEN_DOCUMENTS = 'DOCUMENTS',
+    TOKEN_ASC = 'ASC',
+    TOKEN_DESC = 'DESC',
+    TOKEN_ORDER = 'ORDER',
+    TOKEN_GROUP = 'GROUP',
+    TOKEN_BY = 'BY',
+
     // SyndrQL Keywords - DOL
     TOKEN_GRANT = 'GRANT',
     TOKEN_REVOKE = 'REVOKE',
     TOKEN_ON = 'ON',
     TOKEN_FOR = 'FOR',
-    
+    TOKEN_USER = 'USER',
+    TOKEN_ROLE = 'ROLE',
+    TOKEN_PASSWORD = 'PASSWORD',
+    TOKEN_FORCE = 'FORCE',
+
     // SyndrQL Keywords - Migration
     TOKEN_MIGRATION = 'MIGRATION',
+    TOKEN_MIGRATIONS = 'MIGRATIONS',
     TOKEN_APPLY = 'APPLY',
     TOKEN_VALIDATE = 'VALIDATE',
     TOKEN_ROLLBACK = 'ROLLBACK',
-    
+    TOKEN_START = 'START',
+    TOKEN_COMMIT = 'COMMIT',
+    TOKEN_DESCRIPTION = 'DESCRIPTION',
+    TOKEN_VERSION = 'VERSION',
+
     // Other Keywords
     TOKEN_USE = 'USE',
     TOKEN_AS = 'AS',

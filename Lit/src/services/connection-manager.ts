@@ -199,14 +199,30 @@ export class ConnectionManager extends TypedEventEmitter<ConnectionEventMap> {
       // Fetch users
       try {
         const usersResult = await connection.driver.executeQuery('SHOW USERS;');
-        // console.log('👥 SHOW USERS result:', usersResult);
+        console.log('👥 SHOW USERS result:', JSON.stringify(usersResult, null, 2));
         
         if (usersResult.success && usersResult.data) {
           if (Array.isArray(usersResult.data)) {
-            connection.users = usersResult.data.map((user: Record<string, unknown>) => {
-              // User data might be objects or strings
-              const u = user as Record<string, string>;
-              return u.Name || u.Username || u.name || u.username || String(user);
+            connection.users = usersResult.data.map((user: unknown) => {
+              if (typeof user === 'string') return user;
+              if (typeof user === 'object' && user !== null) {
+                const u = user as Record<string, unknown>;
+                // Try known property names for user name
+                for (const key of ['Name', 'Username', 'name', 'username', 'User', 'user', 'UserName', 'userName']) {
+                  if (typeof u[key] === 'string') return u[key] as string;
+                }
+                // Fall back to first string-valued property that isn't an ID
+                for (const [key, val] of Object.entries(u)) {
+                  if (typeof val === 'string' && !key.toLowerCase().includes('id') && !key.toLowerCase().includes('password')) {
+                    return val;
+                  }
+                }
+                // Last resort: any string value
+                for (const val of Object.values(u)) {
+                  if (typeof val === 'string') return val;
+                }
+              }
+              return JSON.stringify(user);
             });
           } else {
             connection.users = [];

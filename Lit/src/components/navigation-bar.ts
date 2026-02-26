@@ -34,6 +34,34 @@ export class NavigationBar extends LitElement {
         this.requestUpdate();
     }
 
+    private get modKey(): string {
+        return navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl';
+    }
+
+    private handleGlobalKeydown(event: KeyboardEvent) {
+        const isMeta = event.metaKey || event.ctrlKey;
+
+        if (isMeta && event.key === 'n' && !event.shiftKey) {
+            event.preventDefault();
+            this.handleNewConnection(event);
+        } else if (isMeta && event.key === 'o') {
+            event.preventDefault();
+            this.handleFileOpen();
+        } else if (isMeta && event.key === 's') {
+            event.preventDefault();
+            this.handleFileSave();
+        } else if (isMeta && event.shiftKey && event.key === 'P') {
+            event.preventDefault();
+            this.handleOpenProfiler();
+        } else if (isMeta && event.shiftKey && event.key === 'I') {
+            event.preventDefault();
+            this.handleOpenImporter();
+        } else if (isMeta && event.shiftKey && event.key === 'E') {
+            event.preventDefault();
+            this.handleOpenExporter();
+        }
+    }
+
     private handleNewConnection(event: Event) {
         event.preventDefault();
         this.handleMenuClose(); // Close the menu
@@ -49,7 +77,8 @@ export class NavigationBar extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         document.addEventListener('click', this.handleDocumentClick.bind(this));
-        
+        document.addEventListener('keydown', this.handleGlobalKeydown.bind(this));
+
         // Listen for panel selection changes
         document.addEventListener('panel-selected', (event: Event) => {
             this.handlePanelSelected(event as CustomEvent);
@@ -59,6 +88,7 @@ export class NavigationBar extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         document.removeEventListener('click', this.handleDocumentClick.bind(this));
+        document.removeEventListener('keydown', this.handleGlobalKeydown.bind(this));
         document.removeEventListener('panel-selected', (event: Event) => {
             this.handlePanelSelected(event as CustomEvent);
         });
@@ -203,6 +233,14 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleOpenQueryHistory() {
+        this.dispatchEvent(new CustomEvent('open-query-history', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -259,8 +297,8 @@ export class NavigationBar extends LitElement {
             <style>
                 /* Reset navbar to eliminate negative space and reduce height by 35% */
                 navigation-bar .navbar {
-                    min-height: 2.6rem !important; /* Default is 4rem, reduced by 35% */
-                    height: 2.6rem !important;
+                    min-height: 2.8rem !important;
+                    height: 2.8rem !important;
                     padding: 0 !important;
                     margin: 0 !important;
                     box-sizing: border-box;
@@ -361,7 +399,7 @@ export class NavigationBar extends LitElement {
                 }
             </style>
             
-            <div class="navbar bg-base-100 shadow-md">
+            <div class="navbar shadow-md border-b border-db-border" style="background: linear-gradient(180deg, #1a1a1a, #121212)">
                 <div class="navbar-start">
                     <div class="dropdown">
                         <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
@@ -379,90 +417,93 @@ export class NavigationBar extends LitElement {
                     
 
 
-                    <ul class="menu menu-horizontal bg-base-200 [&_li>*]:rounded-none p-0 " style="padding-top: 10px !important;">
+                    <ul class="menu menu-horizontal bg-surface-1 [&_li>*]:rounded-none p-0 " style="padding-top: 10px !important;">
                         <li class="relative">
                             <button 
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('file', e)}
                             >
                                 <i class="fa-solid fa-file"></i>
                                 <span>File</span>
                             </button>
                             ${this.openMenu === 'file' ? html`
-                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleFileOpen}>Open</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleFileSave}>Save</a></li>
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileOpen}>Open<span class="db-shortcut-hint">${this.modKey}+O</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileSave}>Save<span class="db-shortcut-hint">${this.modKey}+S</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
                          <li class="relative">
                             <button 
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('servers', e)}
                             >
                                 <i class="fa-solid fa-server"></i>
                                 <span>Servers</span>
                             </button>
                             ${this.openMenu === 'servers' ? html`
-                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleNewConnection}>New&nbsp;Connection</a></li>
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewConnection}>New&nbsp;Connection<span class="db-shortcut-hint">${this.modKey}+N</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
                         
                         <li class="relative">
                             <button 
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('database', e)}
                             >
                                 <i class="fa-solid fa-database"></i>
                                 <span>Database</span>
                             </button>
                             ${this.openMenu === 'database' ? html`
-                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleNewDatabase}>New&nbsp;Database</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleBackupDatabase}>Backup</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleRestoreDatabase}>Restore</a></li>
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewDatabase}>New&nbsp;Database</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleBackupDatabase}>Backup</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleRestoreDatabase}>Restore</a></li>
                                 </ul>
                             ` : ''}
                         </li>
+                        <li class="border-r border-db-border/30 h-4 self-center mx-1" aria-hidden="true"></li>
                         <li class="relative">
-                            <button 
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                            <button
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('tools', e)}
                             >
                                 <i class="fa-solid fa-screwdriver-wrench"></i>
                                 <span>Tools</span>
                             </button>
                             ${this.openMenu === 'tools' ? html`
-                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-40 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Query Editor</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenProfiler}>Profiler</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenImporter}>Importer</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenExporter}>Exporter</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleOpenSessionManager}>Session Manager</a></li>
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-56 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Query Editor</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenProfiler}>Profiler<span class="db-shortcut-hint">${this.modKey}+Shift+P</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenImporter}>Importer<span class="db-shortcut-hint">${this.modKey}+Shift+I</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenExporter}>Exporter<span class="db-shortcut-hint">${this.modKey}+Shift+E</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenSessionManager}>Session Manager</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenQueryHistory}>Query History</a></li>
                                 </ul>
                             ` : ''}
                         </li>
+                        <li class="border-r border-db-border/30 h-4 self-center mx-1" aria-hidden="true"></li>
                         <li class="relative">
-                            <button 
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                            <button
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('settings', e)}
                             >
                                 <i class="fa-solid fa-gear"></i>
                                 <span>Settings</span>
                             </button>
                             ${this.openMenu === 'settings' ? html`
-                                <ul class="absolute top-full left-0 bg-base-100 shadow-lg rounded-b-md p-2 w-32 z-50">
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Updates</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded">Settings</a></li>
-                                    <li><a href="#" class="block px-2 py-1 hover:bg-base-200 rounded" @click=${this.handleAboutOpen}>Version</a></li>
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Updates</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Settings</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleAboutOpen}>Version</a></li>
                                 </ul>
                             ` : ''}
                         </li>
                         <li>
                             <button
-                                class="flex items-center space-x-1 px-2 py-1 hover:bg-base-300"
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 title="Open AI Assistant"
                                 @click=${this.handleAIAssistantToggle}
                             >

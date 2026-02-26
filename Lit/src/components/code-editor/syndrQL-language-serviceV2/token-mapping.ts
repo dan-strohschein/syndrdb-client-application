@@ -44,8 +44,13 @@ const TOKEN_TO_RENDERING_CATEGORY: Map<TokenType, RenderingCategory> = new Map([
   [TokenType.TOKEN_BUNDLE, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_BUNDLES, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_FIELD, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_FIELDS, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_INDEX, RenderingCategory.KEYWORD],
-  
+  [TokenType.TOKEN_RELATIONSHIP, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_MODIFY, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_NAME, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_WITH, RenderingCategory.KEYWORD],
+
   // DML Keywords
   [TokenType.TOKEN_SELECT, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_ADD, RenderingCategory.KEYWORD],
@@ -57,19 +62,36 @@ const TOKEN_TO_RENDERING_CATEGORY: Map<TokenType, RenderingCategory> = new Map([
   [TokenType.TOKEN_TO, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_IN, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_LIMIT, RenderingCategory.KEYWORD],
-  
+  [TokenType.TOKEN_JOIN, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_DOCUMENT, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_DOCUMENTS, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_ASC, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_DESC, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_ORDER, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_GROUP, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_BY, RenderingCategory.KEYWORD],
+
   // DOL Keywords
   [TokenType.TOKEN_GRANT, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_REVOKE, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_ON, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_FOR, RenderingCategory.KEYWORD],
-  
+  [TokenType.TOKEN_USER, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_ROLE, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_PASSWORD, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_FORCE, RenderingCategory.KEYWORD],
+
   // Migration Keywords
   [TokenType.TOKEN_MIGRATION, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_MIGRATIONS, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_APPLY, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_VALIDATE, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_ROLLBACK, RenderingCategory.KEYWORD],
-  
+  [TokenType.TOKEN_START, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_COMMIT, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_DESCRIPTION, RenderingCategory.KEYWORD],
+  [TokenType.TOKEN_VERSION, RenderingCategory.KEYWORD],
+
   // Other Keywords
   [TokenType.TOKEN_USE, RenderingCategory.KEYWORD],
   [TokenType.TOKEN_AS, RenderingCategory.KEYWORD],

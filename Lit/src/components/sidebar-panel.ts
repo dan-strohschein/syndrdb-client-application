@@ -12,6 +12,9 @@ export class SidebarPanel extends LitElement {
   @state()
   private connections: Connection[] = [];
 
+  @state()
+  private treeFilter = '';
+
   private newConnectionHandler: (() => void) | null = null;
   private saveConnectionHandler: (() => void) | null = null;
 
@@ -136,17 +139,25 @@ export class SidebarPanel extends LitElement {
     this.disconnectFromDatabase(connectionId);
   }
 
+  private _onTreeScroll(e: Event) {
+    const el = e.target as HTMLElement;
+    const wrapper = el.parentElement;
+    if (!wrapper) return;
+    wrapper.classList.toggle('shadow-top', el.scrollTop > 0);
+    wrapper.classList.toggle('shadow-bottom', el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  }
+
   private openConnectionModal() {
     this.dispatchEvent(new CustomEvent('open-connection-modal', { bubbles: true }));
   }
 
   render() {
     return html`
-      <div class="h-full flex flex-col bg-base-200">
+      <div class="h-full flex flex-col bg-surface-1">
         <!-- Header -->
-        <div class="flex-shrink-0 p-4 border-b border-base-300">
-          <h2 class="text-x1 font-semibold text-base-content">Database Connections</h2>
-          <button class="btn btn-primary btn-sm mt-2 w-full" @click=${this.openConnectionModal}>
+        <div class="flex-shrink-0 p-4 db-sidebar-header">
+          <h2 class="text-x1 font-semibold text-gray-200">Database Connections</h2>
+          <button class="btn btn-sm mt-2 w-full bg-accent hover:bg-accent-dark text-white transition-transform duration-100 active:scale-[0.97]" @click=${this.openConnectionModal}>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -154,17 +165,43 @@ export class SidebarPanel extends LitElement {
           </button>
         </div>
         
+        <!-- Search Filter -->
+        <div class="flex-shrink-0 px-4 py-2">
+          <div class="relative">
+            <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-feedback-muted text-xs"></i>
+            <input
+              type="text"
+              class="db-input text-xs w-full pl-7 pr-7 py-1.5"
+              placeholder="Filter connections..."
+              .value=${this.treeFilter}
+              @input=${(e: Event) => { this.treeFilter = (e.target as HTMLInputElement).value; }}
+            />
+            ${this.treeFilter ? html`
+              <button
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-feedback-muted hover:text-white text-xs"
+                @click=${() => { this.treeFilter = ''; }}
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
         <!-- Connection Tree -->
-        <div class="flex-1 overflow-y-scroll overflow-x-hidden p-2" style="max-height: calc(100vh - 200px);">
-          <connection-tree 
-            .connections=${this.connections}
-            @connect-database=${this.handleConnectDatabase}
-            @disconnect-database=${this.handleDisconnectDatabase}
-          ></connection-tree>
+        <div class="flex-1 db-scroll-shadow-wrapper" style="max-height: calc(100vh - 250px);">
+          <div class="h-full overflow-y-scroll overflow-x-hidden p-2" @scroll=${this._onTreeScroll}>
+            <connection-tree
+              .connections=${this.treeFilter
+                ? this.connections.filter(c => c.name.toLowerCase().includes(this.treeFilter.toLowerCase()))
+                : this.connections}
+              @connect-database=${this.handleConnectDatabase}
+              @disconnect-database=${this.handleDisconnectDatabase}
+            ></connection-tree>
+          </div>
         </div>
         
         <!-- Status Bar -->
-        <div class="flex-shrink-0 p-2 border-t border-base-300 text-xs text-base-content/70">
+        <div class="flex-shrink-0 p-2 border-t border-db-border text-xs text-feedback-muted">
           ${this.connections.filter(c => c.status === 'connected').length} of ${this.connections.length} connected
         </div>
       </div>

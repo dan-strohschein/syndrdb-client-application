@@ -90,6 +90,21 @@ export interface ExportWizardModalProps {
   databaseName?: string | null;
 }
 
+/** Props passed to delete-database-modal when opened from root */
+export interface DeleteDatabaseModalProps {
+  open: boolean;
+  connectionId?: string | null;
+  databaseName?: string | null;
+}
+
+/** Props passed to delete-bundle-modal when opened from root */
+export interface DeleteBundleModalProps {
+  open: boolean;
+  connectionId?: string | null;
+  databaseName?: string | null;
+  bundleName?: string | null;
+}
+
 /**
  * Discriminated union: which modal is open and its typed props.
  * Root holds this state and binds to modal components via these types.
@@ -105,4 +120,6 @@ export type ModalState =
   | { type: 'backup'; props: BackupModalProps }
   | { type: 'restore'; props: RestoreModalProps }
   | { type: 'import-wizard'; props: ImportWizardModalProps }
-  | { type: 'export-wizard'; props: ExportWizardModalProps };
+  | { type: 'export-wizard'; props: ExportWizardModalProps }
+  | { type: 'delete-database'; props: DeleteDatabaseModalProps }
+  | { type: 'delete-bundle'; props: DeleteBundleModalProps };

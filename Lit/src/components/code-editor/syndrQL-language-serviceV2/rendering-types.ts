@@ -41,8 +41,8 @@ export interface ErrorUnderlineStyle {
  * Default syntax highlighting theme (VS Code Dark+)
  */
 export const DEFAULT_SYNDRQL_THEME: SyntaxTheme = {
-  keyword: '#569CD6',      // VS Code blue
-  identifier: '#9CDCFE',   // Light blue
+  keyword: '#7CB3F2',      // Brighter blue (improved contrast)
+  identifier: '#DCDCAA',   // Gold/yellow (distinct from keywords)
   literal: '#CE9178',      // Orange
   operator: '#D4D4D4',     // Light gray
   punctuation: '#D4D4D4',  // Light gray
@@ -51,10 +51,10 @@ export const DEFAULT_SYNDRQL_THEME: SyntaxTheme = {
   number: '#B5CEA8',       // Light green
   placeholder: '#4EC9B0',  // Cyan
   unknown: '#D4D4D4',      // Light gray
-  
+
   // Default error underline styling (small squiggly for token errors)
   errorUnderline: {
-    color: '#ff0000',      // Red
+    color: '#FF6B6B',      // Brighter red (improved visibility)
     thickness: 1,
     amplitude: 1,
     frequency: 4
@@ -65,7 +65,7 @@ export const DEFAULT_SYNDRQL_THEME: SyntaxTheme = {
  * Statement-level error underline style (larger, more prominent)
  */
 export const STATEMENT_ERROR_STYLE: ErrorUnderlineStyle = {
-  color: '#ff0000',       // Red
+  color: '#FF6B6B',       // Brighter red (improved visibility)
   thickness: 2,           // Thicker line
   amplitude: 2,           // Larger waves
   frequency: 6            // Wider waves

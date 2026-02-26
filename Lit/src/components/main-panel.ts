@@ -16,7 +16,11 @@ interface TabEntry {
   queryState?: string;
   databaseName?: string;
   connectionId?: string;
+  /** Stable connection name used to remap connectionId across restarts */
+  connectionName?: string;
   profilerConnectionId?: string;
+  /** True if the user manually renamed this tab (prevents auto-naming) */
+  userRenamed?: boolean;
 }
 
 @customElement('main-panel')
@@ -46,6 +50,15 @@ export class MainPanel extends LitElement {
 
   @state()
   private activeTabIndex: number = 0;
+
+  @state()
+  private tabTransitioning = false;
+
+  @state()
+  private closingTabIndex: number | null = null;
+
+  @state()
+  private newTabIndex: number | null = null;
 
   @state()
   private queryResult: QueryResult | null = null;
@@ -92,16 +105,23 @@ export class MainPanel extends LitElement {
   }
 
   firstUpdated() {
-    // Initialize with default editor if none exist
+    // Try to restore tabs from localStorage; fall back to default
     if (this.tabs.length === 0) {
-      this.tabs = [
-        { name: "Default Query Editor", type: 'query' },
-      ];
+      if (!this.restoreTabs()) {
+        this.tabs = [
+          { name: "Default Query Editor", type: 'query' },
+        ];
+      }
     }
 
     // Add event listener for add-query-editor events
     this.addEventListener('add-query-editor', (event: Event) => {
       this.handleAddQueryEditor(event as CustomEvent);
+    });
+
+    // Remap stale tab connectionIds when connections are loaded on startup
+    connectionManager.addEventListener('connectionAdded', () => {
+      this.remapTabConnections();
     });
 
     // Add event listener for open-profiler-tab events
@@ -118,7 +138,7 @@ export class MainPanel extends LitElement {
   private handleAddQueryEditor(event: CustomEvent) {
     const { query, databaseName, connectionId } = event.detail;
     const editorName = `Query Editor ${this.tabs.length + 1}`;
-    
+
     // Build initial query with database context
     let initialQuery = '';
     if (databaseName) {
@@ -126,22 +146,23 @@ export class MainPanel extends LitElement {
     } else {
       initialQuery = query || '-- Your query here';
     }
-    
+
+    // Look up connection name for stable persistence across restarts
+    const conn = connectionId ? connectionManager.getConnection(connectionId) : null;
+
     // Create new array to ensure Lit detects the change
     this.tabs = [...this.tabs, {
       name: editorName,
       type: 'query',
       initialQuery: initialQuery,
       databaseName: databaseName,
-      connectionId: connectionId
+      connectionId: connectionId,
+      connectionName: conn?.name || '',
     }];
     this.activeTabIndex = this.tabs.length - 1; // Switch to new tab
-    
-    console.log(`Added new query editor: ${editorName} with database context:`, {
-      databaseName,
-      connectionId,
-      initialQuery
-    });
+    this.newTabIndex = this.activeTabIndex;
+    setTimeout(() => { this.newTabIndex = null; }, 200);
+    this.persistTabs();
   }
 
   private handleOpenProfilerTab() {
@@ -163,13 +184,16 @@ export class MainPanel extends LitElement {
   }
 
   private switchToTab(index: number) {
-    this.activeTabIndex = index;
-    // Lit automatically handles updates for @state properties
+    if (index === this.activeTabIndex) return;
+    this.tabTransitioning = true;
+    setTimeout(() => {
+      this.activeTabIndex = index;
+      this.tabTransitioning = false;
+    }, 50);
   }
 
   private async closeTab(index: number) {
-    if (this.tabs.length <= 1) {
-      // Prevent closing the last tab
+    if (this.tabs.length <= 1 || this.closingTabIndex !== null) {
       return;
     }
 
@@ -186,20 +210,162 @@ export class MainPanel extends LitElement {
       }
     }
 
-    // Create new array to ensure Lit detects the change
-    this.tabs = this.tabs.filter((_, i) => i !== index);
+    // Animate the tab exit
+    this.closingTabIndex = index;
+    setTimeout(() => {
+      // Create new array to ensure Lit detects the change
+      this.tabs = this.tabs.filter((_, i) => i !== index);
 
-    // Adjust activeTabIndex if necessary
-    if (this.activeTabIndex >= this.tabs.length) {
-      this.activeTabIndex = this.tabs.length - 1;
-    }
+      // Adjust activeTabIndex if necessary
+      if (this.activeTabIndex >= this.tabs.length) {
+        this.activeTabIndex = this.tabs.length - 1;
+      }
+      this.closingTabIndex = null;
+      this.persistTabs();
+    }, 150);
   }
 
   private handleQueryStateChanged(event: CustomEvent, editorIndex: number) {
     const { queryText } = event.detail;
+    const autoName = this.deriveTabName(queryText);
     this.tabs = this.tabs.map((editor, index) =>
-      index === editorIndex ? { ...editor, queryState: queryText } : editor
+      index === editorIndex
+        ? { ...editor, queryState: queryText, ...(autoName && !editor.userRenamed ? { name: autoName } : {}) }
+        : editor
     );
+    this.persistTabs();
+  }
+
+  /**
+   * Derive a short tab name from the first statement in the query text.
+   */
+  private deriveTabName(queryText: string): string | null {
+    if (!queryText || !queryText.trim()) return null;
+    const trimmed = queryText.trim();
+    // Match first statement keyword + target
+    const match = trimmed.match(/^(SELECT|FIND|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|USE|SHOW|BACKUP|RESTORE)\s+(?:(?:DATABASE|BUNDLE|INDEX)\s+)?["']?(\w+)["']?/i);
+    if (match) {
+      const verb = match[1].toUpperCase();
+      const target = match[2];
+      if (verb === 'USE') return `USE ${target}`;
+      if (verb === 'SHOW') return `SHOW ${target}`;
+      return `${verb} ${target}`;
+    }
+    // Fallback: use first 20 chars
+    const firstLine = trimmed.split('\n')[0].substring(0, 25);
+    return firstLine.length > 20 ? firstLine.substring(0, 20) + '...' : firstLine;
+  }
+
+  /**
+   * Handle double-click on tab to rename inline
+   */
+  private handleTabDblClick(index: number) {
+    const currentName = this.tabs[index].name;
+    const newName = prompt('Rename tab:', currentName);
+    if (newName && newName.trim()) {
+      this.tabs = this.tabs.map((tab, i) =>
+        i === index ? { ...tab, name: newName.trim(), userRenamed: true } : tab
+      );
+      this.persistTabs();
+    }
+  }
+
+  /**
+   * Persist tabs to localStorage for session restoration
+   */
+  private persistTabs(): void {
+    try {
+      const serializable = this.tabs.map(t => ({
+        name: t.name,
+        type: t.type,
+        initialQuery: t.queryState || t.initialQuery || '',
+        databaseName: t.databaseName || '',
+        connectionId: t.connectionId || '',
+        connectionName: t.connectionName || '',
+        profilerConnectionId: t.profilerConnectionId || '',
+        userRenamed: (t as any).userRenamed || false,
+      }));
+      localStorage.setItem('syndrdb-tabs', JSON.stringify(serializable));
+      localStorage.setItem('syndrdb-active-tab', String(this.activeTabIndex));
+    } catch {
+      // localStorage unavailable, ignore
+    }
+  }
+
+  /**
+   * Restore tabs from localStorage
+   */
+  private restoreTabs(): boolean {
+    try {
+      const stored = localStorage.getItem('syndrdb-tabs');
+      if (!stored) return false;
+      const parsed = JSON.parse(stored) as TabEntry[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return false;
+      this.tabs = parsed;
+      const activeStr = localStorage.getItem('syndrdb-active-tab');
+      if (activeStr !== null) {
+        const idx = parseInt(activeStr, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < this.tabs.length) {
+          this.activeTabIndex = idx;
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * After connections load on startup, remap stale tab connectionIds
+   * by matching the persisted connectionName to loaded connections.
+   */
+  private remapTabConnections(): void {
+    const connections = connectionManager.getConnections();
+    if (connections.length === 0) return;
+
+    let changed = false;
+    this.tabs = this.tabs.map(tab => {
+      if (!tab.connectionName && !tab.connectionId) return tab;
+
+      // Check if current connectionId is still valid
+      if (tab.connectionId) {
+        const existing = connectionManager.getConnection(tab.connectionId);
+        if (existing) {
+          // Backfill connectionName for pre-fix tabs
+          if (!tab.connectionName) {
+            changed = true;
+            return { ...tab, connectionName: existing.name };
+          }
+          return tab; // Still valid
+        }
+      }
+
+      // connectionId is stale — try to find the connection by persisted name
+      if (tab.connectionName) {
+        const match = connections.find(c => c.name === tab.connectionName);
+        if (match && match.id !== tab.connectionId) {
+          changed = true;
+          return { ...tab, connectionId: match.id };
+        }
+      }
+
+      return tab;
+    });
+
+    if (changed) {
+      this.persistTabs();
+    }
+  }
+
+  /**
+   * Handle a query editor changing its connection (e.g. user picked one from the dropdown)
+   */
+  private handleTabConnectionChanged(event: CustomEvent, editorIndex: number) {
+    const { connectionId, connectionName } = event.detail;
+    this.tabs = this.tabs.map((tab, i) =>
+      i === editorIndex ? { ...tab, connectionId, connectionName } : tab
+    );
+    this.persistTabs();
   }
 
   private get showAIPanel(): boolean {
@@ -249,13 +415,16 @@ export class MainPanel extends LitElement {
         <!-- Center: Tabs + query editor content -->
         <div class="flex-1 min-w-0 flex flex-col">
           <!-- Tab Headers -->
-          <div class="flex border-b border-base-300 bg-base-200 px-4 flex-shrink-0">
+          <div class="flex border-b border-db-border bg-surface-1 px-4 flex-shrink-0" role="tablist">
             ${this.tabs.map((tab, index) => html`
               <button
+                role="tab"
+                aria-selected=${this.activeTabIndex === index}
                 class="px-4 py-2 border-b-2 font-medium text-sm transition-colors duration-200 ${this.activeTabIndex === index
-                  ? 'border-primary text-primary bg-base-100'
-                  : 'border-transparent text-base-content hover:text-primary hover:bg-base-100'}"
+                  ? 'text-accent bg-surface-2 db-tab-active-gradient'
+                  : 'border-transparent text-base-content hover:text-accent-light hover:bg-surface-2'} ${this.closingTabIndex === index ? 'animate-tab-exit' : ''} ${this.newTabIndex === index ? 'animate-tab-enter' : ''}"
                 @click=${() => this.switchToTab(index)}
+                @dblclick=${() => this.handleTabDblClick(index)}
               >
                 ${tab.type === 'profiler'
                   ? html`<i class="fa-solid fa-gauge-high mr-1 text-xs"></i>`
@@ -263,14 +432,14 @@ export class MainPanel extends LitElement {
                   ? html`<i class="fa-solid fa-users mr-1 text-xs"></i>`
                   : html`<i class="fa-solid fa-code mr-1 text-xs"></i>`}
                 ${tab.name}
-                <span class="ml-2 text-accent-content hover:text-info"><a @click=${(e: Event) => { e.stopPropagation(); this.closeTab(index); }}><i class="fa-solid fa-xmark"></i></a></span>
+                <span class="ml-2 text-feedback-muted hover:text-feedback-error transition-colors"><a @click=${(e: Event) => { e.stopPropagation(); this.closeTab(index); }}><i class="fa-solid fa-xmark"></i></a></span>
               </button>
             `)}
           </div>
           <!-- Tab Content -->
           <div class="flex-1 overflow-hidden relative min-h-0">
             ${this.tabs.map((tab, index) => html`
-              <div class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'block z-10' : 'hidden'}">
+              <div role="tabpanel" class="h-full absolute inset-0 ${this.activeTabIndex === index ? 'block z-10' : 'hidden'} ${this.activeTabIndex === index && !this.tabTransitioning ? 'animate-slide-in-up' : ''}">
                 ${tab.type === 'profiler'
                   ? html`<server-profiler-tab
                            class="w-full h-full"
@@ -291,6 +460,7 @@ export class MainPanel extends LitElement {
                         .connectionId=${tab.connectionId || ''}
                         .isActive=${this.activeTabIndex === index}
                         @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}
+                        @tab-connection-changed=${(e: CustomEvent) => this.handleTabConnectionChanged(e, index)}
                       ></query-editor-frame>
                     `}
               </div>
@@ -300,8 +470,8 @@ export class MainPanel extends LitElement {
         <!-- Right: AI Assistant panel (Cursor/Copilot style) -->
         ${this.aiPanelOpen && this.showAIPanel
           ? html`
-              <div class="w-96 flex-shrink-0 border-l border-base-300 bg-base-200/50 flex flex-col overflow-hidden">
-                <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 bg-base-200 flex-shrink-0">
+              <div class="w-96 flex-shrink-0 border-l border-db-border bg-surface-1 flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between px-3 py-2 border-b border-db-border bg-surface-2 flex-shrink-0">
                   <span class="text-sm font-medium text-base-content">AI Assistant</span>
                   <button
                     type="button"

@@ -45,19 +45,21 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Databases Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${() => {
              onSetActiveConnection(connection.id);
              onToggleNode(databasesNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, databasesNodeId, 'Databases', 'databases', null)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('databases')}"></i>
         </span>
         <span>Databases</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(databaseCount)}
         </span>
       </div>
@@ -115,6 +117,8 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Individual Database Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${async () => {
              onSetActiveConnection(connection.id);
              // Set database context when clicking on a database
@@ -139,7 +143,7 @@ export class DatabaseNodeRenderer {
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, databaseNodeId, databaseName, 'database', databaseName)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('database')}"></i>
@@ -195,6 +199,8 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Bundles Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${async () => {
              onSetActiveConnection(connection.id);
              // Set database context when clicking on bundles node
@@ -210,13 +216,13 @@ export class DatabaseNodeRenderer {
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundlesNodeId, 'Bundles', 'bundles', storedBundles)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('bundles')}"></i>
         </span>
         <span>Bundles</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(bundleCount)}
         </span>
       </div>
@@ -264,9 +270,11 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Individual Bundle Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${async () => {
              onSetActiveConnection(connection.id);
-             
+
              // Set database context before bundle operations
              try {
                const { connectionManager } = await import('../../services/connection-manager');
@@ -286,11 +294,19 @@ export class DatabaseNodeRenderer {
                await onBundleClick(connection, bundleName, bundleNodeId);
              }
            }}
+           @dblclick=${(e: MouseEvent) => {
+             e.stopPropagation();
+             (e.currentTarget as HTMLElement).dispatchEvent(new CustomEvent('open-bundle-query', {
+               detail: { bundleName, databaseName, connectionId: connection.id },
+               bubbles: true,
+               composed: true
+             }));
+           }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, bundleNodeId, bundle.Name, 'bundle', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
-        <draggable-component class="mr-2 cursor-move" 
+        <draggable-component class="mr-2 cursor-move"
         .getDropDataHandler=${() => bundle.Name}
         .dragData=${bundle.Name}
         title="Drag to create a query">
@@ -369,6 +385,8 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Fields Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${async () => {
              onSetActiveConnection(connection.id);
              // Set database context before field operations
@@ -382,13 +400,13 @@ export class DatabaseNodeRenderer {
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, fieldsNodeId, 'Fields', 'fields', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('fields')}"></i>
         </span>
         <span>Fields</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(fieldCount)}
         </span>
       </div>
@@ -435,19 +453,21 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Relationships Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${() => {
              onSetActiveConnection(connection.id);
              onToggleNode(relationshipsNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, relationshipsNodeId, 'Relationships', 'relationships', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('relationships')}"></i>
         </span>
         <span>Relationships</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(relationshipCount)}
         </span>
       </div>
@@ -492,6 +512,8 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Indexes Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${async () => {
              onSetActiveConnection(connection.id);
              // Set database context before index operations
@@ -505,13 +527,13 @@ export class DatabaseNodeRenderer {
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, indexesNodeId, 'Indexes', 'indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('indexes')}"></i>
         </span>
         <span>Indexes</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(indexCount)}
         </span>
       </div>
@@ -571,19 +593,21 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- Hash Indexes Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${() => {
              onSetActiveConnection(connection.id);
              onToggleNode(hashIndexesNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, hashIndexesNodeId, 'Hash', 'hash-indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('hash-indexes')}"></i>
         </span>
         <span>Hash</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(hashIndexCount)}
         </span>
       </div>
@@ -631,19 +655,21 @@ export class DatabaseNodeRenderer {
     return html`
       <!-- B-Tree Indexes Container Node -->
       <div class="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-sm"
+           role="treeitem"
+           aria-expanded=${expanded}
            @click=${() => {
              onSetActiveConnection(connection.id);
              onToggleNode(btreeIndexesNodeId);
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, btreeIndexesNodeId, 'B-Tree', 'btree-indexes', bundle)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2">
           <i class="${getNodeIcon('btree-indexes')}"></i>
         </span>
         <span>B-Tree</span>
-        <span class="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+        <span class="ml-2 text-xs bg-surface-4 text-feedback-muted px-2 py-0.5 rounded-full">
           ${formatCountBadge(btreeIndexCount)}
         </span>
       </div>

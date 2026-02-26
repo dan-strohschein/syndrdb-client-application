@@ -460,8 +460,13 @@ const keywords = new Map<string, TokenType>([
     ['BUNDLE', TokenType.TOKEN_BUNDLE],
     ['BUNDLES', TokenType.TOKEN_BUNDLES],
     ['FIELD', TokenType.TOKEN_FIELD],
+    ['FIELDS', TokenType.TOKEN_FIELDS],
     ['INDEX', TokenType.TOKEN_INDEX],
-    
+    ['RELATIONSHIP', TokenType.TOKEN_RELATIONSHIP],
+    ['MODIFY', TokenType.TOKEN_MODIFY],
+    ['NAME', TokenType.TOKEN_NAME],
+    ['WITH', TokenType.TOKEN_WITH],
+
     // DML Keywords
     ['SELECT', TokenType.TOKEN_SELECT],
     ['ADD', TokenType.TOKEN_ADD],
@@ -473,19 +478,36 @@ const keywords = new Map<string, TokenType>([
     ['TO', TokenType.TOKEN_TO],
     ['IN', TokenType.TOKEN_IN],
     ['LIMIT', TokenType.TOKEN_LIMIT],
-    
+    ['JOIN', TokenType.TOKEN_JOIN],
+    ['DOCUMENT', TokenType.TOKEN_DOCUMENT],
+    ['DOCUMENTS', TokenType.TOKEN_DOCUMENTS],
+    ['ASC', TokenType.TOKEN_ASC],
+    ['DESC', TokenType.TOKEN_DESC],
+    ['ORDER', TokenType.TOKEN_ORDER],
+    ['GROUP', TokenType.TOKEN_GROUP],
+    ['BY', TokenType.TOKEN_BY],
+
     // DOL Keywords
     ['GRANT', TokenType.TOKEN_GRANT],
     ['REVOKE', TokenType.TOKEN_REVOKE],
     ['ON', TokenType.TOKEN_ON],
     ['FOR', TokenType.TOKEN_FOR],
-    
+    ['USER', TokenType.TOKEN_USER],
+    ['ROLE', TokenType.TOKEN_ROLE],
+    ['PASSWORD', TokenType.TOKEN_PASSWORD],
+    ['FORCE', TokenType.TOKEN_FORCE],
+
     // Migration Keywords
     ['MIGRATION', TokenType.TOKEN_MIGRATION],
+    ['MIGRATIONS', TokenType.TOKEN_MIGRATIONS],
     ['APPLY', TokenType.TOKEN_APPLY],
     ['VALIDATE', TokenType.TOKEN_VALIDATE],
     ['ROLLBACK', TokenType.TOKEN_ROLLBACK],
-    
+    ['START', TokenType.TOKEN_START],
+    ['COMMIT', TokenType.TOKEN_COMMIT],
+    ['DESCRIPTION', TokenType.TOKEN_DESCRIPTION],
+    ['VERSION', TokenType.TOKEN_VERSION],
+
     // Other Keywords
     ['USE', TokenType.TOKEN_USE],
     ['AS', TokenType.TOKEN_AS],
