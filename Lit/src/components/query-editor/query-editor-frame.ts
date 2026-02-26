@@ -13,6 +13,19 @@ import { DEFAULT_CONFIG } from '../../config/config-types';
 import { queryHistoryService } from '../../services/query-history-service';
 import '../json-tree-view/json-tree-view';
 
+interface StatementResult {
+  statementText: string;
+  result: QueryResult;
+  index: number; // 1-based
+}
+
+interface MultiStatementResult {
+  statements: StatementResult[];
+  totalExecutionTime: number;
+  totalDocumentCount: number;
+  allSucceeded: boolean;
+}
+
 @customElement('query-editor-frame')
 export class QueryEditorFrame extends LitElement {
  
@@ -67,7 +80,13 @@ export class QueryEditorFrame extends LitElement {
     private elapsedDisplay = '';
 
     @state()
-    private resultHistory: Array<{query: string, result: QueryResult, timestamp: number}> = [];
+    private multiResult: MultiStatementResult | null = null;
+
+    @state()
+    private activeStatementIndex: number = 0;
+
+    @state()
+    private resultHistory: Array<{query: string, result: QueryResult, multiResult: MultiStatementResult | null, timestamp: number}> = [];
 
     @state()
     private selectedHistoryIndex = -1;
@@ -127,6 +146,14 @@ export class QueryEditorFrame extends LitElement {
             const currentConn = connectionManager.getConnection(this._selectedConnectionId || '');
             if (!currentConn) {
                 this._selectedConnectionId = this.connectionId;
+            }
+        }
+
+        // Derive queryResult from multiResult when statement selection changes
+        if (changedProperties.has('multiResult') || changedProperties.has('activeStatementIndex')) {
+            if (this.multiResult && this.activeStatementIndex >= 0 &&
+                this.activeStatementIndex < this.multiResult.statements.length) {
+                this.queryResult = this.multiResult.statements[this.activeStatementIndex].result;
             }
         }
 
@@ -199,7 +226,7 @@ export class QueryEditorFrame extends LitElement {
 
     private pushResultHistory(query: string, result: QueryResult) {
         this.resultHistory = [
-            { query, result, timestamp: Date.now() },
+            { query, result, multiResult: this.multiResult, timestamp: Date.now() },
             ...this.resultHistory.slice(0, 9),
         ];
         this.selectedHistoryIndex = -1;
@@ -208,10 +235,30 @@ export class QueryEditorFrame extends LitElement {
     private selectHistoryEntry(index: number) {
         this.selectedHistoryIndex = index;
         if (index >= 0 && index < this.resultHistory.length) {
-            this.queryResult = this.resultHistory[index].result;
+            const entry = this.resultHistory[index];
+            this.multiResult = entry.multiResult;
+            this.activeStatementIndex = 0;
+            this.queryResult = entry.result;
             this.resultAnimating = true;
             setTimeout(() => { this.resultAnimating = false; }, 200);
         }
+    }
+
+    private selectStatementTab(index: number): void {
+        if (!this.multiResult) return;
+        if (index === -1) {
+            // Summary view — keep queryResult as-is, just change index
+            this.activeStatementIndex = -1;
+            this.resultAnimating = true;
+            setTimeout(() => { this.resultAnimating = false; }, 200);
+            return;
+        }
+        if (index >= 0 && index < this.multiResult.statements.length) {
+            this.activeStatementIndex = index;
+            this.queryResult = this.multiResult.statements[index].result;
+        }
+        this.resultAnimating = true;
+        setTimeout(() => { this.resultAnimating = false; }, 200);
     }
 
     private async copyResultToClipboard(doc: unknown) {
@@ -309,6 +356,8 @@ export class QueryEditorFrame extends LitElement {
         }
 
         this.executing = true;
+        this.multiResult = null;
+        this.activeStatementIndex = 0;
         this.dispatchEvent(new CustomEvent('query-executing', {
           detail: { executing: true },
           bubbles: true,
@@ -329,6 +378,19 @@ export class QueryEditorFrame extends LitElement {
             this.resultAnimating = true;
             setTimeout(() => { this.resultAnimating = false; }, 200);
 
+            // Use aggregate totals from multiResult when available
+            // Cast needed: TS control-flow doesn't track that the awaited methods above set multiResult
+            const mr = this.multiResult as MultiStatementResult | null;
+            const totalDocs = mr
+                ? mr.totalDocumentCount
+                : (this.queryResult?.documentCount || this.queryResult?.data?.length || 0);
+            const totalTime = mr
+                ? mr.totalExecutionTime
+                : (this.queryResult?.executionTime || 0);
+            const overallSuccess = mr
+                ? mr.allSucceeded
+                : (this.queryResult?.success ?? false);
+
             // Push to result history (local + persistent)
             if (this.queryResult) {
                 this.pushResultHistory(this.query, this.queryResult);
@@ -336,9 +398,9 @@ export class QueryEditorFrame extends LitElement {
                     this.query,
                     this.connectionId || null,
                     this.databaseName || null,
-                    this.queryResult.success ?? false,
-                    this.queryResult.documentCount || this.queryResult.data?.length || 0,
-                    this.queryResult.executionTime || 0,
+                    overallSuccess,
+                    totalDocs,
+                    totalTime,
                 );
             }
 
@@ -346,9 +408,9 @@ export class QueryEditorFrame extends LitElement {
             if (this.queryResult) {
                 this.dispatchEvent(new CustomEvent('query-executed', {
                     detail: {
-                        executionTime: this.queryResult.executionTime || 0,
-                        ResultCount: this.queryResult.ResultCount || 0,
-                        success: this.queryResult.success
+                        executionTime: totalTime,
+                        ResultCount: totalDocs,
+                        success: overallSuccess
                     },
                     bubbles: true
                 }));
@@ -356,11 +418,14 @@ export class QueryEditorFrame extends LitElement {
         } catch (error) {
             this.stopElapsedTimer();
             console.error('Query execution failed:', error);
-            this.queryResult = {
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                executionTime: 0
-            };
+            // If multiResult is already populated (mid-execution failure), don't overwrite
+            if (!this.multiResult) {
+                this.queryResult = {
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    executionTime: 0
+                };
+            }
         }
 
         this.executing = false;
@@ -372,6 +437,7 @@ export class QueryEditorFrame extends LitElement {
 
     /**
      * Execute a SyndrQL query — validate, parse statements, execute sequentially.
+     * Builds a MultiStatementResult so each statement's results are individually accessible.
      */
     private async executeSyndrQLQuery(): Promise<void> {
         await this.languageService.initialize();
@@ -391,50 +457,60 @@ export class QueryEditorFrame extends LitElement {
 
         console.log(`Found ${statements.length} statement(s) to execute:`, statements.map((s: ParsedStatement) => s.text));
 
-        let finalResult: QueryResult | null = null;
-        const allResults: QueryResult[] = [];
+        const statementResults: StatementResult[] = [];
+        let failedIndex = -1;
 
         for (let i = 0; i < statements.length; i++) {
-            const statement = statements[i].text;
-            console.log(`Executing statement ${i + 1}/${statements.length}:`, statement);
+            const statementText = statements[i].text;
+            console.log(`Executing statement ${i + 1}/${statements.length}:`, statementText);
 
             let result: QueryResult;
 
             if (this.connectionId && this.databaseName) {
                 await connectionManager.setDatabaseContext(this.connectionId, this.databaseName);
-                result = await connectionManager.executeQueryWithContext(this.connectionId, statement);
+                result = await connectionManager.executeQueryWithContext(this.connectionId, statementText);
             } else if (this.connectionId) {
-                result = await connectionManager.executeQueryOnConnectionId(this.connectionId, statement);
+                result = await connectionManager.executeQueryOnConnectionId(this.connectionId, statementText);
             } else {
-                result = await connectionManager.executeQuery(statement);
+                result = await connectionManager.executeQuery(statementText);
             }
 
-            allResults.push(result);
-            finalResult = result;
+            statementResults.push({
+                statementText,
+                result,
+                index: i + 1,
+            });
 
             if (!result.success) {
-                throw new Error(`Statement ${i + 1} failed: ${result.error}`);
+                console.warn(`Statement ${i + 1} failed: ${result.error}`);
+                failedIndex = i;
+                break;
             }
 
             console.log(`Statement ${i + 1} completed successfully`);
         }
 
-        if (statements.length > 1) {
-            const totalExecutionTime = allResults.reduce((sum, r) => sum + (r.executionTime || 0), 0);
-            const totalDocumentCount = allResults.reduce((sum, r) => sum + (r.documentCount || 0), 0);
+        const totalExecutionTime = statementResults.reduce((sum, s) => sum + (s.result.executionTime || 0), 0);
+        const totalDocumentCount = statementResults.reduce((sum, s) => sum + (s.result.documentCount || 0), 0);
 
-            this.queryResult = {
-                success: true,
-                data: finalResult?.data,
-                executionTime: totalExecutionTime,
-                documentCount: totalDocumentCount,
-                ResultCount: finalResult?.ResultCount
-            };
-        } else {
-            this.queryResult = finalResult;
+        this.multiResult = {
+            statements: statementResults,
+            totalExecutionTime,
+            totalDocumentCount,
+            allSucceeded: failedIndex === -1,
+        };
+
+        // Jump to the failed statement if any, otherwise first statement
+        this.activeStatementIndex = failedIndex >= 0 ? failedIndex : 0;
+        // queryResult is derived via willUpdate
+
+        if (failedIndex >= 0) {
+            // Don't throw — partial results are preserved and accessible via tabs.
+            // Set queryResult directly for the catch block to see the error.
+            this.queryResult = statementResults[failedIndex].result;
         }
 
-        console.log('All statements executed successfully');
+        console.log(`Executed ${statementResults.length}/${statements.length} statements${failedIndex >= 0 ? ` (failed at #${failedIndex + 1})` : ' successfully'}`);
     }
 
     /**
@@ -476,6 +552,20 @@ export class QueryEditorFrame extends LitElement {
         }
 
         this.queryResult = result;
+
+        // Wrap in multiResult for uniform template logic
+        this.multiResult = {
+            statements: [{
+                statementText: this.query,
+                result,
+                index: 1,
+            }],
+            totalExecutionTime: result.executionTime || 0,
+            totalDocumentCount: result.documentCount || result.data?.length || 0,
+            allSucceeded: result.success ?? true,
+        };
+        this.activeStatementIndex = 0;
+
         console.log('GraphQL query executed successfully');
     }        private async saveQuery() {
         // TODO: Implement query saving functionality
@@ -716,8 +806,13 @@ export class QueryEditorFrame extends LitElement {
                       'Error'
                     }
                   </span>
+                  ${this.multiResult && this.multiResult.statements.length > 1 ? html`
+                    <span class="badge badge-outline badge-sm">
+                      ${this.multiResult.statements.length} stmts / ${this.multiResult.totalDocumentCount} total docs
+                    </span>
+                  ` : ''}
                   ${this.queryResult.executionTime ? html`
-                    <span class="text-xs text-base-content/70">Execution time: ${this.queryResult.executionTime}ms</span>
+                    <span class="text-xs text-base-content/70">Execution time: ${this.multiResult ? this.multiResult.totalExecutionTime : this.queryResult.executionTime}ms</span>
                   ` : ''}
                 ` : html`
                   <span class="text-xs text-base-content/70">No query executed</span>
@@ -725,54 +820,141 @@ export class QueryEditorFrame extends LitElement {
               </div>
             </div>
 
-            <div class="flex-1 flex flex-col min-h-0 rounded border border-base-300 bg-base-100 overflow-hidden ${this.resultAnimating ? 'db-results-enter' : ''}">
+            <!-- 7a. Statement tabs bar — only shown for multi-statement results -->
+            ${this.multiResult && this.multiResult.statements.length > 1 ? html`
+              <div class="flex items-center gap-1 px-2 py-1.5 bg-surface-1 border border-base-300 rounded-t overflow-x-auto flex-shrink-0">
+                <button
+                  class="badge badge-sm cursor-pointer whitespace-nowrap transition-colors ${this.activeStatementIndex === -1 ? 'badge-accent' : 'badge-outline hover:badge-accent'}"
+                  @click=${() => this.selectStatementTab(-1)}
+                  title="View summary of all statements"
+                >
+                  <i class="fa-solid fa-list-check mr-1"></i> Summary
+                </button>
+                ${this.multiResult.statements.map((stmt, i) => html`
+                  <button
+                    class="badge badge-sm cursor-pointer whitespace-nowrap transition-colors ${this.activeStatementIndex === i ? 'badge-accent' : stmt.result.success ? 'badge-outline hover:badge-accent' : 'badge-error'}"
+                    @click=${() => this.selectStatementTab(i)}
+                    title="${stmt.statementText}"
+                  >
+                    <i class="fa-solid ${stmt.result.success ? 'fa-check' : 'fa-xmark'} mr-1"></i>
+                    Stmt ${stmt.index}
+                    <span class="ml-1 opacity-70">(${stmt.result.documentCount || stmt.result.data?.length || 0})</span>
+                  </button>
+                `)}
+              </div>
+            ` : ''}
+
+            <div class="flex-1 flex flex-col min-h-0 rounded ${this.multiResult && this.multiResult.statements.length > 1 ? 'rounded-t-none' : ''} border border-base-300 bg-base-100 overflow-hidden ${this.resultAnimating ? 'db-results-enter' : ''}">
               <div class="flex-1 p-4 overflow-auto min-h-0 min-w-0">
-                ${this.queryResult ? html`
-                  ${this.queryResult.success ? html`
-                    ${this.resultsTab === 'text' ? html`
-                      ${Array.isArray(this.queryResult.data) ? html`
-                        ${this.queryResult.data.map((doc: unknown) => html`
-                          <div class="group relative hover:bg-surface-3 rounded p-2 mb-1 transition-colors">
-                            <button
-                              class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-feedback-muted hover:text-white p-1"
-                              title="Copy document"
-                              @click=${() => this.copyResultToClipboard(doc)}
-                            >
-                              <i class="fa-solid fa-copy"></i>
-                            </button>
-                            <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(doc, null, 2)}</code></pre>
-                          </div>
+                ${this.multiResult && this.activeStatementIndex === -1 ? html`
+                  <!-- 7b. Summary view -->
+                  <div class="space-y-1">
+                    <table class="table table-xs w-full">
+                      <thead>
+                        <tr class="text-xs text-base-content/70">
+                          <th class="w-12">#</th>
+                          <th>Statement</th>
+                          <th class="w-20 text-center">Status</th>
+                          <th class="w-20 text-right">Docs</th>
+                          <th class="w-24 text-right">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${this.multiResult.statements.map((stmt, i) => html`
+                          <tr class="hover:bg-surface-3 cursor-pointer transition-colors" @click=${() => this.selectStatementTab(i)}>
+                            <td class="font-mono text-xs">${stmt.index}</td>
+                            <td class="font-mono text-xs truncate max-w-[300px]" title="${stmt.statementText}">${stmt.statementText.length > 60 ? stmt.statementText.substring(0, 60) + '...' : stmt.statementText}</td>
+                            <td class="text-center">
+                              <span class="badge badge-xs ${stmt.result.success ? 'badge-success' : 'badge-error'}">
+                                ${stmt.result.success ? 'OK' : 'Error'}
+                              </span>
+                            </td>
+                            <td class="text-right text-xs font-mono">${stmt.result.documentCount || stmt.result.data?.length || 0}</td>
+                            <td class="text-right text-xs font-mono">${stmt.result.executionTime || 0}ms</td>
+                          </tr>
                         `)}
-                      ` : html`
-                        <div class="group relative hover:bg-surface-3 rounded p-2 transition-colors">
-                          <button
-                            class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-feedback-muted hover:text-white p-1"
-                            title="Copy result"
-                            @click=${() => this.copyResultToClipboard(this.queryResult?.data)}
-                          >
-                            <i class="fa-solid fa-copy"></i>
-                          </button>
-                          <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(this.queryResult.data, null, 2)}</code></pre>
+                      </tbody>
+                      <tfoot>
+                        <tr class="font-semibold border-t border-base-300">
+                          <td></td>
+                          <td class="text-xs">Total (${this.multiResult.statements.length} statements)</td>
+                          <td class="text-center">
+                            <span class="badge badge-xs ${this.multiResult.allSucceeded ? 'badge-success' : 'badge-warning'}">
+                              ${this.multiResult.allSucceeded ? 'All OK' : 'Partial'}
+                            </span>
+                          </td>
+                          <td class="text-right text-xs font-mono">${this.multiResult.totalDocumentCount}</td>
+                          <td class="text-right text-xs font-mono">${this.multiResult.totalExecutionTime}ms</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ` : html`
+                  <!-- 7c. Statement text preview — shown when viewing a specific statement in multi-mode -->
+                  ${this.multiResult && this.multiResult.statements.length > 1 && this.activeStatementIndex >= 0 ? html`
+                    <div class="font-mono text-xs text-base-content/60 bg-surface-2 rounded px-2 py-1 mb-3 truncate" title="${this.multiResult.statements[this.activeStatementIndex]?.statementText}">
+                      ${this.multiResult.statements[this.activeStatementIndex]?.statementText}
+                    </div>
+                  ` : ''}
+
+                  ${this.queryResult ? html`
+                    ${this.queryResult.success ? html`
+                      <!-- 7d. DDL success state — no data means DDL/admin statement -->
+                      ${!this.queryResult.data || (Array.isArray(this.queryResult.data) && this.queryResult.data.length === 0) ? html`
+                        <div class="text-center text-success py-8">
+                          <div class="text-4xl mb-2"><i class="fa-solid fa-circle-check"></i></div>
+                          <div class="font-semibold">Statement executed successfully</div>
+                          ${this.queryResult.executionTime ? html`
+                            <div class="text-sm text-base-content/50 mt-1">${this.queryResult.executionTime}ms</div>
+                          ` : ''}
                         </div>
+                      ` : html`
+                        ${this.resultsTab === 'text' ? html`
+                          ${Array.isArray(this.queryResult.data) ? html`
+                            ${this.queryResult.data.map((doc: unknown) => html`
+                              <div class="group relative hover:bg-surface-3 rounded p-2 mb-1 transition-colors">
+                                <button
+                                  class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-feedback-muted hover:text-white p-1"
+                                  title="Copy document"
+                                  @click=${() => this.copyResultToClipboard(doc)}
+                                >
+                                  <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(doc, null, 2)}</code></pre>
+                              </div>
+                            `)}
+                          ` : html`
+                            <div class="group relative hover:bg-surface-3 rounded p-2 transition-colors">
+                              <button
+                                class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-feedback-muted hover:text-white p-1"
+                                title="Copy result"
+                                @click=${() => this.copyResultToClipboard(this.queryResult?.data)}
+                              >
+                                <i class="fa-solid fa-copy"></i>
+                              </button>
+                              <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(this.queryResult.data, null, 2)}</code></pre>
+                            </div>
+                          `}
+                        ` : html`
+                          <json-tree-view
+                            .data=${this.queryResult.data}
+                            default-expanded-depth="1"
+                          ></json-tree-view>
+                        `}
                       `}
                     ` : html`
-                      <json-tree-view
-                        .data=${this.queryResult.data}
-                        default-expanded-depth="1"
-                      ></json-tree-view>
+                      <div class="text-error">
+                        <div class="font-semibold mb-2">Query Error:</div>
+                        <div class="text-sm">${this.queryResult.error}</div>
+                      </div>
                     `}
                   ` : html`
-                    <div class="text-error">
-                      <div class="font-semibold mb-2">Query Error:</div>
-                      <div class="text-sm">${this.queryResult.error}</div>
+                    <div class="text-center text-base-content/50 py-8">
+                      <div class="text-4xl mb-2"><i class="fa-solid fa-table-list"></i></div>
+                      <div>Query results will appear here</div>
+                      <div class="text-sm mt-1">Execute a query to see results</div>
                     </div>
                   `}
-                ` : html`
-                  <div class="text-center text-base-content/50 py-8">
-                    <div class="text-4xl mb-2"><i class="fa-solid fa-table-list"></i></div>
-                    <div>Query results will appear here</div>
-                    <div class="text-sm mt-1">Execute a query to see results</div>
-                  </div>
                 `}
               </div>
               <div class="flex border-t border-base-300 bg-base-200/50 flex-shrink-0">

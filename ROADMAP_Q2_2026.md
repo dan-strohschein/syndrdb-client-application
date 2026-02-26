@@ -31,7 +31,7 @@ This analysis compares the SyndrDB client application against SQL Server Managem
 | C1 | ~~**Find and Replace** (Ctrl+F / Ctrl+H)~~ | Find and Replace dialog | **DONE** (2026-02-26) | Users cannot search within queries. Blocks anyone writing multi-statement scripts |
 | C2 | **Comment/Uncomment Toggle** (Ctrl+/) | Block Comment/Uncomment | Tokenizer recognizes comments but no toggle command exists | Core debugging workflow — commenting out statements is muscle memory |
 | C3 | **Results Grid View** with column sorting | Results to Grid | Results display as raw JSON `<pre>` or JSON tree view only | Data browsing is impractical without tabular display. Every competitor has this |
-| C4 | **Multi-statement result sets** | Separate result panes per statement | `executeSyndrQLQuery()` runs all statements but only keeps the final result | Forces users to execute one statement at a time — extremely frustrating |
+| C4 | ~~**Multi-statement result sets**~~ | Separate result panes per statement | **DONE** (2026-02-26) | Forces users to execute one statement at a time — extremely frustrating |
 | C5 | **Go to Line** (Ctrl+G) | Go to Line Number | Not implemented | When errors reference line numbers, users can't navigate to them |
 
 ### HIGH — Significantly Impacts Daily Productivity
@@ -127,7 +127,7 @@ Core editor and results features that block serious adoption.
 | 1.2 | ~~Comment/Uncomment toggle (Ctrl+/)~~ | Small | **DONE** (2026-02-26) |
 | 1.3 | ~~Go to Line (Ctrl+G)~~ | Small | **DONE** (2026-02-26) |
 | 1.4 | Results Grid View with sortable columns | Large | `query-editor-frame.ts`, new `results-grid.ts` |
-| 1.5 | Multi-statement result sets | Medium | `query-editor-frame.ts` — refactor to store all results, not just final |
+| 1.5 | ~~Multi-statement result sets~~ | Medium | **DONE** (2026-02-26) — `query-editor-frame.ts` statement tabs with summary view |
 | 1.6 | Resizable editor/results splitter | Medium | `query-editor-frame.ts` — add drag splitter |
 | 1.7 | ~~"Script As" from context menu~~ | Medium | **DONE** (2026-02-26) |
 | 1.8 | ~~Copy results with headers~~ | Small | **DONE** (2026-02-26) |
