@@ -42,6 +42,7 @@ import { ScrollController } from './scroll-controller.js';
 import { ErrorPopoverController } from './error-popover-controller.js';
 import { SuggestionController } from './suggestion-controller.js';
 import { StatementValidationController } from './statement-validation-controller.js';
+import { FindReplaceController } from './find-replace-controller.js';
 import { Position, FontMetrics, KeyCommand, EditorTheme, ScrollOffset, Coordinates, MouseEventData, CharacterPosition } from './types.js';
 import { LanguageServiceV2, type SyntaxTheme, DEFAULT_SYNDRQL_THEME } from './syndrQL-language-serviceV2/index.js';
 import type { ILanguageService, ILanguageServiceError } from './language-service-interface.js';
@@ -117,6 +118,19 @@ export class CodeEditor extends LitElement {
   
   // Statement cache and validation — delegated to StatementValidationController
   private statementValidationController!: StatementValidationController;
+
+  // Find and Replace — delegated to FindReplaceController
+  private findReplaceController!: FindReplaceController;
+
+  // Find/Replace overlay reactive state
+  @state() private showFindReplace: boolean = false;
+  @state() private showReplaceField: boolean = false;
+  @state() private findSearchTerm: string = '';
+  @state() private findReplaceTerm: string = '';
+  @state() private findMatchCount: number = 0;
+  @state() private findCurrentMatch: number = -1;
+  @state() private findCaseSensitive: boolean = false;
+  @state() private findIsRegex: boolean = false;
   
   // Cursor blinking state
   private cursorVisible: boolean = true;
@@ -299,6 +313,42 @@ export class CodeEditor extends LitElement {
         onApplySuggestion: (suggestion) => this.applySuggestion(suggestion),
       });
       
+      // Find and Replace — owned by FindReplaceController
+      this.findReplaceController = new FindReplaceController({
+        getDocumentLines: () => this.documentModel.getLines(),
+        getCursorPosition: () => this.documentModel.getCursorPosition(),
+        getSelectedText: () => this.documentModel.getSelectedText(),
+        hasSelection: () => this.documentModel.hasSelection(),
+        replaceTextRange: (startLine, startCol, endLine, endCol, newText) => {
+          this.documentModel.deleteText(
+            { line: startLine, column: startCol },
+            { line: endLine, column: endCol },
+          );
+          this.documentModel.insertText(
+            { line: startLine, column: startCol },
+            newText,
+          );
+          this.statementValidationController?.updateStatementCache();
+          this.statementValidationController?.markCurrentStatementDirty();
+          this.updateLineCount();
+        },
+        setCursorPosition: (line, column) => {
+          this.documentModel.setCursorPosition({ line, column });
+        },
+        setSelection: (start, end) => {
+          this.documentModel.setSelection(start, end);
+        },
+        scrollToLine: (line) => {
+          this.documentModel.setCursorPosition({ line, column: 0 });
+          this.ensureCursorVisible();
+        },
+        requestUpdate: () => {
+          this.syncFindReplaceState();
+          this.renderEditor();
+          this.requestUpdate();
+        },
+      });
+
       // Connect coordinate system to input processor
       this.inputProcessor.setCoordinateSystem(this.coordinateSystem);
       
@@ -545,23 +595,26 @@ export class CodeEditor extends LitElement {
     // Handle text input
     this.inputCapture.onTextInput((text: string) => {
       // console.log('Text input received:', JSON.stringify(text));
-      
+
       // Process text input using InputProcessor
       this.inputProcessor.processTextInput(text, this.documentModel);
-      
+
       // Update statement cache and mark current statement as dirty
     this.statementValidationController.updateStatementCache();
     this.statementValidationController.markCurrentStatementDirty();
-      
+
       // Update line count for line-numbers component
       this.updateLineCount();
-      
+
       // Trigger autocomplete suggestions (debounced)
       this.suggestionController.scheduleUpdate();
-      
+
+      // Notify find/replace of document changes
+      this.findReplaceController?.documentChanged();
+
       // Ensure cursor remains visible
       this.ensureCursorVisible();
-      
+
       // Reset cursor blinking and re-render
       this.resetCursorBlinking();
       this.renderEditor();
@@ -595,6 +648,7 @@ export class CodeEditor extends LitElement {
     this.statementValidationController.updateStatementCache();
     this.statementValidationController.markCurrentStatementDirty();
         this.updateLineCount();
+        this.findReplaceController?.documentChanged();
       }
       
       // Ensure cursor remains visible after navigation
@@ -887,6 +941,18 @@ export class CodeEditor extends LitElement {
         // Go to Line
         this.handleGoToLine();
         return true;
+
+      case 'f':
+      case 'F':
+        // Find (Ctrl/Cmd+F)
+        this.openFindReplace(false);
+        return true;
+
+      case 'h':
+      case 'H':
+        // Find and Replace (Ctrl/Cmd+H)
+        this.openFindReplace(true);
+        return true;
     }
 
     switch (command.key.toLowerCase()) {
@@ -997,6 +1063,41 @@ export class CodeEditor extends LitElement {
     this.showGoToLineDialog = false;
     this.requestUpdate();
     this.inputCapture?.focus();
+  }
+
+  // -----------------------------------------------------------------------
+  // Find and Replace
+  // -----------------------------------------------------------------------
+
+  private openFindReplace(showReplace: boolean): void {
+    this.findReplaceController.open(showReplace);
+    this.syncFindReplaceState();
+    this.requestUpdate();
+    this.updateComplete.then(() => {
+      const input = this.querySelector('#find-search-input') as HTMLInputElement;
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  private closeFindReplace(): void {
+    this.findReplaceController.close();
+    this.syncFindReplaceState();
+    this.renderEditor();
+    this.requestUpdate();
+    this.inputCapture?.focus();
+  }
+
+  /** Pull controller state into reactive Lit state for the overlay template. */
+  private syncFindReplaceState(): void {
+    this.showFindReplace = this.findReplaceController.isOpen();
+    this.showReplaceField = this.findReplaceController.showReplace;
+    this.findSearchTerm = this.findReplaceController.searchTerm;
+    this.findReplaceTerm = this.findReplaceController.replaceTerm;
+    this.findMatchCount = this.findReplaceController.getMatchCount();
+    this.findCurrentMatch = this.findReplaceController.getCurrentMatchIndex();
+    this.findCaseSensitive = this.findReplaceController.caseSensitive;
+    this.findIsRegex = this.findReplaceController.isRegex;
   }
 
   /**
@@ -1218,6 +1319,21 @@ export class CodeEditor extends LitElement {
         if (lineIndex === cursorLine) {
           this.context.fillStyle = 'rgba(255, 255, 255, 0.04)';
           this.context.fillRect(0, y, this.canvas.width, fontMetrics.lineHeight);
+        }
+
+        // Draw find/replace match highlights on this line
+        if (this.findReplaceController?.isOpen()) {
+          const lineMatches = this.findReplaceController.getMatchesForLine(lineIndex);
+          const scrollX = scrollOffset.x;
+          for (const match of lineMatches) {
+            const matchX = (match.startColumn * fontMetrics.characterWidth) - scrollX;
+            const matchWidth = (match.endColumn - match.startColumn) * fontMetrics.characterWidth;
+            const isCurrent = this.findReplaceController.isCurrentMatch(match);
+            this.context.fillStyle = isCurrent
+              ? 'rgba(255, 200, 50, 0.45)'
+              : 'rgba(255, 200, 50, 0.2)';
+            this.context.fillRect(matchX, y, matchWidth, fontMetrics.lineHeight);
+          }
         }
 
         this.renderLine(line, lineIndex, y, fontMetrics);
@@ -1762,7 +1878,11 @@ export class CodeEditor extends LitElement {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
-    
+
+    if (this.findReplaceController) {
+      this.findReplaceController.dispose();
+    }
+
     // Dispose language service only if we created it
     if (this.languageService && this.ownsLanguageService) {
       this.languageService.dispose();
@@ -1944,6 +2064,90 @@ export class CodeEditor extends LitElement {
               <button class="btn btn-sm btn-ghost" @click=${() => this.dismissGoToLine()}>
                 <i class="fa-solid fa-xmark"></i>
               </button>
+            </div>
+          ` : ''}
+
+          <!-- Find and Replace overlay -->
+          ${this.showFindReplace ? html`
+            <div class="absolute top-2 right-2 z-50 bg-surface-3 border border-db-border rounded-lg shadow-elevation-3 p-3 flex flex-col gap-2 min-w-[340px]"
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeFindReplace(); }
+                e.stopPropagation();
+              }}
+            >
+              <!-- Find row -->
+              <div class="flex items-center gap-1.5">
+                <input
+                  id="find-search-input"
+                  type="text"
+                  class="input input-sm input-bordered flex-1 text-sm bg-surface-2 min-w-0"
+                  placeholder="Find"
+                  .value=${this.findSearchTerm}
+                  @input=${(e: Event) => {
+                    this.findReplaceController.setSearchTerm((e.target as HTMLInputElement).value);
+                  }}
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); this.findReplaceController.previousMatch(); this.syncFindReplaceState(); this.renderEditor(); }
+                    else if (e.key === 'Enter') { e.preventDefault(); this.findReplaceController.nextMatch(); this.syncFindReplaceState(); this.renderEditor(); }
+                  }}
+                />
+                <button
+                  class="btn btn-xs ${this.findCaseSensitive ? 'btn-primary' : 'btn-ghost'} font-mono"
+                  title="Match Case"
+                  @click=${() => { this.findReplaceController.toggleCaseSensitive(); this.syncFindReplaceState(); this.renderEditor(); }}
+                >Aa</button>
+                <button
+                  class="btn btn-xs ${this.findIsRegex ? 'btn-primary' : 'btn-ghost'} font-mono"
+                  title="Use Regular Expression"
+                  @click=${() => { this.findReplaceController.toggleRegex(); this.syncFindReplaceState(); this.renderEditor(); }}
+                >.*</button>
+                <button class="btn btn-xs btn-ghost" title="Previous Match (Shift+Enter)"
+                  @click=${() => { this.findReplaceController.previousMatch(); this.syncFindReplaceState(); this.renderEditor(); }}
+                ><i class="fa-solid fa-chevron-up"></i></button>
+                <button class="btn btn-xs btn-ghost" title="Next Match (Enter)"
+                  @click=${() => { this.findReplaceController.nextMatch(); this.syncFindReplaceState(); this.renderEditor(); }}
+                ><i class="fa-solid fa-chevron-down"></i></button>
+                <span class="text-xs text-base-content/60 whitespace-nowrap min-w-[60px] text-right">
+                  ${this.findMatchCount > 0
+                    ? `${this.findCurrentMatch + 1} of ${this.findMatchCount}`
+                    : this.findSearchTerm ? 'No results' : ''}
+                </span>
+                <button class="btn btn-xs btn-ghost" title="Close (Escape)"
+                  @click=${() => this.closeFindReplace()}
+                ><i class="fa-solid fa-xmark"></i></button>
+              </div>
+
+              <!-- Toggle replace row expand -->
+              <div class="flex items-center gap-1.5">
+                <button
+                  class="btn btn-xs btn-ghost"
+                  title="${this.showReplaceField ? 'Hide Replace' : 'Show Replace'}"
+                  @click=${() => { this.findReplaceController.toggleReplace(); this.syncFindReplaceState(); }}
+                ><i class="fa-solid fa-chevron-${this.showReplaceField ? 'up' : 'down'} text-[10px]"></i></button>
+
+                ${this.showReplaceField ? html`
+                  <input
+                    id="find-replace-input"
+                    type="text"
+                    class="input input-sm input-bordered flex-1 text-sm bg-surface-2 min-w-0"
+                    placeholder="Replace"
+                    .value=${this.findReplaceTerm}
+                    @input=${(e: Event) => {
+                      this.findReplaceController.setReplaceTerm((e.target as HTMLInputElement).value);
+                      this.findReplaceTerm = (e.target as HTMLInputElement).value;
+                    }}
+                    @keydown=${(e: KeyboardEvent) => {
+                      if (e.key === 'Enter') { e.preventDefault(); this.findReplaceController.replaceCurrent(); this.syncFindReplaceState(); this.renderEditor(); }
+                    }}
+                  />
+                  <button class="btn btn-xs btn-ghost" title="Replace"
+                    @click=${() => { this.findReplaceController.replaceCurrent(); this.syncFindReplaceState(); this.renderEditor(); }}
+                  ><i class="fa-solid fa-right-left"></i></button>
+                  <button class="btn btn-xs btn-ghost" title="Replace All"
+                    @click=${() => { this.findReplaceController.replaceAll(); this.syncFindReplaceState(); this.renderEditor(); }}
+                  ><i class="fa-solid fa-list-check"></i></button>
+                ` : ''}
+              </div>
             </div>
           ` : ''}
 

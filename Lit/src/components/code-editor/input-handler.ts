@@ -210,7 +210,7 @@ export class InputCapture implements IInputCapture {
     }
     
     // Define keys that we handle when combined with modifiers
-    const modifierKeys = ['c', 'v', 'x', 'a', 'z', 'y', '/', 'g']; // clipboard + select all + undo/redo + comment toggle + go to line
+    const modifierKeys = ['c', 'v', 'x', 'a', 'z', 'y', '/', 'g', 'f', 'h']; // clipboard + select all + undo/redo + comment toggle + go to line + find/replace
 
     // Also handle Ctrl+Arrow for word navigation, Ctrl+Home/End for document navigation
     const modifierNavKeys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
