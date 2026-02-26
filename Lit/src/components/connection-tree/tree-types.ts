@@ -74,4 +74,7 @@ export const CONTEXT_MENU_ACTIONS = {
   DELETE_BUNDLE: 'delete-bundle',
   BACKUP_DATABASE: 'backup-database',
   RESTORE_DATABASE: 'restore-database',
+  SCRIPT_AS_CREATE: 'script-as-create',
+  SCRIPT_AS_DROP: 'script-as-drop',
+  REFRESH_NODE: 'refresh-node',
 } as const;

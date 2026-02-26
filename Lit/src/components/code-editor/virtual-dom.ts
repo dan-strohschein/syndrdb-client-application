@@ -7,6 +7,21 @@
 import { DocumentModel, Position, Selection } from './types.js';
 
 /**
+ * Represents a single undoable change to the document.
+ */
+interface DocumentChange {
+  type: 'insert' | 'delete';
+  /** Position where the change occurred */
+  position: Position;
+  /** The text that was inserted or deleted */
+  text: string;
+  /** Cursor position before the change */
+  cursorBefore: Position;
+  /** Cursor position after the change */
+  cursorAfter: Position;
+}
+
+/**
  * Interface for document operations.
  * Separates document state from rendering concerns.
  */
@@ -15,24 +30,24 @@ export interface IDocumentModel {
   getLines(): readonly string[];
   getLine(lineNumber: number): string;
   getLineCount(): number;
-  
+
   // Text modification
   insertText(position: Position, text: string): void;
   deleteText(start: Position, end: Position): void;
-  
+
   // Cursor management
   getCursorPosition(): Position;
   setCursorPosition(position: Position): void;
-  
+
   // Selection management (future)
   getSelections(): readonly Selection[];
   setSelections(selections: Selection[]): void;
-  
-  // TODO: Phase 2 - Add undo/redo support
-  // undo(): void;
-  // redo(): void;
-  // canUndo(): boolean;
-  // canRedo(): boolean;
+
+  // Undo/redo support
+  undo(): boolean;
+  redo(): boolean;
+  canUndo(): boolean;
+  canRedo(): boolean;
 }
 
 /**
@@ -41,11 +56,16 @@ export interface IDocumentModel {
  */
 export class VirtualDocumentModel implements IDocumentModel {
   private document: DocumentModel;
-  
-  // TODO: Phase 2 - Add change tracking for undo/redo
-  // private changeHistory: DocumentChange[];
-  // private historyIndex: number;
-  
+
+  /** Undo/redo change history stack */
+  private changeHistory: DocumentChange[] = [];
+  /** Current position in the history (points past the last applied change) */
+  private historyIndex: number = 0;
+  /** Maximum number of undo steps to keep */
+  private static readonly MAX_HISTORY = 500;
+  /** Flag to suppress recording during undo/redo replay */
+  private isReplaying = false;
+
   constructor(initialContent: string = '') {
     this.document = {
       lines: initialContent ? initialContent.split('\n') : [''],
@@ -76,7 +96,9 @@ export class VirtualDocumentModel implements IDocumentModel {
    */
   insertText(position: Position, text: string): void {
    // console.log('VirtualDocumentModel.insertText called with:', { position, text, currentLineCount: this.document.lines.length });
-    
+
+    const cursorBefore = { ...this.document.cursorPosition };
+
     // Ensure the target line exists by creating empty lines if needed
     this.ensureLineExists(position.line);
     
@@ -119,9 +141,17 @@ export class VirtualDocumentModel implements IDocumentModel {
     }
     
    // console.log('After text insertion:', { finalLineCount: this.document.lines.length, cursorPosition: this.document.cursorPosition });
-    
-    // TODO: Phase 2 - Add change tracking for undo/redo
-    // this.recordChange('insert', position, text);
+
+    // Record change for undo/redo
+    if (!this.isReplaying) {
+      this.recordChange({
+        type: 'insert',
+        position: { ...position },
+        text,
+        cursorBefore: cursorBefore,
+        cursorAfter: { ...this.document.cursorPosition },
+      });
+    }
   }
   
   /**
@@ -159,12 +189,17 @@ export class VirtualDocumentModel implements IDocumentModel {
   deleteText(start: Position, end: Position): void {
     this.validatePosition(start);
     this.validatePosition(end);
-    
+
+    const cursorBefore = { ...this.document.cursorPosition };
+
     // Ensure start comes before end
     if (this.comparePositions(start, end) > 0) {
       [start, end] = [end, start];
     }
-    
+
+    // Capture deleted text before mutating (needed for undo)
+    const deletedText = this.getTextRange(start, end);
+
     if (start.line === end.line) {
       // Single-line deletion
       const line = this.document.lines[start.line];
@@ -177,19 +212,27 @@ export class VirtualDocumentModel implements IDocumentModel {
       const endLine = this.document.lines[end.line];
       const before = startLine.substring(0, start.column);
       const after = endLine.substring(end.column);
-      
+
       // Replace start line with merged content
       this.document.lines[start.line] = before + after;
-      
+
       // Remove lines in between
       this.document.lines.splice(start.line + 1, end.line - start.line);
     }
-    
+
     // Update cursor position to start of deletion
     this.document.cursorPosition = start;
-    
-    // TODO: Phase 2 - Add change tracking for undo/redo
-    // this.recordChange('delete', start, deletedText);
+
+    // Record change for undo/redo
+    if (!this.isReplaying) {
+      this.recordChange({
+        type: 'delete',
+        position: { ...start },
+        text: deletedText,
+        cursorBefore,
+        cursorAfter: { ...start },
+      });
+    }
   }
   
   getCursorPosition(): Position {
@@ -348,12 +391,148 @@ export class VirtualDocumentModel implements IDocumentModel {
     return a.column - b.column;
   }
 
+  // ── Undo / Redo ──────────────────────────────────────────────────────
+
+  /**
+   * Records a change in the history for undo/redo.
+   * Truncates any forward history when a new change is made.
+   */
+  private recordChange(change: DocumentChange): void {
+    // Discard any forward (redo) history
+    if (this.historyIndex < this.changeHistory.length) {
+      this.changeHistory.length = this.historyIndex;
+    }
+
+    this.changeHistory.push(change);
+    this.historyIndex = this.changeHistory.length;
+
+    // Enforce max history size
+    if (this.changeHistory.length > VirtualDocumentModel.MAX_HISTORY) {
+      const excess = this.changeHistory.length - VirtualDocumentModel.MAX_HISTORY;
+      this.changeHistory.splice(0, excess);
+      this.historyIndex -= excess;
+    }
+  }
+
+  canUndo(): boolean {
+    return this.historyIndex > 0;
+  }
+
+  canRedo(): boolean {
+    return this.historyIndex < this.changeHistory.length;
+  }
+
+  /**
+   * Undo the last change. Returns true if a change was undone.
+   */
+  undo(): boolean {
+    if (!this.canUndo()) return false;
+
+    this.historyIndex--;
+    const change = this.changeHistory[this.historyIndex];
+
+    this.isReplaying = true;
+    try {
+      if (change.type === 'insert') {
+        // Reverse of insert is delete
+        const endPos = this.calculateEndPosition(change.position, change.text);
+        this.deleteText(change.position, endPos);
+      } else {
+        // Reverse of delete is insert
+        this.insertText(change.position, change.text);
+      }
+      // Restore cursor to pre-change position
+      this.document.cursorPosition = { ...change.cursorBefore };
+    } finally {
+      this.isReplaying = false;
+    }
+    return true;
+  }
+
+  /**
+   * Redo the last undone change. Returns true if a change was redone.
+   */
+  redo(): boolean {
+    if (!this.canRedo()) return false;
+
+    const change = this.changeHistory[this.historyIndex];
+    this.historyIndex++;
+
+    this.isReplaying = true;
+    try {
+      if (change.type === 'insert') {
+        this.insertText(change.position, change.text);
+      } else {
+        const endPos = this.calculateEndPosition(change.position, change.text);
+        this.deleteText(change.position, endPos);
+      }
+      // Restore cursor to post-change position
+      this.document.cursorPosition = { ...change.cursorAfter };
+    } finally {
+      this.isReplaying = false;
+    }
+    return true;
+  }
+
+  /**
+   * Calculates the end position after inserting text at a given position.
+   */
+  private calculateEndPosition(start: Position, text: string): Position {
+    const lines = text.split('\n');
+    if (lines.length === 1) {
+      return { line: start.line, column: start.column + text.length };
+    }
+    return {
+      line: start.line + lines.length - 1,
+      column: lines[lines.length - 1].length,
+    };
+  }
+
   /**
    * Get the complete document text as a single string
    * Used for autocomplete/suggestion generation
    */
   getFullDocumentText(): string {
     return this.document.lines.join('\n');
+  }
+
+  /**
+   * Toggle line comments (// ) on the specified line range.
+   * If all lines are commented, removes comments; otherwise adds comments.
+   * Returns the new cursor position after toggling.
+   */
+  toggleLineComment(startLine: number, endLine: number): void {
+    const clampedStart = Math.max(0, Math.min(startLine, this.document.lines.length - 1));
+    const clampedEnd = Math.max(0, Math.min(endLine, this.document.lines.length - 1));
+
+    // Check if all non-empty lines in the range are already commented
+    let allCommented = true;
+    for (let i = clampedStart; i <= clampedEnd; i++) {
+      const trimmed = this.document.lines[i].trimStart();
+      if (trimmed.length > 0 && !trimmed.startsWith('//')) {
+        allCommented = false;
+        break;
+      }
+    }
+
+    if (allCommented) {
+      // Remove comments
+      for (let i = clampedStart; i <= clampedEnd; i++) {
+        const line = this.document.lines[i];
+        const commentIndex = line.indexOf('//');
+        if (commentIndex !== -1) {
+          // Remove "// " or "//" at the first occurrence
+          const afterSlashes = line.substring(commentIndex + 2);
+          const prefix = line.substring(0, commentIndex);
+          this.document.lines[i] = prefix + (afterSlashes.startsWith(' ') ? afterSlashes.substring(1) : afterSlashes);
+        }
+      }
+    } else {
+      // Add comments — prepend "// " to each line
+      for (let i = clampedStart; i <= clampedEnd; i++) {
+        this.document.lines[i] = '// ' + this.document.lines[i];
+      }
+    }
   }
 
   /**

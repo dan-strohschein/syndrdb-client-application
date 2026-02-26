@@ -98,6 +98,13 @@ export class CodeEditor extends LitElement {
   // Internal state
   @state()
   private isInitialized: boolean = false;
+
+  // Go to Line dialog state
+  @state()
+  private showGoToLineDialog: boolean = false;
+
+  @state()
+  private goToLineValue: string = '';
   
   // Scroll and scrollbar — delegated to ScrollController
   private scrollController!: ScrollController;
@@ -411,67 +418,82 @@ export class CodeEditor extends LitElement {
  //     console.log('🎯 CodeEditor: Connection manager imported, registering listeners...');
       
       // Listen for database context changes
-      connectionManager.addEventListener('databaseContextChanged', ({ databaseName }: { databaseName: string }) => {
-//        console.log(`🎯 CodeEditor: Received databaseContextChanged event for "${databaseName}"`);
+      connectionManager.addEventListener('databaseContextChanged', ({ connectionId, databaseName }: { connectionId: string; databaseName: string }) => {
         if (this.languageService) {
           this.languageService.setDatabaseContext(databaseName);
+
+          // Also hydrate context with any already-loaded bundles for this database
+          const cachedBundles = connectionManager.getBundlesForDatabase(connectionId, databaseName);
+          if (cachedBundles.length > 0) {
+            this.hydrateContextWithBundles(databaseName, cachedBundles);
+          }
         }
       });
 
       // Listen for bundles loaded events to update context data
       connectionManager.addEventListener('bundlesLoaded', async ({ databaseName, bundles }: { databaseName: string, bundles: Bundle[] }) => {
- //       console.log(`🎯 CodeEditor: Received bundlesLoaded event for "${databaseName}" with ${bundles.length} bundles`);
-
         if (this.languageService) {
-          // Convert bundles to DatabaseDefinition format
-          const bundleDefs = bundles.map((bundle: Bundle) => {
-            const bundleName = bundle.Name;
-
-            // Extract fields — use bundle.FieldDefinitions (already normalised by bundle-manager)
-            const fieldsMap = new Map<string, { name: string; type: string; constraints: { nullable?: boolean; unique?: boolean; primary?: boolean; default?: string | number | boolean | null } }>();
-
-            const fieldDefs = bundle.FieldDefinitions;
-
-            if (Array.isArray(fieldDefs)) {
-              for (const field of fieldDefs) {
-                fieldsMap.set(field.Name, {
-                  name: field.Name,
-                  type: field.Type || 'text',
-                  constraints: {
-                    nullable: !field.IsRequired,
-                    unique: field.IsUnique === true,
-                    primary: field.Name === 'DocumentID',
-                    default: field.DefaultValue
-                  }
-                });
-              }
-            }
-            
-//            console.log(`🎯 CodeEditor: Bundle "${bundleName}" has ${fieldsMap.size} fields`);
-            
-            return {
-              name: bundleName,
-              database: databaseName,
-              fields: fieldsMap,
-              relationships: new Map(),
-              indexes: (Array.isArray(bundle.Indexes) ? bundle.Indexes : []).map(idx => idx.IndexName)
-            };
-          });
-
-          // Update context with database and bundle data
-          this.languageService.updateContextData([{
-            name: databaseName,
-            bundles: new Map(bundleDefs.map(b => [b.name, b]))
-          }]);
-          
-//          console.log(`🎯 CodeEditor: Context updated with ${bundleDefs.length} bundles`);
+          this.hydrateContextWithBundles(databaseName, bundles);
         }
       });
 
-    //  console.log('✅ Database context listeners registered successfully');
+      // Hydrate context with any already-loaded bundles across all connections
+      // (covers the case where bundles were loaded before this editor was mounted)
+      for (const connection of connectionManager.getConnections()) {
+        if (connection.status === 'connected' && connection.databaseBundles) {
+          for (const [dbName, bundles] of connection.databaseBundles.entries()) {
+            if (bundles.length > 0 && this.languageService) {
+              this.hydrateContextWithBundles(dbName, bundles);
+            }
+          }
+        }
+      }
+
     } catch (error) {
       console.error('Failed to set up database context listener:', error);
     }
+  }
+
+  /**
+   * Convert raw Bundle objects into the format expected by the language service
+   * and update the document context.
+   */
+  private hydrateContextWithBundles(databaseName: string, bundles: Bundle[]): void {
+    if (!this.languageService) return;
+
+    const bundleDefs = bundles.map((bundle: Bundle) => {
+      const bundleName = bundle.Name;
+      const fieldsMap = new Map<string, { name: string; type: string; constraints: { nullable?: boolean; unique?: boolean; primary?: boolean; default?: string | number | boolean | null } }>();
+      const fieldDefs = bundle.FieldDefinitions;
+
+      if (Array.isArray(fieldDefs)) {
+        for (const field of fieldDefs) {
+          fieldsMap.set(field.Name, {
+            name: field.Name,
+            type: field.Type || 'text',
+            constraints: {
+              nullable: !field.IsRequired,
+              unique: field.IsUnique === true,
+              primary: field.Name === 'DocumentID',
+              default: field.DefaultValue
+            }
+          });
+        }
+      }
+
+      return {
+        name: bundleName,
+        database: databaseName,
+        fields: fieldsMap,
+        relationships: new Map(),
+        indexes: (Array.isArray(bundle.Indexes) ? bundle.Indexes : []).map(idx => idx.IndexName)
+      };
+    });
+
+    this.languageService.updateContextData([{
+      name: databaseName,
+      bundles: new Map(bundleDefs.map(b => [b.name, b]))
+    }]);
   }
   
   /**
@@ -563,8 +585,8 @@ export class CodeEditor extends LitElement {
       // Process key command using InputProcessor
       this.inputProcessor.processKeyCommand(command, this.documentModel);
       
-      // Hide suggestions on certain navigation commands
-      if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(command.key)) {
+      // Hide suggestions on major navigation (not left/right which just adjust position)
+      if (['Home', 'End', 'PageUp', 'PageDown'].includes(command.key)) {
         this.suggestionController.hideSuggestions();
       }
       
@@ -834,18 +856,43 @@ export class CodeEditor extends LitElement {
    */
   private handleClipboardCommand(command: KeyCommand): boolean {
 
-       
-    // Only handle Ctrl combinations
+    // Only handle Ctrl/Cmd combinations
     if (!command.modifiers.ctrl && !command.modifiers.meta) {
-        
       return false;
     }
 
+    // Ctrl+Enter: dispatch execute request
+    if (command.key === 'Enter') {
+      this.dispatchEvent(new CustomEvent('execute-query-requested', {
+        bubbles: true,
+        composed: true,
+      }));
+      return true;
+    }
+
+    // Ctrl+Space: manually trigger autocomplete
+    if (command.key === ' ') {
+      this.suggestionController.scheduleUpdate();
+      return true;
+    }
+
+    switch (command.key) {
+      case '/':
+        // Toggle line comment
+        this.handleToggleComment();
+        return true;
+
+      case 'g':
+      case 'G':
+        // Go to Line
+        this.handleGoToLine();
+        return true;
+    }
 
     switch (command.key.toLowerCase()) {
       case 'c':
         // Copy selected text
-        
+
         this.copyToClipboard();
         return true;
         
@@ -856,13 +903,127 @@ export class CodeEditor extends LitElement {
         return true;
         
       case 'x':
-        
+
         // Cut selected text
         this.cutToClipboard();
         return true;
-        
+
+      case 'z':
+        if (command.modifiers.shift) {
+          // Ctrl+Shift+Z = Redo
+          this.handleRedo();
+        } else {
+          // Ctrl+Z = Undo
+          this.handleUndo();
+        }
+        return true;
+
+      case 'y':
+        // Ctrl+Y = Redo
+        this.handleRedo();
+        return true;
+
       default:
         return false;
+    }
+  }
+
+  /**
+   * Toggle line comments (// ) on selected lines or current line.
+   */
+  private handleToggleComment(): void {
+    if (!this.documentModel) return;
+
+    const cursor = this.documentModel.getCursorPosition();
+    const selection = this.documentModel.getCurrentSelection();
+
+    let startLine: number;
+    let endLine: number;
+
+    if (selection && this.documentModel.hasSelection()) {
+      startLine = selection.start.line;
+      endLine = selection.end.line;
+    } else {
+      startLine = cursor.line;
+      endLine = cursor.line;
+    }
+
+    this.documentModel.toggleLineComment(startLine, endLine);
+
+    // Update editor state
+    this.statementValidationController.updateStatementCache();
+    this.statementValidationController.markCurrentStatementDirty();
+    this.updateLineCount();
+    this.renderEditor();
+  }
+
+  /**
+   * Show Go to Line dialog overlay.
+   */
+  private handleGoToLine(): void {
+    this.showGoToLineDialog = true;
+    this.goToLineValue = '';
+    this.requestUpdate();
+    // Focus the input after render
+    this.updateComplete.then(() => {
+      const input = this.querySelector('#go-to-line-input') as HTMLInputElement;
+      input?.focus();
+    });
+  }
+
+  /**
+   * Process the Go to Line dialog submission.
+   */
+  private submitGoToLine(): void {
+    const lineNumber = parseInt(this.goToLineValue, 10);
+    if (!isNaN(lineNumber) && lineNumber >= 1 && this.documentModel) {
+      const targetLine = Math.min(lineNumber - 1, this.documentModel.getLineCount() - 1);
+      this.documentModel.setCursorPosition({ line: targetLine, column: 0 });
+      this.documentModel.clearSelections();
+      this.ensureCursorVisible();
+      this.resetCursorBlinking();
+      this.renderEditor();
+    }
+    this.showGoToLineDialog = false;
+    this.requestUpdate();
+    // Return focus to the editor
+    this.inputCapture?.focus();
+  }
+
+  /**
+   * Dismiss the Go to Line dialog.
+   */
+  private dismissGoToLine(): void {
+    this.showGoToLineDialog = false;
+    this.requestUpdate();
+    this.inputCapture?.focus();
+  }
+
+  /**
+   * Undo the last edit
+   */
+  private handleUndo(): void {
+    if (this.documentModel.undo()) {
+      this.documentModel.clearSelections();
+      this.statementValidationController.updateStatementCache();
+      this.statementValidationController.markCurrentStatementDirty();
+      this.updateLineCount();
+      this.ensureCursorVisible();
+      this.renderEditor();
+    }
+  }
+
+  /**
+   * Redo the last undone edit
+   */
+  private handleRedo(): void {
+    if (this.documentModel.redo()) {
+      this.documentModel.clearSelections();
+      this.statementValidationController.updateStatementCache();
+      this.statementValidationController.markCurrentStatementDirty();
+      this.updateLineCount();
+      this.ensureCursorVisible();
+      this.renderEditor();
     }
   }
 
@@ -1044,11 +1205,21 @@ export class CodeEditor extends LitElement {
       lines.length - 1
     );
     
+    // Get current cursor line for highlighting
+    const cursorLine = this.documentModel.getCursorPosition().line;
+
     // Only render visible lines
     for (let lineIndex = firstVisibleLine; lineIndex <= lastVisibleLine; lineIndex++) {
       if (lineIndex >= 0 && lineIndex < lines.length) {
         const line = lines[lineIndex];
         const y = (lineIndex * fontMetrics.lineHeight) - scrollOffset.y;
+
+        // Highlight current cursor line with subtle background
+        if (lineIndex === cursorLine) {
+          this.context.fillStyle = 'rgba(255, 255, 255, 0.04)';
+          this.context.fillRect(0, y, this.canvas.width, fontMetrics.lineHeight);
+        }
+
         this.renderLine(line, lineIndex, y, fontMetrics);
       }
     }
@@ -1749,6 +1920,33 @@ export class CodeEditor extends LitElement {
             </div>
           ` : ''}
           
+          <!-- Go to Line dialog -->
+          ${this.showGoToLineDialog ? html`
+            <div class="absolute top-2 right-2 z-50 bg-surface-3 border border-db-border rounded-lg shadow-elevation-3 p-3 flex items-center gap-2"
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Enter') { e.preventDefault(); this.submitGoToLine(); }
+                if (e.key === 'Escape') { e.preventDefault(); this.dismissGoToLine(); }
+                e.stopPropagation();
+              }}
+            >
+              <label class="text-xs text-base-content/70">Go to Line:</label>
+              <input
+                id="go-to-line-input"
+                type="number"
+                min="1"
+                max="${this.lineCount}"
+                class="input input-sm input-bordered w-24 text-sm bg-surface-2"
+                placeholder="1-${this.lineCount}"
+                .value=${this.goToLineValue}
+                @input=${(e: Event) => { this.goToLineValue = (e.target as HTMLInputElement).value; }}
+              />
+              <button class="btn btn-sm btn-primary" @click=${() => this.submitGoToLine()}>Go</button>
+              <button class="btn btn-sm btn-ghost" @click=${() => this.dismissGoToLine()}>
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          ` : ''}
+
           <!-- Error popover for invalid tokens/statements -->
           <error-pop-up></error-pop-up>
           

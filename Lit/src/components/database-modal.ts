@@ -35,6 +35,14 @@ export class DatabaseModal extends BaseModalMixin(LitElement) {
   @state()
   private isLoading = false;
 
+  @state()
+  private showDdlPreview = false;
+
+  private get ddlPreviewText(): string {
+    if (!this.formData.name.trim()) return '-- Enter a database name to see generated SyndrQL';
+    return `CREATE DATABASE "${this.formData.name}";`;
+  }
+
   override handleClose(): void {
     this.errorMessage = '';
     this.isLoading = false;
@@ -155,7 +163,7 @@ export class DatabaseModal extends BaseModalMixin(LitElement) {
 
         return html`
         <div class="modal ${this.open ? 'modal-open' : ''}">
-            <div class="modal-box w-11/12 max-w-2xl">
+            <div class="modal-box w-11/12 max-w-2xl ${this.modalContainerClass}">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-bold text-lg">${this.editMode ? 'Edit Database' : 'Add New Database'}</h3>
@@ -196,19 +204,34 @@ export class DatabaseModal extends BaseModalMixin(LitElement) {
                         </div>
                     </div>
                     
+                    <!-- DDL Preview -->
+                    <div class="mt-4 border border-db-border rounded-lg overflow-hidden">
+                        <button
+                            type="button"
+                            class="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-base-content/70 bg-surface-2 hover:bg-surface-3 transition-colors"
+                            @click=${() => { this.showDdlPreview = !this.showDdlPreview; }}
+                        >
+                            <span><i class="fa-solid fa-code mr-2"></i>Generated SyndrQL</span>
+                            <i class="fa-solid ${this.showDdlPreview ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                        </button>
+                        ${this.showDdlPreview ? html`
+                            <pre class="p-3 bg-surface-1 text-xs font-mono text-base-content whitespace-pre-wrap overflow-x-auto max-h-40">${this.ddlPreviewText}</pre>
+                        ` : ''}
+                    </div>
+
                     <!-- Modal Actions -->
                     <div class="modal-action mt-6">
-                        <button 
+                        <button
                             type="button"
-                            class="btn btn-ghost" 
+                            class="btn btn-ghost"
                             @click=${this.handleClose}
                             ?disabled="${this.isLoading}"
                         >
                             Cancel
                         </button>
-                        <button 
+                        <button
                             type="submit"
-                            class="btn btn-primary ${this.isLoading ? 'loading' : ''}" 
+                            class="btn btn-primary ${this.isLoading ? 'loading' : ''}"
                             ?disabled="${this.isLoading || !this.formData.name.trim()}"
                         >
                             ${this.isLoading ? (this.editMode ? 'Updating...' : 'Creating...') : (this.editMode ? 'Update Database' : 'Create Database')}
@@ -216,7 +239,7 @@ export class DatabaseModal extends BaseModalMixin(LitElement) {
                     </div>
                 </form>
             </div>
-            <div class="modal-backdrop" @click=${this.handleClose}></div>
+            <div class="modal-backdrop ${this.modalBackdropClass}" @click=${this.handleClose}></div>
         </div>
         `;
     }

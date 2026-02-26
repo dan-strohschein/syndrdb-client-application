@@ -210,9 +210,15 @@ export class InputCapture implements IInputCapture {
     }
     
     // Define keys that we handle when combined with modifiers
-    const modifierKeys = ['c', 'v', 'x', 'a', 'z', 'y']; // clipboard + select all + undo/redo
-    
-    return modifierKeys.includes(event.key.toLowerCase());
+    const modifierKeys = ['c', 'v', 'x', 'a', 'z', 'y', '/', 'g']; // clipboard + select all + undo/redo + comment toggle + go to line
+
+    // Also handle Ctrl+Arrow for word navigation, Ctrl+Home/End for document navigation
+    const modifierNavKeys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+
+    // Handle Ctrl+Enter for execute query, Ctrl+Space for suggestions
+    if (event.key === 'Enter' || event.key === ' ') return true;
+
+    return modifierKeys.includes(event.key.toLowerCase()) || modifierNavKeys.includes(event.key);
   }
   
   /**
@@ -450,14 +456,18 @@ export class InputProcessor implements IInputProcessor {
     
     switch (command.key) {
       case 'ArrowLeft':
-        newPos = this.moveCursorLeft(currentPos, documentModel);
+        newPos = (command.modifiers.ctrl || command.modifiers.meta)
+          ? this.moveCursorWordLeft(currentPos, documentModel)
+          : this.moveCursorLeft(currentPos, documentModel);
         this.handleArrowKeyWithSelection(newPos, command.modifiers.shift, documentModel);
-        return; // Skip normal cursor positioning since we handled it
-        
+        return;
+
       case 'ArrowRight':
-        newPos = this.moveCursorRight(currentPos, documentModel);
+        newPos = (command.modifiers.ctrl || command.modifiers.meta)
+          ? this.moveCursorWordRight(currentPos, documentModel)
+          : this.moveCursorRight(currentPos, documentModel);
         this.handleArrowKeyWithSelection(newPos, command.modifiers.shift, documentModel);
-        return; // Skip normal cursor positioning since we handled it
+        return;
         
       case 'ArrowUp':
         newPos = this.moveCursorUp(currentPos, documentModel);
@@ -485,11 +495,15 @@ export class InputProcessor implements IInputProcessor {
         this.handleDeleteInput(currentPos, documentModel);
         break;
         
-      // TODO: Phase 3 - Add more key commands
       case 'Home':
+        newPos = this.handleHome(currentPos, command, documentModel);
+        this.handleArrowKeyWithSelection(newPos, command.modifiers.shift, documentModel);
+        return;
+
       case 'End':
-        console.log(`${command.key} not implemented yet`);
-        break;
+        newPos = this.handleEnd(currentPos, command, documentModel);
+        this.handleArrowKeyWithSelection(newPos, command.modifiers.shift, documentModel);
+        return;
         
       default:
         console.log('Unknown key command:', command.key);
@@ -595,6 +609,95 @@ export class InputProcessor implements IInputProcessor {
     return currentPos; // Can't move further down
   }
   
+  /**
+   * Moves cursor to the start of the previous word boundary.
+   */
+  private moveCursorWordLeft(currentPos: Position, documentModel: VirtualDocumentModel): Position {
+    let { line, column } = currentPos;
+
+    // If at start of line, move to end of previous line
+    if (column === 0) {
+      if (line > 0) {
+        const prevLine = documentModel.getLine(line - 1);
+        return { line: line - 1, column: prevLine.length };
+      }
+      return currentPos;
+    }
+
+    const lineText = documentModel.getLine(line);
+
+    // Skip whitespace going left
+    while (column > 0 && /\s/.test(lineText[column - 1])) {
+      column--;
+    }
+    // Skip word characters going left
+    while (column > 0 && /\w/.test(lineText[column - 1])) {
+      column--;
+    }
+
+    this.preferredColumn = column;
+    return { line, column };
+  }
+
+  /**
+   * Moves cursor to the end of the next word boundary.
+   */
+  private moveCursorWordRight(currentPos: Position, documentModel: VirtualDocumentModel): Position {
+    let { line, column } = currentPos;
+    const lineText = documentModel.getLine(line);
+
+    // If at end of line, move to start of next line
+    if (column >= lineText.length) {
+      if (line < documentModel.getLineCount() - 1) {
+        return { line: line + 1, column: 0 };
+      }
+      return currentPos;
+    }
+
+    // Skip word characters going right
+    while (column < lineText.length && /\w/.test(lineText[column])) {
+      column++;
+    }
+    // Skip whitespace going right
+    while (column < lineText.length && /\s/.test(lineText[column])) {
+      column++;
+    }
+
+    this.preferredColumn = column;
+    return { line, column };
+  }
+
+  /**
+   * Handles Home key — go to start of line, or start of document with Ctrl/Cmd.
+   */
+  private handleHome(currentPos: Position, command: KeyCommand, documentModel: VirtualDocumentModel): Position {
+    if (command.modifiers.ctrl || command.modifiers.meta) {
+      // Ctrl+Home: go to document start
+      this.preferredColumn = 0;
+      return { line: 0, column: 0 };
+    }
+    // Home: go to start of current line
+    this.preferredColumn = 0;
+    return { line: currentPos.line, column: 0 };
+  }
+
+  /**
+   * Handles End key — go to end of line, or end of document with Ctrl/Cmd.
+   */
+  private handleEnd(currentPos: Position, command: KeyCommand, documentModel: VirtualDocumentModel): Position {
+    if (command.modifiers.ctrl || command.modifiers.meta) {
+      // Ctrl+End: go to end of document
+      const lastLine = documentModel.getLineCount() - 1;
+      const lastLineLength = documentModel.getLine(lastLine).length;
+      this.preferredColumn = lastLineLength;
+      return { line: lastLine, column: lastLineLength };
+    }
+    // End: go to end of current line
+    const lineLength = documentModel.getLine(currentPos.line).length;
+    this.preferredColumn = lineLength;
+    return { line: currentPos.line, column: lineLength };
+  }
+
   /**
    * Handles tab input - inserts spaces or tab character.
    */

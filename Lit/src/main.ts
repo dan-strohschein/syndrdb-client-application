@@ -26,7 +26,13 @@ import './components/code-editor/code-editor';
 import './components/error-modal';
 import './components/backup-modal';
 import './components/restore-modal';
+import './components/delete-database-modal';
+import './components/delete-bundle-modal';
 import './components/status-bar';
+import './components/toast-notification';
+import './components/command-palette';
+import './components/toolbar';
+import './components/query-history-panel';
 import './components/server-profiler/server-profiler-tab';
 import './components/server-profiler/profiler-connection-picker';
 import './components/server-profiler/profiler-metrics-display';
@@ -69,8 +75,12 @@ async function initializeApplication() {
     console.log('✅ Application initialization complete');
   } catch (error) {
     console.error('❌ Application initialization failed:', error);
-    // Show error to user
-    alert(`Application initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check the console for details.`);
+    // Show error toast once the app has rendered
+    setTimeout(() => {
+      import('./components/toast-notification').then(({ ToastNotification }) => {
+        ToastNotification.error(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check console for details.`);
+      });
+    }, 500);
     throw error;
   }
 }
@@ -187,6 +197,34 @@ export class AppRoot extends LitElement {
 
     this.addEventListener('ai-assistant-toggle-requested', () => {
       this.aiPanelOpen = !this.aiPanelOpen;
+      this.activeTool = this.aiPanelOpen ? 'ai-assistant' : '';
+    });
+
+    this.addEventListener('open-query-history', () => {
+      this.activeTool = 'history';
+      // Clear after the panel opens so the highlight is momentary
+      setTimeout(() => { this.activeTool = ''; }, 1500);
+    });
+
+    this.addEventListener('query-executing', (event: Event) => {
+      const { executing } = (event as CustomEvent).detail;
+      this.isExecuting = executing;
+    });
+
+    // Listen for open-bundle-query events (double-click on bundle in tree)
+    this.addEventListener('open-bundle-query', (event: Event) => {
+      const { bundleName, databaseName, connectionId } = (event as CustomEvent).detail;
+      const mainPanel = this.querySelector('main-panel');
+      if (mainPanel) {
+        mainPanel.dispatchEvent(new CustomEvent('add-query-editor', {
+          detail: {
+            query: `FIND * IN "${bundleName}" LIMIT 10;`,
+            databaseName,
+            connectionId
+          },
+          bubbles: false
+        }));
+      }
     });
 
     // Listen for open-profiler-tab events and forward to main-panel
@@ -214,13 +252,72 @@ export class AppRoot extends LitElement {
     this.addEventListener('export-wizard-requested', (event: Event) => {
       this.handleExportWizardRequest(event as CustomEvent);
     });
+
+    // Listen for delete database requests
+    this.addEventListener('delete-database-requested', (event: Event) => {
+      this.handleDeleteDatabaseRequest(event as CustomEvent);
+    });
+
+    // Listen for database-deleted events to refresh the tree
+    this.addEventListener('database-deleted', (event: Event) => {
+      this.handleDatabaseDeleted(event as CustomEvent);
+    });
+
+    // Listen for delete bundle requests
+    this.addEventListener('delete-bundle-requested', (event: Event) => {
+      this.handleDeleteBundleRequest(event as CustomEvent);
+    });
+
+    // Listen for bundle-deleted events to refresh the tree
+    this.addEventListener('bundle-deleted', (event: Event) => {
+      this.handleBundleDeleted(event as CustomEvent);
+    });
+
+    // Listen for refresh-tree-node events
+    this.addEventListener('refresh-tree-node', (event: Event) => {
+      this.handleRefreshTreeNode(event as CustomEvent);
+    });
   }
 
   @state()
   private aiPanelOpen = false;
 
   @state()
+  private activeTool = '';
+
+  @state()
+  private isExecuting = false;
+
+  @state()
   private modalState: ModalState = { type: 'none' };
+
+  @state()
+  private sidebarWidth = parseInt(localStorage.getItem('sidebar-width') || '30', 10);
+
+  private _resizing = false;
+
+  private _onResizeMove = (e: MouseEvent) => {
+    if (!this._resizing) return;
+    const pct = (e.clientX / window.innerWidth) * 100;
+    this.sidebarWidth = Math.max(15, Math.min(50, pct));
+  };
+
+  private _onResizeEnd = () => {
+    this._resizing = false;
+    document.removeEventListener('mousemove', this._onResizeMove);
+    document.removeEventListener('mouseup', this._onResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    localStorage.setItem('sidebar-width', String(Math.round(this.sidebarWidth)));
+  };
+
+  private _startResize = () => {
+    this._resizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', this._onResizeMove);
+    document.addEventListener('mouseup', this._onResizeEnd);
+  };
 
   @state()
   private statusBarState: { executionTimeMS: number; resultCount: number } = {
@@ -433,10 +530,11 @@ export class AppRoot extends LitElement {
     
     console.log(`🧪 Testing connection: ${event.detail.connectionName} (ID: ${event.detail.connectionId})`);
     
-    // For now, show an alert with the test result
-    // TODO show a toast notification or modal for the connection
+    // Show toast notification for connection test result
     setTimeout(() => {
-      alert(`Connection test for "${event.detail.connectionName}": Success! ✅\n\n(This is a mock result - integrate with your actual connection service)`);
+      import('./components/toast-notification').then(({ ToastNotification }) => {
+        ToastNotification.success(`Connection test for "${event.detail.connectionName}": Success!`);
+      });
     }, 100); // Small delay to let the context menu close first
   }
 
@@ -476,6 +574,84 @@ export class AppRoot extends LitElement {
     };
   }
 
+  private handleDeleteDatabaseRequest(event: CustomEvent) {
+    const { connectionId, nodeName } = event.detail || {};
+    this.modalState = {
+      type: 'delete-database',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+        databaseName: nodeName ?? null,
+      },
+    };
+  }
+
+  private handleDatabaseDeleted(event: CustomEvent) {
+    const sidebarPanel = this.querySelector('sidebar-panel');
+    if (sidebarPanel) {
+      console.log('📤 Refreshing connection tree after database deletion');
+      sidebarPanel.dispatchEvent(new CustomEvent('refresh-connection', {
+        detail: { connectionId: event.detail?.connectionId },
+        bubbles: false
+      }));
+    }
+  }
+
+  private handleDeleteBundleRequest(event: CustomEvent) {
+    const { connectionId, nodeName, nodeId } = event.detail || {};
+    // Extract database name from nodeId format: connectionId-database-databaseName-bundle-bundleName
+    const parts = (nodeId as string)?.split('-') ?? [];
+    const databaseIndex = parts.indexOf('database');
+    const databaseName = databaseIndex !== -1 && databaseIndex + 1 < parts.length
+      ? parts[databaseIndex + 1]
+      : null;
+
+    this.modalState = {
+      type: 'delete-bundle',
+      props: {
+        open: true,
+        connectionId: connectionId ?? null,
+        databaseName,
+        bundleName: nodeName ?? null,
+      },
+    };
+  }
+
+  private handleBundleDeleted(event: CustomEvent) {
+    const sidebarPanel = this.querySelector('sidebar-panel');
+    if (sidebarPanel) {
+      console.log('📤 Refreshing connection tree after bundle deletion');
+      sidebarPanel.dispatchEvent(new CustomEvent('refresh-connection', {
+        detail: { connectionId: event.detail?.connectionId },
+        bubbles: false
+      }));
+    }
+  }
+
+  private async handleRefreshTreeNode(event: CustomEvent) {
+    const { connectionId, nodeType } = event.detail;
+    if (!connectionId) return;
+
+    try {
+      await connectionManager.refreshMetadata(connectionId);
+      const sidebarPanel = this.querySelector('sidebar-panel');
+      if (sidebarPanel) {
+        sidebarPanel.dispatchEvent(new CustomEvent('refresh-connection', {
+          detail: { connectionId },
+          bubbles: false
+        }));
+      }
+      import('./components/toast-notification').then(({ ToastNotification }) => {
+        ToastNotification.success(`Refreshed ${nodeType || 'node'}`);
+      });
+    } catch (error) {
+      console.error('Failed to refresh tree node:', error);
+      import('./components/toast-notification').then(({ ToastNotification }) => {
+        ToastNotification.error('Failed to refresh');
+      });
+    }
+  }
+
   private handleExportWizardRequest(event?: CustomEvent) {
     const { connectionId, databaseName } = event?.detail || {};
     this.modalState = {
@@ -513,20 +689,25 @@ export class AppRoot extends LitElement {
 
   render() {
     return html`
-      <div class="h-screen bg-base-100 text-base-content flex flex-col">
-        
-          <!-- Navigation Bar --> 
-          <div class="w-full p-4 bg-base-200 flex-shrink-0">
+      <div class="h-screen bg-surface-0 text-base-content flex flex-col">
+
+          <!-- Navigation Bar -->
+          <div class="w-full p-4 bg-surface-1 flex-shrink-0">
             <navigation-bar></navigation-bar>
           </div>
-       
-          
-        
+
         <div class="flex-1 flex min-w-0">
+          <!-- Activity Bar (vertical toolbar) -->
+          <app-toolbar .activeTool=${this.activeTool}></app-toolbar>
           <!-- Sidebar: Connections -->
-          <sidebar-panel class="w-[30%] min-w-0 flex-shrink-0 bg-base-200"></sidebar-panel>
+          <sidebar-panel class="min-w-0 flex-shrink-0 bg-surface-1" style="width: ${this.sidebarWidth}%"></sidebar-panel>
+          <!-- Resize Handle -->
+          <div
+            class="w-1 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors flex-shrink-0"
+            @mousedown=${this._startResize}
+          ></div>
           <!-- Center: Code editor (query tabs + results) -->
-          <main-panel class="flex-1 min-w-0 bg-base-100" .aiPanelOpen=${this.aiPanelOpen}></main-panel>
+          <main-panel class="flex-1 min-w-0 bg-surface-2" .aiPanelOpen=${this.aiPanelOpen}></main-panel>
         </div>
         
         <!-- Status Bar at the bottom -->
@@ -534,6 +715,7 @@ export class AppRoot extends LitElement {
           id="main-status-bar"
           .executionTimeMS=${this.statusBarState.executionTimeMS}
           .resultCount=${this.statusBarState.resultCount}
+          .executing=${this.isExecuting}
         ></status-bar>
 
         <!-- Modals: bound from modalState (no querySelector, no casts) -->
@@ -597,6 +779,28 @@ export class AppRoot extends LitElement {
           .databaseName=${this.modalState.type === 'export-wizard' ? this.modalState.props.databaseName ?? null : null}
           @close-modal=${this.handleCloseModal}
         ></export-wizard-modal>
+        <delete-database-modal
+          .open=${this.modalState.type === 'delete-database'}
+          .connectionId=${this.modalState.type === 'delete-database' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'delete-database' ? this.modalState.props.databaseName ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></delete-database-modal>
+        <delete-bundle-modal
+          .open=${this.modalState.type === 'delete-bundle'}
+          .connectionId=${this.modalState.type === 'delete-bundle' ? this.modalState.props.connectionId ?? null : null}
+          .databaseName=${this.modalState.type === 'delete-bundle' ? this.modalState.props.databaseName ?? null : null}
+          .bundleName=${this.modalState.type === 'delete-bundle' ? this.modalState.props.bundleName ?? null : null}
+          @close-modal=${this.handleCloseModal}
+        ></delete-bundle-modal>
+
+        <!-- Toast Notification Container -->
+        <toast-notification></toast-notification>
+
+        <!-- Command Palette (Ctrl+K) -->
+        <command-palette></command-palette>
+
+        <!-- Query History Panel -->
+        <query-history-panel></query-history-panel>
     </div>
     `;
   }
