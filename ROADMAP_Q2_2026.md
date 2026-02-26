@@ -28,7 +28,7 @@ This analysis compares the SyndrDB client application against SQL Server Managem
 
 | # | Feature | SSMS Equivalent | Current State | Impact |
 |---|---------|----------------|---------------|--------|
-| C1 | **Find and Replace** (Ctrl+F / Ctrl+H) | Find and Replace dialog | Not implemented — no search bindings in `input-handler.ts` | Users cannot search within queries. Blocks anyone writing multi-statement scripts |
+| C1 | ~~**Find and Replace** (Ctrl+F / Ctrl+H)~~ | Find and Replace dialog | **DONE** (2026-02-26) | Users cannot search within queries. Blocks anyone writing multi-statement scripts |
 | C2 | **Comment/Uncomment Toggle** (Ctrl+/) | Block Comment/Uncomment | Tokenizer recognizes comments but no toggle command exists | Core debugging workflow — commenting out statements is muscle memory |
 | C3 | **Results Grid View** with column sorting | Results to Grid | Results display as raw JSON `<pre>` or JSON tree view only | Data browsing is impractical without tabular display. Every competitor has this |
 | C4 | **Multi-statement result sets** | Separate result panes per statement | `executeSyndrQLQuery()` runs all statements but only keeps the final result | Forces users to execute one statement at a time — extremely frustrating |
@@ -123,7 +123,7 @@ Core editor and results features that block serious adoption.
 
 | # | Feature | Effort | Key Files |
 |---|---------|--------|-----------|
-| 1.1 | Find and Replace | Large | `code-editor.ts`, `virtual-dom.ts`, `input-handler.ts`, new `search-overlay.ts` |
+| 1.1 | ~~Find and Replace~~ | Large | **DONE** (2026-02-26) — `find-replace-controller.ts`, `code-editor.ts`, `input-handler.ts` |
 | 1.2 | ~~Comment/Uncomment toggle (Ctrl+/)~~ | Small | **DONE** (2026-02-26) |
 | 1.3 | ~~Go to Line (Ctrl+G)~~ | Small | **DONE** (2026-02-26) |
 | 1.4 | Results Grid View with sortable columns | Large | `query-editor-frame.ts`, new `results-grid.ts` |
