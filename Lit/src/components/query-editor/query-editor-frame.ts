@@ -99,6 +99,9 @@ export class QueryEditorFrame extends LitElement {
     @state()
     private activeQueryTab: 'syndrql' | 'graphql' = 'syndrql';
 
+    @state() private editorHeightPct: number = parseInt(localStorage.getItem('editor-split-pct') || '50', 10);
+    private _verticalResizing = false;
+
     private languageService: LanguageServiceV2;
     private graphqlLanguageService: GraphQLLanguageService;
 
@@ -186,10 +189,42 @@ export class QueryEditorFrame extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         this.removeEventListener('execute-query-requested', this._onExecuteRequested as EventListener);
+        document.removeEventListener('mousemove', this._onVerticalResizeMove);
+        document.removeEventListener('mouseup', this._onVerticalResizeEnd);
     }
 
     private _onExecuteRequested = () => {
         this.executeQuery();
+    };
+
+    private _startVerticalResize = (e: MouseEvent) => {
+        e.preventDefault();
+        this._verticalResizing = true;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', this._onVerticalResizeMove);
+        document.addEventListener('mouseup', this._onVerticalResizeEnd);
+    };
+
+    private _onVerticalResizeMove = (e: MouseEvent) => {
+        if (!this._verticalResizing) return;
+        const rect = this.getBoundingClientRect();
+        const breadcrumb = this.querySelector('.border-b.bg-surface-1') as HTMLElement;
+        const offsetTop = breadcrumb ? breadcrumb.offsetHeight : 0;
+        const availableHeight = rect.height - offsetTop;
+        const relativeY = e.clientY - rect.top - offsetTop;
+        const pct = (relativeY / availableHeight) * 100;
+        this.editorHeightPct = Math.max(20, Math.min(80, pct));
+    };
+
+    private _onVerticalResizeEnd = () => {
+        this._verticalResizing = false;
+        document.removeEventListener('mousemove', this._onVerticalResizeMove);
+        document.removeEventListener('mouseup', this._onVerticalResizeEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        localStorage.setItem('editor-split-pct', String(Math.round(this.editorHeightPct)));
+        window.dispatchEvent(new Event('resize'));
     };
 
     private startElapsedTimer() {
@@ -714,8 +749,8 @@ export class QueryEditorFrame extends LitElement {
           <span class="opacity-50">/</span>
           <span>${this.activeQueryTab === 'graphql' ? 'GraphQL' : 'SyndrQL'}</span>
         </div>
-        <!-- Query Editor (Top Half) -->
-        <div class="flex-1 border-b border-base-300 min-h-0 h-1/2">
+        <!-- Query Editor (Top) -->
+        <div class="border-b border-base-300 min-h-0 overflow-hidden" style="height: ${this.editorHeightPct}%">
           <div class="h-full p-4 flex flex-col">
             <div class="flex items-center justify-between mb-3">
               <div class="flex flex-col">
@@ -761,9 +796,18 @@ export class QueryEditorFrame extends LitElement {
             </div>
           </div>
         </div>
-        
-        <!-- JSON Results (Bottom Half) -->
-        <div class="flex-1 min-h-0 h-1/2 flex flex-col overflow-hidden">
+
+        <!-- Resize Handle -->
+        <div
+          class="h-1 cursor-row-resize hover:bg-accent/30 active:bg-accent/50 transition-colors flex-shrink-0 relative group"
+          @mousedown=${this._startVerticalResize}
+          @dblclick=${() => { this.editorHeightPct = 50; localStorage.setItem('editor-split-pct', '50'); window.dispatchEvent(new Event('resize')); }}
+        >
+          <div class="absolute inset-x-0 -top-1 -bottom-1"></div>
+        </div>
+
+        <!-- Query Results (Bottom) -->
+        <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
           <div class="p-4 flex flex-col min-h-0 flex-1">
             <div class="flex items-center justify-between mb-3 flex-shrink-0">
               <div class="flex items-center gap-2">

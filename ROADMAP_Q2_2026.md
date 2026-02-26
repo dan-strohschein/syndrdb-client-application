@@ -41,7 +41,7 @@ This analysis compares the SyndrDB client application against SQL Server Managem
 | H1 | **"Script As" from context menu** | Right-click → Script As → CREATE/ALTER/DROP | DDL generator exists in `ddl-script-generator.ts` but only used by export wizard | Expose existing DDL generator through tree context menu → opens new query tab. DataGrip does this with one click |
 | H2 | **Code Snippets / Templates** | Code Snippets, Template Explorer | `SuggestionKind.SNIPPET` enum exists but no snippet definitions or expansion logic | VS Code-style snippets with tab stops (`SELECT $1 FROM $2 WHERE $3`) are superior to SSMS templates |
 | H3 | **Object Properties Panel** | Right-click → Properties | Bundle details available but only viewable through edit modal | DataGrip-style inspector panel (non-modal, read-only by default, edit button to switch modes) |
-| H4 | **Resizable Editor/Results Splitter** | Draggable splitter | Fixed 50/50 split (`h-1/2` CSS) — cannot resize | Drag-to-resize splitter. Users need to maximize results or editor depending on task |
+| H4 | ~~**Resizable Editor/Results Splitter**~~ | Draggable splitter | **DONE** (2026-02-26) | Drag-to-resize splitter with 20-80% clamp, double-click to reset, localStorage persistence |
 | H5 | **Execution Plan Viewer** | Display Estimated/Actual Execution Plan | Not implemented (requires SyndrDB server EXPLAIN support) | Graphical plan display when server supports it |
 | H6 | **Object Search** across all databases | Object Explorer Search (Ctrl+D) | Sidebar filter only searches connection names | DataGrip's Ctrl+N global fuzzy search across all connections/databases/bundles/fields |
 
@@ -128,7 +128,7 @@ Core editor and results features that block serious adoption.
 | 1.3 | ~~Go to Line (Ctrl+G)~~ | Small | **DONE** (2026-02-26) |
 | 1.4 | Results Grid View with sortable columns | Large | `query-editor-frame.ts`, new `results-grid.ts` |
 | 1.5 | ~~Multi-statement result sets~~ | Medium | **DONE** (2026-02-26) — `query-editor-frame.ts` statement tabs with summary view |
-| 1.6 | Resizable editor/results splitter | Medium | `query-editor-frame.ts` — add drag splitter |
+| 1.6 | ~~Resizable editor/results splitter~~ | Medium | **DONE** (2026-02-26) — drag handle with localStorage persistence in `query-editor-frame.ts` |
 | 1.7 | ~~"Script As" from context menu~~ | Medium | **DONE** (2026-02-26) |
 | 1.8 | ~~Copy results with headers~~ | Small | **DONE** (2026-02-26) |
 | 1.9 | ~~DDL Preview in schema modals~~ | Small | **DONE** (2026-02-26) |
