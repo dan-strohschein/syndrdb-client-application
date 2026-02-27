@@ -12,9 +12,6 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
   databaseName: string | null = null;
 
   @state()
-  private confirmationText = '';
-
-  @state()
   private isDeleting = false;
 
   @state()
@@ -23,71 +20,56 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
   @state()
   private errorMessage = '';
 
-  private get isConfirmed(): boolean {
-    return this.confirmationText.trim().toLowerCase() === 'delete';
-  }
+  @state()
+  private confirmText = '';
 
   override handleClose(): void {
-    this.confirmationText = '';
     this.isDeleting = false;
     this.forceDelete = false;
     this.errorMessage = '';
+    this.confirmText = '';
     super.handleClose();
   }
 
-  private handleConfirmationInput(e: Event) {
-    this.confirmationText = (e.target as HTMLInputElement).value;
-    if (this.errorMessage) this.errorMessage = '';
-  }
-
   private async handleDelete() {
-    if (!this.isConfirmed || this.isDeleting) return;
-
-    const connId = this.connectionId;
-    const dbName = this.databaseName;
-
-    if (!connId) {
-      this.errorMessage = 'No connection specified.';
+    if (!this.connectionId || !this.databaseName) return;
+    if (this.confirmText !== this.databaseName) {
+      this.errorMessage = 'Database name does not match. Please type the exact name to confirm.';
       return;
     }
-    if (!dbName) {
-      this.errorMessage = 'No database specified.';
-      return;
-    }
+
+    this.isDeleting = true;
+    this.errorMessage = '';
 
     try {
-      this.isDeleting = true;
-      this.errorMessage = '';
-
       const dropCmd = this.forceDelete
-        ? `DROP DATABASE "${dbName}" WITH FORCE;`
-        : `DROP DATABASE "${dbName}";`;
-      console.log('[DeleteDatabase] Sending DROP command:', dropCmd);
-      const result = await connectionManager.executeQueryWithContext(connId, dropCmd);
-      console.log('[DeleteDatabase] DROP result:', result);
+        ? `DROP DATABASE "${this.databaseName}" WITH FORCE;`
+        : `DROP DATABASE "${this.databaseName}";`;
+      const result = await connectionManager.executeQueryOnConnectionId(
+        this.connectionId,
+        dropCmd
+      );
 
-      if (result.success) {
-        // Refresh metadata so the tree updates
-        await connectionManager.refreshMetadata(connId);
-
-        this.dispatchEvent(
-          new CustomEvent('database-deleted', {
-            detail: { connectionId: connId, databaseName: dbName },
-            bubbles: true,
-          })
-        );
-
-        this.handleClose();
-      } else {
-        const err = result.error;
-        const msg = err && typeof err === 'object' && 'message' in err
-          ? (err as { message: string }).message
-          : err || 'Unknown error';
-        this.errorMessage = `Failed to delete database: ${msg}`;
+      if (!result.success) {
+        this.errorMessage = result.error || 'Failed to drop database';
+        this.isDeleting = false;
+        return;
       }
-    } catch (error) {
-      this.errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-    } finally {
+
+      await connectionManager.refreshMetadata(this.connectionId);
+
+      import('./toast-notification').then(({ ToastNotification }) => {
+        ToastNotification.success(`Database "${this.databaseName}" deleted`);
+      });
+
+      this.dispatchEvent(new CustomEvent('database-deleted', {
+        detail: { connectionId: this.connectionId, databaseName: this.databaseName },
+        bubbles: true,
+      }));
+
+      this.handleClose();
+    } catch (err) {
+      this.errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       this.isDeleting = false;
     }
   }
@@ -96,90 +78,69 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
     if (!this.open) return html``;
 
     return html`
-      <div class="modal ${this.open ? 'modal-open' : ''}">
-        <div class="modal-box w-11/12 max-w-lg ${this.modalContainerClass}">
-          <!-- Modal Header -->
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="font-bold text-lg">Delete Database</h3>
-            <button
-              class="btn btn-sm btn-circle btn-ghost"
-              @click=${this.handleClose}
-              ?disabled=${this.isDeleting}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+      <div class="modal modal-open">
+        <div class="db-modal-container modal-box w-11/12 max-w-md">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-lg text-feedback-error">
+              <i class="fa-solid fa-triangle-exclamation mr-2"></i>Delete Database
+            </h3>
+            <button class="btn btn-sm btn-circle btn-ghost" @click=${this.handleClose}>
+              <i class="fa-solid fa-xmark"></i>
             </button>
           </div>
 
-          <!-- Warning -->
-          <div class="p-3 bg-error/10 border border-error/30 rounded-md mb-4">
-            <p class="text-sm text-error font-semibold">
-              This action cannot be undone.
-            </p>
-            <p class="text-sm text-error mt-1">
+          <div class="space-y-4">
+            <p class="text-sm">
               This will permanently delete the database
-              <span class="font-bold">"${this.databaseName}"</span>
-              and all of its data.
+              <strong class="text-feedback-error">${this.databaseName}</strong>
+              and all of its bundles and data. This action cannot be undone.
             </p>
-          </div>
 
-          <!-- Confirmation Input -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Type <span class="font-bold">delete</span> to confirm
+            <div>
+              <label class="label">
+                <span class="label-text text-sm">Type <strong>${this.databaseName}</strong> to confirm:</span>
+              </label>
+              <input
+                type="text"
+                class="input input-bordered input-sm w-full"
+                .value=${this.confirmText}
+                @input=${(e: Event) => { this.confirmText = (e.target as HTMLInputElement).value; }}
+                placeholder=${this.databaseName ?? ''}
+                ?disabled=${this.isDeleting}
+                autocomplete="off"
+              />
+            </div>
+
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                class="toggle toggle-error toggle-sm"
+                .checked=${this.forceDelete}
+                @change=${(e: Event) => { this.forceDelete = (e.target as HTMLInputElement).checked; }}
+                ?disabled=${this.isDeleting}
+              />
+              <span class="text-sm">Force delete (remove database even if bundles contain data)</span>
             </label>
-            <input
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-error focus:border-error"
-              placeholder="type in the word delete to confirm"
-              .value=${this.confirmationText}
-              @input=${this.handleConfirmationInput}
-              ?disabled=${this.isDeleting}
-              autocomplete="off"
-            />
+
+            ${this.errorMessage ? html`
+              <p class="text-sm text-feedback-error">${this.errorMessage}</p>
+            ` : ''}
           </div>
 
-          <!-- Force Delete Toggle -->
-          <label class="flex items-center gap-2 cursor-pointer mt-4">
-            <input
-              type="checkbox"
-              class="toggle toggle-error toggle-sm"
-              .checked=${this.forceDelete}
-              @change=${(e: Event) => { this.forceDelete = (e.target as HTMLInputElement).checked; }}
-              ?disabled=${this.isDeleting}
-            />
-            <span class="text-sm">Force delete (remove database even if bundles contain data)</span>
-          </label>
-
-          <!-- Error Message -->
-          ${this.errorMessage
-            ? html`<div class="mt-4 p-3 bg-error/10 border border-error/30 rounded-md">
-                <p class="text-sm text-error">${this.errorMessage}</p>
-              </div>`
-            : ''}
-
-          <!-- Modal Actions -->
           <div class="modal-action mt-6">
-            <button
-              type="button"
-              class="btn btn-ghost"
-              @click=${this.handleClose}
-              ?disabled=${this.isDeleting}
-            >
+            <button class="btn btn-ghost btn-sm" @click=${this.handleClose} ?disabled=${this.isDeleting}>
               Cancel
             </button>
             <button
-              type="button"
-              class="btn btn-error ${this.isDeleting ? 'loading' : ''}"
+              class="btn btn-error btn-sm ${this.isDeleting ? 'loading' : ''}"
               @click=${this.handleDelete}
-              ?disabled=${!this.isConfirmed || this.isDeleting}
+              ?disabled=${this.isDeleting || this.confirmText !== this.databaseName}
             >
               ${this.isDeleting ? 'Deleting...' : 'Delete Database'}
             </button>
           </div>
         </div>
-        <div class="modal-backdrop ${this.modalBackdropClass}" @click=${this.handleClose}></div>
+        <div class="modal-backdrop" @click=${this.handleClose}></div>
       </div>
     `;
   }

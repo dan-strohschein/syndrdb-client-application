@@ -3,6 +3,9 @@
  */
 import { html, TemplateResult } from 'lit';
 import { ContextMenuState, CONTEXT_MENU_ACTIONS, NODE_TYPES } from './tree-types';
+import { buildCreateBundleCommand } from '../../domain/bundle-commands';
+import { buildCreateDatabaseCommand } from '../../tools/exporter/domain/ddl-script-generator';
+import { fieldDefinitionsToArray } from '../../lib/bundle-utils';
 
 export class TreeContextMenuHandler {
   /**
@@ -216,7 +219,7 @@ export class TreeContextMenuHandler {
         case CONTEXT_MENU_ACTIONS.DELETE_BUNDLE:
             console.log('🗄️ Dispatching delete-bundle-requested event from connection tree')
             eventDispatcher(new CustomEvent('delete-bundle-requested', {
-                detail: { 
+                detail: {
                 connectionId: contextMenu.nodeId.split('-')[0], // Extract connection ID
                 nodeType: contextMenu.nodeType,
                 nodeName: contextMenu.nodeName,
@@ -227,6 +230,69 @@ export class TreeContextMenuHandler {
             }));
             console.log('✅ Delete bundle event dispatched successfully');
         break;
+
+        case CONTEXT_MENU_ACTIONS.SCRIPT_AS_CREATE: {
+            const scriptContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            let script = '';
+
+            if (contextMenu.nodeType === NODE_TYPES.BUNDLE && contextMenu.data) {
+                const bundle = contextMenu.data;
+                const fieldDefs = fieldDefinitionsToArray(bundle.FieldDefinitions);
+                script = `USE "${scriptContext.databaseName}";\n\n${buildCreateBundleCommand(bundle.Name, fieldDefs)}`;
+            } else if (contextMenu.nodeType === NODE_TYPES.DATABASE) {
+                script = buildCreateDatabaseCommand(contextMenu.nodeName);
+            }
+
+            if (script) {
+                eventDispatcher(new CustomEvent('add-query-editor', {
+                    detail: {
+                        query: script,
+                        databaseName: scriptContext.databaseName,
+                        connectionId: scriptContext.connectionId
+                    },
+                    bubbles: true
+                }));
+            }
+            break;
+        }
+
+        case CONTEXT_MENU_ACTIONS.SCRIPT_AS_DROP: {
+            const dropContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            let dropScript = '';
+
+            if (contextMenu.nodeType === NODE_TYPES.BUNDLE) {
+                dropScript = `USE "${dropContext.databaseName}";\n\nDROP BUNDLE "${contextMenu.nodeName}";`;
+            } else if (contextMenu.nodeType === NODE_TYPES.DATABASE) {
+                dropScript = `DROP DATABASE "${contextMenu.nodeName}";`;
+            }
+
+            if (dropScript) {
+                eventDispatcher(new CustomEvent('add-query-editor', {
+                    detail: {
+                        query: dropScript,
+                        databaseName: dropContext.databaseName,
+                        connectionId: dropContext.connectionId
+                    },
+                    bubbles: true
+                }));
+            }
+            break;
+        }
+
+        case CONTEXT_MENU_ACTIONS.REFRESH_NODE: {
+            const refreshContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            eventDispatcher(new CustomEvent('refresh-tree-node', {
+                detail: {
+                    connectionId: refreshContext.connectionId,
+                    databaseName: refreshContext.databaseName,
+                    nodeType: contextMenu.nodeType,
+                    nodeId: contextMenu.nodeId,
+                    nodeName: contextMenu.nodeName
+                },
+                bubbles: true
+            }));
+            break;
+        }
     }
   }
 
@@ -253,7 +319,12 @@ export class TreeContextMenuHandler {
          icon: 'fa-database',
          label: 'New Database'
       });
-     
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.REFRESH_NODE,
+        icon: 'fa-rotate',
+        label: 'Refresh'
+      });
+
     } else if (nodeType === NODE_TYPES.DATABASE) {
       actions.push({
         action: CONTEXT_MENU_ACTIONS.EDIT_DATABASE,
@@ -279,6 +350,21 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.RESTORE_DATABASE,
         icon: 'fa-upload',
         label: 'Restore Database'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.SCRIPT_AS_CREATE,
+        icon: 'fa-file-code',
+        label: 'Script As CREATE'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.SCRIPT_AS_DROP,
+        icon: 'fa-file-circle-minus',
+        label: 'Script As DROP'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.REFRESH_NODE,
+        icon: 'fa-rotate',
+        label: 'Refresh'
       });
     } else if (nodeType === NODE_TYPES.USERS) {
       actions.push({
@@ -313,6 +399,21 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.DELETE_BUNDLE,
         icon: 'fa-trash',
         label: 'Delete Bundle'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.SCRIPT_AS_CREATE,
+        icon: 'fa-file-code',
+        label: 'Script As CREATE'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.SCRIPT_AS_DROP,
+        icon: 'fa-file-circle-minus',
+        label: 'Script As DROP'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.REFRESH_NODE,
+        icon: 'fa-rotate',
+        label: 'Refresh'
       });
     } else {
       actions.push({
@@ -368,10 +469,10 @@ export class TreeContextMenuHandler {
 
     return html`
       <context-menu style="position: fixed; top: ${contextMenu.y}px; left: ${contextMenu.x}px; z-index: 1000;">
-        <ul class="menu bg-base-200 w-56 rounded-box shadow-lg">
+        <ul class="menu bg-surface-4 w-56 rounded-lg shadow-elevation-4 border border-db-border animate-context-menu-enter">
           ${actions.map(({action, icon, label}) => html`
             <li>
-              <a @click=${(e: Event) => {
+              <a class="transition-colors duration-100 hover:bg-accent-subtle" @click=${(e: Event) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onAction(action);
