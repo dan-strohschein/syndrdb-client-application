@@ -45,15 +45,17 @@ export class QueryEditorTabContainer extends LitElement {
     this.graphqlLanguageService = new GraphQLLanguageService();
     this.graphqlLanguageService.initialize();
 
-    // Initialize SyndrQL query text with database name if provided
-    if (this.databaseName && !this.syndrqlQueryText) {
-      this.syndrqlQueryText = `USE "${this.databaseName}";`;
-    } else if (!this.syndrqlQueryText) {
-      this.syndrqlQueryText = 'USE "<Database_Name>";';
+    // Set default syndrqlQueryText only if not already set
+    if (!this.syndrqlQueryText) {
+      if (this.databaseName) {
+        this.syndrqlQueryText = `USE "${this.databaseName}";`;
+      } else {
+        this.syndrqlQueryText = 'USE "<Database_Name>";';
+      }
     }
 
-    // Initialize queryText with the active tab's content
-    this.queryText = this.activeTab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
+    // Don't overwrite queryText here — let the parent binding set it.
+    // The updated() handler will sync queryText → syndrqlQueryText when it arrives.
 
     window.addEventListener('resize', this.resizeHandler);
   }
@@ -70,6 +72,21 @@ export class QueryEditorTabContainer extends LitElement {
 
   updated(changedProperties: PropertyValues) {
     super.updated(changedProperties);
+
+    // Handle queryText changes from parent (e.g. "Open in Editor Tab" from export wizard)
+    if (changedProperties.has('queryText') && this.queryText) {
+      const prev = changedProperties.get('queryText') as string | undefined;
+      // Only sync if queryText actually changed and differs from current syndrqlQueryText
+      if (this.queryText !== prev && this.queryText !== this.syndrqlQueryText) {
+        this.syndrqlQueryText = this.queryText;
+        // Push to the code editor if it already exists
+        const editor = this.querySelector('#syndrql-editor code-editor') as
+          (HTMLElement & { setText?: (text: string) => void }) | null;
+        if (editor?.setText) {
+          editor.setText(this.queryText);
+        }
+      }
+    }
 
     // Handle database name changes
     if (changedProperties.has('databaseName') && this.databaseName) {
@@ -165,7 +182,7 @@ export class QueryEditorTabContainer extends LitElement {
         <div class="flex-1 relative">
           <!-- SyndrQL Editor (uses default SyndrQL LS via fallback) -->
           <div id="syndrql-editor" class="h-full absolute inset-0 p-4 ${this.activeTab === 'syndrql' ? 'visible z-10' : 'invisible z-0'}">
-            <code-editor data-placeholder="SyndrQL Editor"></code-editor>
+            <code-editor .initialText=${this.syndrqlQueryText} data-placeholder="SyndrQL Editor"></code-editor>
           </div>
 
           <!-- GraphQL Editor (uses pluggable GraphQL LS) -->

@@ -46,6 +46,9 @@ export class BundleModal extends BaseModalMixin(LitElement) {
   @state()
   private bundles: Array<Bundle> = [];
 
+  @state()
+  private showDdlPreview = false;
+
   protected willUpdate(changedProperties: PropertyValues): void {
     super.willUpdate(changedProperties);
     if (changedProperties.has('bundle')) {
@@ -76,6 +79,16 @@ export class BundleModal extends BaseModalMixin(LitElement) {
 
     private handleRelationshipStatementsChanged(event: CustomEvent<string[]>) {
         this.relationshipStatements = event.detail ?? [];
+    }
+
+    private get ddlPreviewText(): string {
+        const { name, fieldDefinitions } = this.bundleFormState;
+        if (!name) return '-- Enter a bundle name to see generated SyndrQL';
+        if (this.bundle) {
+            const cmd = buildUpdateBundleCommands(this.bundle, this.bundleFormState, this.relationshipStatements);
+            return cmd || '-- No changes detected';
+        }
+        return buildCreateBundleCommand(name, fieldDefinitions);
     }
 
     private async handleSave() {
@@ -133,7 +146,7 @@ export class BundleModal extends BaseModalMixin(LitElement) {
 
         return html`
         <div class="modal ${this.open ? 'modal-open' : ''}">
-            <div class="modal-box w-4/5 max-w-6xl">
+            <div class="modal-box db-modal-container-lg">
                 <!-- Modal Header -->
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-bold text-lg">${this.bundle ? 'Edit Bundle' : 'Add New Bundle'}</h3>
@@ -191,19 +204,34 @@ export class BundleModal extends BaseModalMixin(LitElement) {
                         </div>
                     </div>
                     
+                    <!-- DDL Preview -->
+                    <div class="mt-4 border border-db-border rounded-lg overflow-hidden">
+                        <button
+                            type="button"
+                            class="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-base-content/70 bg-surface-2 hover:bg-surface-3 transition-colors"
+                            @click=${() => { this.showDdlPreview = !this.showDdlPreview; }}
+                        >
+                            <span><i class="fa-solid fa-code mr-2"></i>Generated SyndrQL</span>
+                            <i class="fa-solid ${this.showDdlPreview ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                        </button>
+                        ${this.showDdlPreview ? html`
+                            <pre class="p-3 bg-surface-1 text-xs font-mono text-base-content whitespace-pre-wrap overflow-x-auto max-h-40">${this.ddlPreviewText}</pre>
+                        ` : ''}
+                    </div>
+
                     <!-- Modal Actions -->
                     <div class="modal-action mt-6">
-                        <button 
+                        <button
                             type="button"
-                            class="btn btn-ghost" 
+                            class="btn btn-ghost"
                             @click=${this.handleClose}
                             ?disabled="${this.isLoading}"
                         >
                             Cancel
                         </button>
-                        <button 
+                        <button
                             type="submit"
-                            class="btn btn-primary ${this.isLoading ? 'loading' : ''}" 
+                            class="btn btn-primary ${this.isLoading ? 'loading' : ''}"
                             ?disabled="${this.isLoading || !this.bundleFormState.name || this.bundleFormState.fieldDefinitions.length === 0}"
                         >
                             ${this.isLoading ? 'Saving...' : (this.bundle ? 'Update Bundle' : 'Add New Bundle')}

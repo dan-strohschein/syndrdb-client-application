@@ -614,15 +614,17 @@ export class ConnectionManager extends TypedEventEmitter<ConnectionEventMap> {
     if (!rawIndexes || typeof rawIndexes !== 'object') return [];
     if (Array.isArray(rawIndexes)) {
       return rawIndexes.map((idx: Record<string, unknown>) => ({
+        ...idx,
         IndexName: (idx.IndexName ?? idx.indexName ?? '') as string,
-        IndexType: ConnectionManager.normalizeIndexType((idx.IndexType ?? idx.indexType ?? '') as string)
-      }));
+        IndexType: ConnectionManager.normalizeIndexType((idx.IndexType ?? idx.indexType ?? '') as string),
+      })) as BundleIndex[];
     }
     return Object.entries(rawIndexes as Record<string, Record<string, unknown>>).map(([key, indexData]) => ({
+      ...indexData,
       IndexName: (indexData.IndexName ?? indexData.indexName ?? key) as string,
       IndexType: ConnectionManager.normalizeIndexType((indexData.IndexType ?? indexData.indexType ?? '') as string),
-      _mapKey: key
-    }));
+      _mapKey: key,
+    })) as BundleIndex[];
   }
 
   /**

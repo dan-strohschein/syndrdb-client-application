@@ -36,6 +36,7 @@ export interface FileDialogAPI {
   
   showSaveDialog: (options?: {
     title?: string;
+    defaultPath?: string;
     filters?: { name: string; extensions: string[] }[];
   }) => Promise<{ canceled: boolean; filePath?: string }>;
 }
@@ -83,11 +84,38 @@ export interface FileSystemAPI {
   deleteDirectory: (path: string) => Promise<void>;
 }
 
+export interface ExporterElectronAPI {
+  listPlugins: () => Promise<import('../tools/exporter/types/exporter-plugin').ExporterPluginManifest[]>;
+  exportSchema: (ddlScript: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+  startExport: (config: import('../tools/exporter/types/export-config').ExportExecutionConfig) => Promise<import('../tools/exporter/types/exporter-plugin').ExportResult>;
+  abortExport: () => Promise<void>;
+  onExportProgress: (callback: (data: unknown) => void) => void;
+  onExportComplete: (callback: (data: unknown) => void) => void;
+  onExportError: (callback: (data: unknown) => void) => void;
+  removeExportListeners: () => void;
+}
+
+export interface ImporterElectronAPI {
+  listPlugins: () => Promise<import('../tools/importer/types/importer-plugin').ImporterPluginManifest[]>;
+  getFileInfo: (filePath: string) => Promise<import('../tools/importer/types/importer-plugin').FileInfo>;
+  parsePreview: (pluginId: string, config: import('../tools/importer/types/importer-plugin').ParserConfig) => Promise<import('../tools/importer/types/importer-plugin').ParseResult>;
+  validateImport: (config: import('../electron/import-execution-engine').ImportExecutionConfig, previewRows: (string | null)[][]) => Promise<{ validRows: number; invalidRows: number; errors: import('../tools/importer/types/importer-plugin').ImportRowError[] }>;
+  startImport: (config: import('../electron/import-execution-engine').ImportExecutionConfig) => Promise<import('../tools/importer/types/importer-plugin').ImportResult>;
+  abortImport: () => Promise<void>;
+  onImportProgress: (callback: (data: unknown) => void) => void;
+  onImportBatchResult: (callback: (data: unknown) => void) => void;
+  onImportComplete: (callback: (data: unknown) => void) => void;
+  onImportError: (callback: (data: unknown) => void) => void;
+  removeImportListeners: () => void;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
   fileDialog: FileDialogAPI;
   aiAssistant?: AIAssistantElectronAPI;
+  importer?: ImporterElectronAPI;
+  exporter?: ExporterElectronAPI;
   readFile?: FileSystemAPI['readFile'];
   writeFile?: FileSystemAPI['writeFile'];
   createDirectory?: FileSystemAPI['createDirectory'];

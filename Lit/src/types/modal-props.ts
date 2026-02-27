@@ -75,6 +75,21 @@ export interface RestoreModalProps {
   connectionId?: string | null;
 }
 
+/** Props passed to import-wizard-modal when opened from root */
+export interface ImportWizardModalProps {
+  open: boolean;
+  connectionId?: string | null;
+  databaseName?: string | null;
+  bundleName?: string | null;
+}
+
+/** Props passed to export-wizard-modal when opened from root */
+export interface ExportWizardModalProps {
+  open: boolean;
+  connectionId?: string | null;
+  databaseName?: string | null;
+}
+
 /**
  * Discriminated union: which modal is open and its typed props.
  * Root holds this state and binds to modal components via these types.
@@ -88,4 +103,6 @@ export type ModalState =
   | { type: 'error'; props: ErrorModalProps }
   | { type: 'user'; props: UserModalProps }
   | { type: 'backup'; props: BackupModalProps }
-  | { type: 'restore'; props: RestoreModalProps };
+  | { type: 'restore'; props: RestoreModalProps }
+  | { type: 'import-wizard'; props: ImportWizardModalProps }
+  | { type: 'export-wizard'; props: ExportWizardModalProps };

@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fileDialog: {
     showOpenDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-open', options),
-    showSaveDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) =>
+    showSaveDialog: (options?: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) =>
       ipcRenderer.invoke('file-dialog:show-save', options)
   },
 
@@ -59,5 +59,56 @@ contextBridge.exposeInMainWorld('electronAPI', {
     generateQuery: (request: import('../types/electron-api').AIAssistantGenerateRequest) =>
       ipcRenderer.invoke('ai-assistant:generate-query', request),
     checkSubscription: () => ipcRenderer.invoke('ai-assistant:check-subscription')
+  },
+
+  importer: {
+    listPlugins: () => ipcRenderer.invoke('importer:list-plugins'),
+    getFileInfo: (filePath: string) => ipcRenderer.invoke('importer:get-file-info', filePath),
+    parsePreview: (pluginId: string, config: unknown) =>
+      ipcRenderer.invoke('importer:parse-preview', pluginId, config),
+    validateImport: (config: unknown, previewRows: unknown) =>
+      ipcRenderer.invoke('importer:validate-import', config, previewRows),
+    startImport: (config: unknown) => ipcRenderer.invoke('importer:start-import', config),
+    abortImport: () => ipcRenderer.invoke('importer:abort-import'),
+    onImportProgress: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-progress', (_, data) => callback(data));
+    },
+    onImportBatchResult: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-batch-result', (_, data) => callback(data));
+    },
+    onImportComplete: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-complete', (_, data) => callback(data));
+    },
+    onImportError: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('importer:import-error', (_, data) => callback(data));
+    },
+    removeImportListeners: () => {
+      ipcRenderer.removeAllListeners('importer:import-progress');
+      ipcRenderer.removeAllListeners('importer:import-batch-result');
+      ipcRenderer.removeAllListeners('importer:import-complete');
+      ipcRenderer.removeAllListeners('importer:import-error');
+    }
+  },
+
+  exporter: {
+    listPlugins: () => ipcRenderer.invoke('exporter:list-plugins'),
+    exportSchema: (ddlScript: string, filePath: string) =>
+      ipcRenderer.invoke('exporter:export-schema', ddlScript, filePath),
+    startExport: (config: unknown) => ipcRenderer.invoke('exporter:start-export', config),
+    abortExport: () => ipcRenderer.invoke('exporter:abort-export'),
+    onExportProgress: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-progress', (_, data) => callback(data));
+    },
+    onExportComplete: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-complete', (_, data) => callback(data));
+    },
+    onExportError: (callback: (data: unknown) => void) => {
+      ipcRenderer.on('exporter:export-error', (_, data) => callback(data));
+    },
+    removeExportListeners: () => {
+      ipcRenderer.removeAllListeners('exporter:export-progress');
+      ipcRenderer.removeAllListeners('exporter:export-complete');
+      ipcRenderer.removeAllListeners('exporter:export-error');
+    }
   }
 } as ElectronAPI);
