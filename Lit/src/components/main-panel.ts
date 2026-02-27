@@ -21,6 +21,8 @@ interface TabEntry {
   profilerConnectionId?: string;
   /** True if the user manually renamed this tab (prevents auto-naming) */
   userRenamed?: boolean;
+  /** Which sub-tab to activate initially (syndrql, graphql, diagram) */
+  initialTab?: 'syndrql' | 'graphql' | 'diagram';
 }
 
 @customElement('main-panel')
@@ -133,6 +135,11 @@ export class MainPanel extends LitElement {
     this.addEventListener('open-session-manager-tab', () => {
       this.handleOpenSessionManagerTab();
     });
+
+    // Add event listener for open-schema-diagram events
+    this.addEventListener('open-schema-diagram', (event: Event) => {
+      this.handleOpenSchemaDiagram(event as CustomEvent);
+    });
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
@@ -181,6 +188,37 @@ export class MainPanel extends LitElement {
       type: 'session-manager'
     }];
     this.activeTabIndex = this.tabs.length - 1;
+  }
+
+  private handleOpenSchemaDiagram(event: CustomEvent) {
+    let { connectionId, databaseName } = event.detail ?? {};
+
+    // Fall back to active connection if not provided (e.g. Tools menu launch)
+    if (!connectionId) {
+      const activeConn = connectionManager.getActiveConnection();
+      if (activeConn) {
+        connectionId = activeConn.id;
+        if (!databaseName) {
+          databaseName = activeConn.currentDatabase || '';
+        }
+      }
+    }
+
+    const conn = connectionId ? connectionManager.getConnection(connectionId) : null;
+    const tabName = databaseName ? `Schema: ${databaseName}` : 'Schema Diagram';
+
+    this.tabs = [...this.tabs, {
+      name: tabName,
+      type: 'query',
+      databaseName: databaseName || '',
+      connectionId: connectionId || '',
+      connectionName: conn?.name || '',
+      initialTab: 'diagram',
+    }];
+    this.activeTabIndex = this.tabs.length - 1;
+    this.newTabIndex = this.activeTabIndex;
+    setTimeout(() => { this.newTabIndex = null; }, 200);
+    this.persistTabs();
   }
 
   private switchToTab(index: number) {
@@ -284,6 +322,7 @@ export class MainPanel extends LitElement {
         connectionName: t.connectionName || '',
         profilerConnectionId: t.profilerConnectionId || '',
         userRenamed: (t as any).userRenamed || false,
+        initialTab: t.initialTab || 'syndrql',
       }));
       localStorage.setItem('syndrdb-tabs', JSON.stringify(serializable));
       localStorage.setItem('syndrdb-active-tab', String(this.activeTabIndex));
@@ -458,6 +497,7 @@ export class MainPanel extends LitElement {
                         .initialQuery=${tab.queryState || tab.initialQuery || ''}
                         .databaseName=${tab.databaseName || ''}
                         .connectionId=${tab.connectionId || ''}
+                        .initialTab=${tab.initialTab || 'syndrql'}
                         .isActive=${this.activeTabIndex === index}
                         @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}
                         @tab-connection-changed=${(e: CustomEvent) => this.handleTabConnectionChanged(e, index)}

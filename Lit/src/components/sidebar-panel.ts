@@ -158,9 +158,7 @@ export class SidebarPanel extends LitElement {
         <div class="flex-shrink-0 p-4 db-sidebar-header">
           <h2 class="text-x1 font-semibold text-gray-200">Database Connections</h2>
           <button class="btn btn-sm mt-2 w-full bg-accent hover:bg-accent-dark text-white transition-transform duration-100 active:scale-[0.97]" @click=${this.openConnectionModal}>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
+            <i class="fa-solid fa-plus mr-2 text-green-300"></i>
             New Connection
           </button>
         </div>
@@ -168,7 +166,7 @@ export class SidebarPanel extends LitElement {
         <!-- Search Filter -->
         <div class="flex-shrink-0 px-4 py-2">
           <div class="relative">
-            <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-feedback-muted text-xs"></i>
+            <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400 text-xs"></i>
             <input
               type="text"
               class="db-input text-xs w-full pl-7 pr-7 py-1.5"

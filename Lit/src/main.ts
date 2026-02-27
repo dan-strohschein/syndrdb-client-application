@@ -243,6 +243,17 @@ export class AppRoot extends LitElement {
       }
     });
 
+    // Listen for open-schema-diagram events and forward to main-panel
+    this.addEventListener('open-schema-diagram', (event: Event) => {
+      const mainPanel = this.querySelector('main-panel');
+      if (mainPanel) {
+        mainPanel.dispatchEvent(new CustomEvent('open-schema-diagram', {
+          detail: (event as CustomEvent).detail,
+          bubbles: false
+        }));
+      }
+    });
+
     // Listen for import wizard requests
     this.addEventListener('import-wizard-requested', (event: Event) => {
       this.handleImportWizardRequest(event as CustomEvent);

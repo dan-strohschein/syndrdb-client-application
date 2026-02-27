@@ -45,6 +45,9 @@ export class QueryEditorFrame extends LitElement {
     @property({ type: String })
     public connectionId: string = '';
 
+    @property({ type: String })
+    public initialTab: 'syndrql' | 'graphql' | 'diagram' = 'syndrql';
+
     @consume({ context: connectionContext })
   @state() connectionCtxt?: ConnectionContext;
 
@@ -98,7 +101,7 @@ export class QueryEditorFrame extends LitElement {
 
     /** Which editor tab is currently active (tracked via tab-changed event). */
     @state()
-    private activeQueryTab: 'syndrql' | 'graphql' = 'syndrql';
+    private activeQueryTab: 'syndrql' | 'graphql' | 'diagram' = 'syndrql';
 
     @state() private editorHeightPct: number = parseInt(localStorage.getItem('editor-split-pct') || '50', 10);
     private _verticalResizing = false;
@@ -133,13 +136,17 @@ export class QueryEditorFrame extends LitElement {
 
   willUpdate(changedProperties: PropertyValues) {
         // Initialize properties only once when they first arrive
-        if (!this._initialized && (this.initialQuery || this.connectionId)) {
+        if (!this._initialized && (this.initialQuery || this.connectionId || this.initialTab !== 'syndrql')) {
             if (this.initialQuery) {
                 this.query = this.initialQuery;
             }
 
             if (this.connectionId) {
                 this._selectedConnectionId = this.connectionId;
+            }
+
+            if (this.initialTab) {
+                this.activeQueryTab = this.initialTab;
             }
 
             this._initialized = true;
@@ -748,8 +755,16 @@ export class QueryEditorFrame extends LitElement {
             <span class="hover:text-accent cursor-pointer transition-colors" title="Database: ${this.databaseName}">${this.databaseName}</span>
           ` : ''}
           <span class="opacity-50">/</span>
-          <span>${this.activeQueryTab === 'graphql' ? 'GraphQL' : 'SyndrQL'}</span>
+          <span>${this.activeQueryTab === 'diagram' ? 'Schema Diagram' : this.activeQueryTab === 'graphql' ? 'GraphQL' : 'SyndrQL'}</span>
         </div>
+        ${this.activeQueryTab === 'diagram' ? html`
+        <!-- Schema Diagram (full height, no editor header or results) -->
+        <div class="flex-1 min-h-0 overflow-hidden">
+          <div class="h-full bg-base-100 rounded border border-base-300">
+            <query-editor-tab-container .activeTab=${this.activeQueryTab} .connectionId=${this.connectionId} .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
+          </div>
+        </div>
+        ` : html`
         <!-- Query Editor (Top) -->
         <div class="border-b border-base-300 min-h-0 overflow-hidden" style="height: ${this.editorHeightPct}%">
           <div class="h-full p-4 flex flex-col">
@@ -793,7 +808,7 @@ export class QueryEditorFrame extends LitElement {
               </div>
             </div>
             <div class="flex-1 bg-base-100 rounded border border-base-300">
-              <query-editor-tab-container .activeTab='syndrql' .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
+              <query-editor-tab-container .activeTab=${this.activeQueryTab} .connectionId=${this.connectionId} .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
             </div>
           </div>
         </div>
@@ -1029,6 +1044,7 @@ export class QueryEditorFrame extends LitElement {
             </div>
           </div>
         </div>
+        `}
       </div>
     `;
   }

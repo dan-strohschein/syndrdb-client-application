@@ -241,6 +241,23 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleEditCommand(command: string) {
+        this.dispatchEvent(new CustomEvent('edit-command', {
+            detail: { command },
+            bubbles: true,
+            composed: true,
+        }));
+        this.handleMenuClose();
+    }
+
+    private handleOpenSchemaDiagram() {
+        this.dispatchEvent(new CustomEvent('open-schema-diagram', {
+            bubbles: true,
+            composed: true
+        }));
+        this.handleMenuClose();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -419,48 +436,69 @@ export class NavigationBar extends LitElement {
 
                     <ul class="menu menu-horizontal bg-surface-1 [&_li>*]:rounded-none p-0 " style="padding-top: 10px !important;">
                         <li class="relative">
-                            <button 
+                            <button
                                 class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('file', e)}
                             >
-                                <i class="fa-solid fa-file"></i>
+                                <i class="fa-solid fa-file text-blue-400"></i>
                                 <span>File</span>
                             </button>
                             ${this.openMenu === 'file' ? html`
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileOpen}>Open<span class="db-shortcut-hint">${this.modKey}+O</span></a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileSave}>Save<span class="db-shortcut-hint">${this.modKey}+S</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileOpen}><span><i class="fa-solid fa-folder-open mr-2 text-xs text-yellow-400"></i>Open</span><span class="db-shortcut-hint">${this.modKey}+O</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileSave}><span><i class="fa-solid fa-floppy-disk mr-2 text-xs text-blue-400"></i>Save</span><span class="db-shortcut-hint">${this.modKey}+S</span></a></li>
+                                </ul>
+                            ` : ''}
+                        </li>
+                        <li class="relative">
+                            <button
+                                class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
+                                @click=${(e: Event) => this.handleMenuToggle('edit', e)}
+                            >
+                                <i class="fa-solid fa-pen-to-square text-amber-400"></i>
+                                <span>Edit</span>
+                            </button>
+                            ${this.openMenu === 'edit' ? html`
+                                <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-56 z-50 animate-context-menu-enter border border-db-border">
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('undo')}><span><i class="fa-solid fa-rotate-left mr-2 text-xs text-orange-400"></i>Undo</span><span class="db-shortcut-hint">${this.modKey}+Z</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('redo')}><span><i class="fa-solid fa-rotate-right mr-2 text-xs text-green-400"></i>Redo</span><span class="db-shortcut-hint">${this.modKey}+Shift+Z</span></a></li>
+                                    <li class="border-t border-db-border/30 my-1" aria-hidden="true"></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('cut')}><span><i class="fa-solid fa-scissors mr-2 text-xs text-red-400"></i>Cut</span><span class="db-shortcut-hint">${this.modKey}+X</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('copy')}><span><i class="fa-solid fa-copy mr-2 text-xs text-blue-400"></i>Copy</span><span class="db-shortcut-hint">${this.modKey}+C</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('paste')}><span><i class="fa-solid fa-paste mr-2 text-xs text-emerald-400"></i>Paste</span><span class="db-shortcut-hint">${this.modKey}+V</span></a></li>
+                                    <li class="border-t border-db-border/30 my-1" aria-hidden="true"></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${() => this.handleEditCommand('toggleComment')}><span><i class="fa-solid fa-slash mr-2 text-xs text-violet-400"></i>Toggle Comment</span><span class="db-shortcut-hint">${this.modKey}+/</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
                          <li class="relative">
-                            <button 
+                            <button
                                 class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('servers', e)}
                             >
-                                <i class="fa-solid fa-server"></i>
+                                <i class="fa-solid fa-server text-emerald-400"></i>
                                 <span>Servers</span>
                             </button>
                             ${this.openMenu === 'servers' ? html`
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewConnection}>New&nbsp;Connection<span class="db-shortcut-hint">${this.modKey}+N</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewConnection}><span><i class="fa-solid fa-plug mr-2 text-xs text-green-400"></i>New&nbsp;Connection</span><span class="db-shortcut-hint">${this.modKey}+N</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
-                        
+
                         <li class="relative">
-                            <button 
+                            <button
                                 class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('database', e)}
                             >
-                                <i class="fa-solid fa-database"></i>
+                                <i class="fa-solid fa-database text-cyan-400"></i>
                                 <span>Database</span>
                             </button>
                             ${this.openMenu === 'database' ? html`
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewDatabase}>New&nbsp;Database</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleBackupDatabase}>Backup</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleRestoreDatabase}>Restore</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleNewDatabase}><span><i class="fa-solid fa-circle-plus mr-2 text-xs text-green-400"></i>New&nbsp;Database</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleBackupDatabase}><span><i class="fa-solid fa-box-archive mr-2 text-xs text-amber-400"></i>Backup</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleRestoreDatabase}><span><i class="fa-solid fa-rotate-left mr-2 text-xs text-sky-400"></i>Restore</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
@@ -470,17 +508,18 @@ export class NavigationBar extends LitElement {
                                 class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('tools', e)}
                             >
-                                <i class="fa-solid fa-screwdriver-wrench"></i>
+                                <i class="fa-solid fa-screwdriver-wrench text-orange-400"></i>
                                 <span>Tools</span>
                             </button>
                             ${this.openMenu === 'tools' ? html`
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-56 z-50 animate-context-menu-enter border border-db-border">
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Query Editor</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenProfiler}>Profiler<span class="db-shortcut-hint">${this.modKey}+Shift+P</span></a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenImporter}>Importer<span class="db-shortcut-hint">${this.modKey}+Shift+I</span></a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenExporter}>Exporter<span class="db-shortcut-hint">${this.modKey}+Shift+E</span></a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenSessionManager}>Session Manager</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenQueryHistory}>Query History</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300"><span><i class="fa-solid fa-terminal mr-2 text-xs text-green-400"></i>Query Editor</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenSchemaDiagram}><span><i class="fa-solid fa-share-nodes mr-2 text-xs text-indigo-400"></i>Schema Diagram</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenProfiler}><span><i class="fa-solid fa-gauge-high mr-2 text-xs text-rose-400"></i>Profiler</span><span class="db-shortcut-hint">${this.modKey}+Shift+P</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenImporter}><span><i class="fa-solid fa-file-import mr-2 text-xs text-cyan-400"></i>Importer</span><span class="db-shortcut-hint">${this.modKey}+Shift+I</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenExporter}><span><i class="fa-solid fa-file-export mr-2 text-xs text-teal-400"></i>Exporter</span><span class="db-shortcut-hint">${this.modKey}+Shift+E</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenSessionManager}><span><i class="fa-solid fa-users mr-2 text-xs text-purple-400"></i>Session Manager</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleOpenQueryHistory}><span><i class="fa-solid fa-clock-rotate-left mr-2 text-xs text-amber-400"></i>Query History</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
@@ -490,14 +529,14 @@ export class NavigationBar extends LitElement {
                                 class="flex items-center space-x-1 px-2 py-1 hover:bg-surface-3"
                                 @click=${(e: Event) => this.handleMenuToggle('settings', e)}
                             >
-                                <i class="fa-solid fa-gear"></i>
+                                <i class="fa-solid fa-gear text-gray-400"></i>
                                 <span>Settings</span>
                             </button>
                             ${this.openMenu === 'settings' ? html`
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Updates</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300">Settings</a></li>
-                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleAboutOpen}>Version</a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300"><span><i class="fa-solid fa-arrows-rotate mr-2 text-xs text-sky-400"></i>Updates</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300"><span><i class="fa-solid fa-sliders mr-2 text-xs text-violet-400"></i>Settings</span></a></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleAboutOpen}><span><i class="fa-solid fa-circle-info mr-2 text-xs text-blue-400"></i>Version</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>
@@ -507,7 +546,7 @@ export class NavigationBar extends LitElement {
                                 title="Open AI Assistant"
                                 @click=${this.handleAIAssistantToggle}
                             >
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <i class="fa-solid fa-wand-magic-sparkles text-violet-400"></i>
                                 <span>AI</span>
                             </button>
                         </li>

@@ -279,6 +279,18 @@ export class TreeContextMenuHandler {
             break;
         }
 
+        case CONTEXT_MENU_ACTIONS.SCHEMA_DIAGRAM: {
+            const diagramContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
+            eventDispatcher(new CustomEvent('open-schema-diagram', {
+                detail: {
+                    connectionId: diagramContext.connectionId,
+                    databaseName: diagramContext.databaseName || contextMenu.nodeName
+                },
+                bubbles: true
+            }));
+            break;
+        }
+
         case CONTEXT_MENU_ACTIONS.REFRESH_NODE: {
             const refreshContext = TreeContextMenuHandler.extractDatabaseContext(contextMenu.nodeId, contextMenu.nodeType);
             eventDispatcher(new CustomEvent('refresh-tree-node', {
@@ -340,6 +352,11 @@ export class TreeContextMenuHandler {
         action: CONTEXT_MENU_ACTIONS.QUERY,
         icon: 'fa-plus',
         label: 'New Query Editor'
+      });
+      actions.push({
+        action: CONTEXT_MENU_ACTIONS.SCHEMA_DIAGRAM,
+        icon: 'fa-share-nodes',
+        label: 'Schema Diagram'
       });
       actions.push({
         action: CONTEXT_MENU_ACTIONS.BACKUP_DATABASE,

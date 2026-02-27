@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import '../code-editor/code-editor.js';
 import '../code-editor/suggestion-complete/suggestion-dropdown';
 import '../dragndrop/droppable';
+import '../schema-diagram/schema-diagram';
 
 import { GraphQLLanguageService } from '../code-editor/graphql-language-service/index.js';
 import type { ILanguageService } from '../code-editor/language-service-interface.js';
@@ -17,7 +18,10 @@ export class QueryEditorTabContainer extends LitElement {
   }
 
   @property({ type: String })
-  public activeTab: 'syndrql' | 'graphql' = 'syndrql';
+  public activeTab: 'syndrql' | 'graphql' | 'diagram' = 'syndrql';
+
+  @property({ type: String })
+  public connectionId: string = '';
 
   @property({ type: String })
   public databaseName: string = '';
@@ -115,15 +119,17 @@ export class QueryEditorTabContainer extends LitElement {
     }
   }
 
-  private handleTabClick(tab: 'syndrql' | 'graphql') {
+  private handleTabClick(tab: 'syndrql' | 'graphql' | 'diagram') {
     if (this.activeTab !== tab) {
       // Save current tab's content before switching
       this.saveCurrentTabContent();
 
       this.activeTab = tab;
 
-      // Load the content for the new tab
-      this.queryText = tab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
+      // Load the content for the new tab (diagram has no text)
+      if (tab !== 'diagram') {
+        this.queryText = tab === 'syndrql' ? this.syndrqlQueryText : this.graphqlQueryText;
+      }
 
       // Emit tab change event
       this.dispatchEvent(new CustomEvent('tab-changed', {
@@ -141,6 +147,7 @@ export class QueryEditorTabContainer extends LitElement {
    * Save the current tab's content by reading from the active code-editor.
    */
   private saveCurrentTabContent(): void {
+    if (this.activeTab === 'diagram') return; // diagram has no text to save
     if (this.activeTab === 'syndrql') {
       const editor = this.querySelector('#syndrql-editor code-editor') as any;
       if (editor?.getText) {
@@ -158,6 +165,7 @@ export class QueryEditorTabContainer extends LitElement {
    * Focus the active tab's code-editor.
    */
   private focusActiveEditor(): void {
+    if (this.activeTab === 'diagram') return; // diagram uses canvas, no text editor focus
     const selector = this.activeTab === 'syndrql' ? '#syndrql-editor code-editor' : '#graphql-editor code-editor';
     const codeEditor = this.querySelector(selector) as any;
     if (codeEditor?.inputCapture) {
@@ -192,6 +200,15 @@ export class QueryEditorTabContainer extends LitElement {
               data-placeholder="GraphQL Editor"
             ></code-editor>
           </div>
+
+          <!-- Schema Diagram -->
+          <div id="diagram-view" class="h-full absolute inset-0 ${this.activeTab === 'diagram' ? 'visible z-10' : 'invisible z-0'}">
+            <schema-diagram
+              .connectionId=${this.connectionId}
+              .databaseName=${this.databaseName}
+              .isActive=${this.activeTab === 'diagram'}
+            ></schema-diagram>
+          </div>
         </div>
 
         <!-- Tab Headers (Bottom) -->
@@ -216,6 +233,17 @@ export class QueryEditorTabContainer extends LitElement {
             @click=${() => this.handleTabClick('graphql')}
           >
             <i class="fa-solid fa-diagram-project mr-1"></i>GraphQL
+          </button>
+
+          <button
+            class="px-3 py-2 border-t-2 font-medium text-xs transition-colors duration-200 ${
+              this.activeTab === 'diagram'
+                ? 'border-primary text-base-content bg-base-100'
+                : 'border-transparent text-base-content opacity-30 hover:text-base-content hover:opacity-100 hover:bg-base-100'
+            }"
+            @click=${() => this.handleTabClick('diagram')}
+          >
+            <i class="fa-solid fa-share-nodes mr-1"></i>Schema
           </button>
         </div>
       </div>
