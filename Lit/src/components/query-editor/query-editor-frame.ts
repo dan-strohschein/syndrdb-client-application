@@ -12,6 +12,7 @@ import { GraphQLLanguageService } from '../code-editor/graphql-language-service/
 import { DEFAULT_CONFIG } from '../../config/config-types';
 import { queryHistoryService } from '../../services/query-history-service';
 import '../json-tree-view/json-tree-view';
+import '../results-grid/results-grid';
 
 interface StatementResult {
   statementText: string;
@@ -65,7 +66,7 @@ export class QueryEditorFrame extends LitElement {
 
     /** Active results view: 'text' (default) or 'json' (tree). */
     @state()
-    private resultsTab: 'text' | 'json' = 'text';
+    private resultsTab: 'text' | 'grid' | 'json' = 'text';
 
     @state()
     private executing = false;
@@ -979,6 +980,10 @@ export class QueryEditorFrame extends LitElement {
                               <pre class="text-sm font-mono text-base-content whitespace-pre-wrap"><code>${JSON.stringify(this.queryResult.data, null, 2)}</code></pre>
                             </div>
                           `}
+                        ` : this.resultsTab === 'grid' ? html`
+                          <results-grid
+                            .data=${Array.isArray(this.queryResult.data) ? this.queryResult.data as Record<string, unknown>[] : [this.queryResult.data as Record<string, unknown>]}
+                          ></results-grid>
                         ` : html`
                           <json-tree-view
                             .data=${this.queryResult.data}
@@ -1007,6 +1012,12 @@ export class QueryEditorFrame extends LitElement {
                   @click=${() => { this.resultsTab = 'text'; }}
                 >
                   Text
+                </button>
+                <button
+                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'grid' ? 'bg-base-100 text-accent border-b-2 border-accent' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/30'}"
+                  @click=${() => { this.resultsTab = 'grid'; }}
+                >
+                  <i class="fa-solid fa-table-cells text-xs mr-1"></i>Grid
                 </button>
                 <button
                   class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'json' ? 'bg-base-100 text-accent border-b-2 border-accent' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/30'}"
