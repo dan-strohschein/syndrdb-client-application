@@ -1,6 +1,19 @@
 [
     {
         "version": "1.0.0",
+        "root": "use_database_statement",
+        "rules": [
+            {"name": "use_database_statement",
+            "symbols": [
+                {"token":"USE"},
+                {"token": "database_reference", "optional": false},
+                {"literal":";"}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
         "root": "create_user_statement",
         "rules": [
             {"name": "create_user_statement",

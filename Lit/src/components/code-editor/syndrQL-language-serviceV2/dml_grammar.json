@@ -53,24 +53,45 @@
                 {
                     "branches": [
                         [
-                            {"token": "field_reference", "optional": false},
+                            {"reference": "select_item", "optional": false},
                             {"literal":",", "optional": true},
-                            {"token": "field_reference", "optional": true}
+                            {"reference": "select_item", "optional": true},
+                            {"literal":",", "optional": true},
+                            {"reference": "select_item", "optional": true},
+                            {"literal":",", "optional": true},
+                            {"reference": "select_item", "optional": true}
                         ],
                         [
                             {"token":"ASTERISK", "optional": false}
                         ],
                         [
                             {"literal":"documents", "optional": false}
-                        ],
-                        [
-                            {"token": "function_reference", "optional": true}
                         ]
                     ]
                 }
-                
+
             ],
             "minimum-branches": 1,
+            "postprocess": null
+            }
+        ]
+    },
+    {
+        "root" : "select_item",
+        "rules": [
+            {"name": "select_item",
+            "symbols": [
+                {
+                    "branches": [
+                        [
+                            {"reference": "function_call", "optional": false}
+                        ],
+                        [
+                            {"reference": "field_reference", "optional": false}
+                        ]
+                    ]
+                }
+            ],
             "postprocess": null
             }
         ]
@@ -80,7 +101,7 @@
         "rules": [
             {"name": "field",
             "symbols": [
-                {"token": "field_reference", "optional": false},
+                {"reference": "field_reference", "optional": false},
                 {"literal":"AS", "optional": true},
                 {"token": "identifier", "optional": true}
             ],
@@ -96,7 +117,7 @@
                 {"token":"JOIN"},
                 {"token": "bundle_reference", "optional": false},
                 {"token":"ON"},
-                {"token": "condition", "optional": false}
+                {"reference": "condition", "optional": false}
             ],
             "postprocess": null
             }
@@ -144,9 +165,12 @@
         "rules": [
             {"name": "condition",
             "symbols": [
-                {"token": "field_reference", "optional": false},
+                {"reference": "field_reference", "optional": false},
                 {"reference": "comparison_operator", "optional": false},
-                {"token": "literal", "optional": false}
+                {"branches": [
+                    [{"reference": "field_reference", "optional": false}],
+                    [{"token": "literal", "optional": false}]
+                ]}
             ],
             "postprocess": null 
             }
@@ -200,12 +224,26 @@
         ]
     },
     {
+        "root": "group_by_clause",
+        "rules": [
+            {"name": "group_by_clause",
+            "symbols": [
+                {"token":"GROUP"},
+                {"token":"BY"},
+                {"reference": "field_reference", "optional": false}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
         "root": "order_by_clause",
         "rules": [
             {"name": "order_by_clause",
             "symbols": [
-                {"token" :"ORDER BY"},
-                {"token": "field_reference", "optional": false},
+                {"token":"ORDER"},
+                {"token":"BY"},
+                {"reference": "field_reference", "optional": false},
                 {"token": "ASC", "optional": true},
                 {"token":"DESC", "optional": true}
             ],
@@ -226,7 +264,7 @@
                 {"literal":"("},
                 {"reference": "field_assignments", "optional": false},
                 {"literal":")"},
-                {"token": "where_clause", "optional": true},
+                {"reference": "where_clause", "optional": true},
                 {"literal":";"}
             ],
             "postprocess": null
@@ -252,7 +290,7 @@
         "rules": [
             {"name": "field_assignment",
             "symbols": [
-                {"token": "field_reference", "optional": false},
+                {"reference": "field_reference", "optional": false},
                 {"literal":"="},
                 {"token": "literal", "optional": false}
             ],
@@ -272,6 +310,19 @@
         ]
     },
     {
+        "root": "field_reference",
+        "rules": [
+            {"name": "field_reference",
+            "symbols": [
+                {"token": "identifier", "optional": false},
+                {"literal": ".", "optional": true},
+                {"token": "identifier", "optional": true}
+            ],
+            "postprocess": null
+            }
+        ]
+    },
+    {
         "root": "add_document",
         "rules": [
             {"name": "add_document_statement",
@@ -281,6 +332,7 @@
                 {"token":"TO"},
                 {"token":"BUNDLE"},
                 {"token": "bundle_reference", "optional": false},
+                {"token":"WITH"},
                 {"literal":"("},
                 {"reference": "doc_field_assignments", "optional": false},
                 {"literal":")"},
@@ -298,7 +350,8 @@
                 {"literal":"{" , "optional": false},
                 {"reference": "doc_field_assignment", "optional": false},
                 {"literal":"}", "optional": false},
-                {"literal":",", "optional": true}
+                {"literal":",", "optional": true},
+                {"reference": "doc_field_assignments", "optional": true}
             ],
             "postprocess": null,
             "minimum-symbols": 1
@@ -310,7 +363,7 @@
         "rules": [
             {"name": "doc_field_assignment",
             "symbols": [
-                {"token": "field_reference", "optional": false},
+                {"reference": "field_reference", "optional": false},
                 {"literal":"="},
                 {"token": "literal", "optional": false}
             ],
@@ -324,8 +377,8 @@
             {"name": "delete_document_statement",
             "symbols": [
                 {"token":"DELETE"},
+                {"token":"DOCUMENTS"},
                 {"token":"FROM"},
-                {"token":"BUNDLE"},
                 {"token": "bundle_reference", "optional": false},
                 {"reference": "where_clause", "optional": true},
                 {"literal":";"}
@@ -333,6 +386,23 @@
             "postprocess": null
             }
         ]
+    },
+    {
+        "root": "function_call",
+        "rules": [
+            {"name": "function_call",
+            "symbols": [
+                {"token": "function_reference", "optional": false},
+                {"literal": "("},
+                {"branches": [
+                    [{"token": "ASTERISK", "optional": false}],
+                    [{"reference": "field_reference", "optional": false}]
+                ]},
+                {"literal": ")"}
+            ],
+            "postprocess": null
+            }
+        ]
     }
-    
-]   
+
+]

@@ -18,62 +18,563 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Override default font family globally */
+/* ===== Keyframes (defined here so they're always emitted) ===== */
+
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes modal-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdrop-exit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-out-left {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-20px); }
+}
+
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.95); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-once {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-2px); }
+  40%, 80% { transform: translateX(2px); }
+}
+
+@keyframes expand-collapse {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+
+@keyframes chevron-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
+}
+
+@keyframes context-menu-enter {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes connected-glow {
+  0%, 100% { box-shadow: 0 0 3px rgba(34, 197, 94, 0.25); }
+  50% { box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.6); }
+}
+
+@keyframes connected-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); width: 40%; }
+  50% { width: 60%; }
+  100% { transform: translateX(250%); width: 40%; }
+}
+
+@keyframes tab-enter {
+  from { opacity: 0; transform: translateX(12px); max-width: 0; }
+  to { opacity: 1; transform: translateX(0); max-width: 200px; }
+}
+
+@keyframes tab-exit {
+  from { opacity: 1; transform: translateX(0); max-width: 200px; }
+  to { opacity: 0; transform: translateX(-8px); max-width: 0; }
+}
+
+/* ===== Base layer ===== */
+
 @layer base {
   html, body {
     font-family: 'Geist Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   }
-  
+
   /* Override DaisyUI and other theme font settings */
   * {
     font-family: inherit;
   }
-  
+
   /* Monospace font for code elements */
   code, pre, .font-mono {
     font-family: 'Geist Mono', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
   }
 }
 
-/* Database-specific component styles */
+/* ===== Component styles ===== */
+
 @layer components {
   .db-panel {
-    @apply bg-db-panel border border-db-border;
+    @apply bg-surface-2 border border-db-border;
   }
-  
+
   .db-sidebar {
-    @apply bg-db-sidebar border-r border-db-border;
+    @apply bg-surface-1 border-r border-db-border;
   }
-  
+
   .db-table {
     @apply w-full border-collapse;
   }
-  
+
   .db-table th {
-    @apply bg-db-panel text-left px-3 py-2 border-b border-db-border font-medium;
+    @apply bg-surface-3 text-left px-3 py-2 border-b border-db-border font-medium;
   }
-  
+
   .db-table td {
     @apply px-3 py-2 border-b border-db-border;
   }
-  
+
   .db-table tr:hover {
     @apply bg-db-hover;
   }
-  
+
   .db-button {
-    @apply px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm;
+    @apply px-3 py-2 text-white rounded text-sm
+           transition-all duration-100 active:scale-[0.97];
   }
-  
+
+  .db-button-success {
+    @apply px-3 py-2 bg-feedback-success hover:brightness-110 text-white rounded text-sm
+           transition-all duration-100 active:scale-[0.97];
+  }
+
+  .db-button-danger {
+    @apply px-3 py-2 bg-feedback-error hover:brightness-110 text-white rounded text-sm
+           transition-all duration-100 active:scale-[0.97];
+  }
+
+  .db-button-secondary {
+    @apply px-3 py-2 bg-surface-4 hover:bg-db-hover text-gray-200 rounded text-sm
+           transition-all duration-100 active:scale-[0.97];
+  }
+
+  .db-button-ghost {
+    @apply px-3 py-2 bg-transparent text-accent hover:bg-accent-subtle rounded text-sm
+           transition-all duration-100 active:scale-[0.97];
+  }
+
+  .db-button-outline {
+    @apply px-3 py-2 bg-transparent border border-accent text-accent hover:bg-accent hover:text-white rounded text-sm
+           transition-all duration-150 active:scale-[0.97];
+  }
+
   .db-input {
-    @apply bg-db-panel border border-db-border rounded px-3 py-2 text-white;
+    @apply bg-surface-2 border border-db-border rounded px-3 py-2 text-white
+           transition-all duration-200
+           focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15;
   }
-  
+
   .db-tree-item {
-    @apply px-3 py-1 hover:bg-db-hover cursor-pointer select-none;
+    @apply px-3 py-1 hover:bg-db-hover cursor-pointer select-none
+           transition-colors duration-100;
   }
-  
+
   .db-tree-item.selected {
-    @apply bg-db-selected;
+    @apply border-l-2 border-l-accent;
   }
+
+  /* Modal backdrop and container */
+  .db-modal-backdrop {
+    @apply fixed inset-0 bg-black/50 z-40;
+  }
+
+  .db-modal-container {
+    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 sm:w-4/5 md:w-3/5 lg:max-w-2xl;
+  }
+
+  /* Large modals (bundle editor, import/export wizards) */
+  .db-modal-container-lg {
+    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 lg:w-4/5 lg:max-w-6xl;
+  }
+
+  /* Focus ring styling */
+  .db-focus-ring:focus-visible {
+    @apply outline-2 outline-accent outline-offset-2 ring-0;
+  }
+
+  /* Elevated surfaces */
+  .db-surface-elevated {
+    @apply bg-surface-3 shadow-elevation-3;
+  }
+
+  .db-surface-floating {
+    @apply bg-surface-4 shadow-elevation-4;
+  }
+
+  /* Tree indent guides */
+  .db-tree-indent-guide {
+    @apply border-l border-white/[0.06];
+  }
+
+  /* Context menu */
+  .db-context-menu {
+    @apply bg-surface-4 shadow-elevation-4 rounded-lg border border-db-border overflow-hidden;
+  }
+
+  .db-context-menu-item {
+    @apply px-3 py-1.5 text-sm text-gray-200 cursor-pointer
+           transition-colors duration-100
+           hover:bg-accent-subtle hover:text-white;
+  }
+
+  /* Status indicator dots */
+  .db-status-dot {
+    @apply w-2.5 h-2.5 rounded-full transition-colors duration-300;
+  }
+
+  .db-status-dot-connected {
+    @apply bg-feedback-success;
+  }
+
+  .db-status-dot-connecting {
+    @apply bg-feedback-warning;
+  }
+
+  .db-status-dot-error {
+    @apply bg-feedback-error;
+  }
+
+  .db-status-dot-disconnected {
+    @apply bg-feedback-muted;
+  }
+
+  /* Toast notifications */
+  .db-toast-container {
+    @apply fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-2 pointer-events-none;
+  }
+
+  .db-toast {
+    @apply pointer-events-auto px-4 py-3 rounded-lg shadow-elevation-3
+           text-sm text-white flex items-center gap-3 min-w-[300px] max-w-[450px];
+  }
+
+  .db-toast-success {
+    @apply bg-surface-4 border-l-4 border-l-feedback-success;
+  }
+
+  .db-toast-error {
+    @apply bg-surface-4 border-l-4 border-l-feedback-error;
+  }
+
+  .db-toast-warning {
+    @apply bg-surface-4 border-l-4 border-l-feedback-warning;
+  }
+
+  .db-toast-info {
+    @apply bg-surface-4 border-l-4 border-l-feedback-info;
+  }
+
+  /* Keyboard shortcut hints in menus */
+  .db-shortcut-hint {
+    @apply text-xs text-feedback-muted font-mono ml-auto pl-4;
+  }
+
+  /* Empty state */
+  .db-empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+  }
+
+  .db-empty-state-icon {
+    @apply text-4xl text-feedback-muted mb-3;
+  }
+
+  .db-empty-state-title {
+    @apply text-lg text-gray-300 font-medium mb-1;
+  }
+
+  .db-empty-state-description {
+    @apply text-sm text-feedback-muted mb-4;
+  }
+
+  /* Badge / Chip component */
+  .db-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .db-badge-accent {
+    @apply bg-accent/15 text-accent-light;
+  }
+
+  .db-badge-success {
+    @apply bg-feedback-success/15 text-feedback-success;
+  }
+
+  .db-badge-error {
+    @apply bg-feedback-error/15 text-feedback-error;
+  }
+
+  .db-badge-warning {
+    @apply bg-feedback-warning/15 text-feedback-warning;
+  }
+
+  .db-badge-info {
+    @apply bg-feedback-info/15 text-feedback-info;
+  }
+
+  .db-badge-muted {
+    @apply bg-feedback-muted/15 text-feedback-muted;
+  }
+
+  /* Loading spinner */
+  .db-spinner {
+    @apply w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full;
+    animation: spin 600ms linear infinite;
+  }
+
+  .db-spinner-sm {
+    @apply w-3.5 h-3.5 border-2 border-accent/30 border-t-accent rounded-full;
+    animation: spin 600ms linear infinite;
+  }
+
+  /* Progress bar */
+  .db-progress-bar {
+    @apply h-0.5 w-full overflow-hidden;
+  }
+
+  .db-progress-bar-track {
+    @apply h-full bg-accent rounded-full;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+
+  /* Scroll shadow wrapper */
+  .db-scroll-shadow-wrapper {
+    @apply relative overflow-hidden;
+  }
+}
+
+/* ===== Non-Tailwind styles (after @layer so they win specificity) ===== */
+
+/* Button gradient */
+.db-button {
+  background-image: linear-gradient(180deg, #6366F1, #4F46E5);
+}
+
+.db-button:hover {
+  background-image: linear-gradient(180deg, #818CF8, #6366F1);
+}
+
+/* Selected tree node gradient */
+.db-tree-item.selected {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.10), transparent);
+}
+
+/* Modal animations */
+.db-modal-backdrop {
+  animation: backdrop-enter 200ms ease-out;
+}
+
+.db-modal-backdrop.closing {
+  animation: backdrop-exit 150ms ease-in forwards;
+}
+
+.db-modal-container {
+  animation: modal-enter 200ms ease-out;
+}
+
+.db-modal-container.closing {
+  animation: modal-exit 150ms ease-in forwards;
+}
+
+.db-modal-container-lg {
+  animation: modal-enter 200ms ease-out;
+}
+
+.db-modal-container-lg.closing {
+  animation: modal-exit 150ms ease-in forwards;
+}
+
+/* Context menu animation */
+.db-context-menu {
+  animation: context-menu-enter 120ms ease-out;
+}
+
+/* Connecting dot pulse */
+.db-status-dot-connecting {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Toast animations */
+.db-toast {
+  animation: toast-enter 300ms ease-out;
+}
+
+.db-toast.exiting {
+  animation: toast-exit 200ms ease-in forwards;
+}
+
+/* Skeleton loading */
+.db-skeleton {
+  background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Focus ring box-shadow */
+.db-focus-ring:focus-visible {
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+/* Active tab gradient underline */
+.db-tab-active-gradient {
+  border-image: linear-gradient(90deg, #6366F1, transparent) 1;
+}
+
+/* Results slide-in animation */
+.db-results-enter {
+  animation: slide-in-up 200ms ease-out;
+}
+
+/* Input focus glow */
+.db-input:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.10),
+              0 0 12px rgba(99, 102, 241, 0.08);
+}
+
+/* Connected status pulse — wraps dot + text */
+.db-connected-pulse {
+  animation: connected-pulse 3s ease-in-out infinite;
+}
+
+/* Connected dot glow */
+.db-status-dot-connected {
+  animation: connected-glow 3s ease-in-out infinite;
+}
+
+.db-status-dot-connecting {
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.40);
+}
+
+.db-status-dot-error {
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.40);
+}
+
+.db-status-dot-disconnected {
+  box-shadow: none;
+}
+
+/* Sidebar header gradient */
+.db-sidebar-header {
+  background: linear-gradient(180deg, #1e1e2e, #1a1a1a);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+/* Scroll shadow overlays */
+.db-scroll-shadow-wrapper::before,
+.db-scroll-shadow-wrapper::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  z-index: 1;
+}
+
+.db-scroll-shadow-wrapper::before {
+  top: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.25), transparent);
+}
+
+.db-scroll-shadow-wrapper::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.25), transparent);
+}
+
+.db-scroll-shadow-wrapper.shadow-top::before {
+  opacity: 1;
+}
+
+.db-scroll-shadow-wrapper.shadow-bottom::after {
+  opacity: 1;
+}
+
+/* Tab enter/exit animations */
+.animate-tab-enter {
+  animation: tab-enter 200ms ease-out;
+  overflow: hidden;
+}
+
+.animate-tab-exit {
+  animation: tab-exit 150ms ease-in forwards;
+  overflow: hidden;
+}
+
+/* Accessibility: respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== Custom Scrollbars ===== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

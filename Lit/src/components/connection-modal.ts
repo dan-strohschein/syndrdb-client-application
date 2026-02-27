@@ -4,6 +4,7 @@ import { connectionManager } from '../services/connection-manager';
 import { ConnectionConfig } from '../drivers/syndrdb-driver';
 import type { Connection } from '../services/connection-manager';
 import { BaseModalMixin } from '../lib/base-modal-mixin';
+import { ToastNotification } from './toast-notification';
 
 @customElement('connection-modal')
 export class ConnectionModal extends BaseModalMixin(LitElement) {
@@ -32,13 +33,21 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
         this.prepopulateForm();
       }
     }
+
+    // Autofocus the first input when modal opens
+    if (changedProperties.has('open') && this.open) {
+      requestAnimationFrame(() => {
+        const firstInput = this.querySelector('input[type="text"]') as HTMLInputElement;
+        if (firstInput) firstInput.focus();
+      });
+    }
   }
 
   @state()
   private formData = {
     name: '',
-    hostname: '',
-    port: '',
+    hostname: 'localhost',
+    port: '1776',
     database: '',
     username: '',
     password: ''
@@ -49,6 +58,11 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
 
   @state()
   private testResult = '';
+
+  @state()
+  private showOverwriteConfirm = false;
+
+  private pendingOverwriteConfig: ConnectionConfig | null = null;
 
   private prepopulateForm() {
     if (this.connectionToEdit && this.connectionToEdit.config) {
@@ -126,23 +140,11 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
       
       if (!saveResult.success) {
         if (saveResult.connectionExists) {
-          // Connection with this name already exists, ask user if they want to overwrite
-          const userConfirmed = confirm(
-            `A connection with the name "${config.name}" already exists. Do you want to overwrite it?`
-          );
-          
-          if (userConfirmed) {
-            // User confirmed overwrite
-            const overwriteResult = await electronAPI.connectionStorage.overwrite(config);
-            if (!overwriteResult.success) {
-              throw new Error(overwriteResult.error || 'Failed to overwrite connection');
-            }
-          } else {
-            // User cancelled, don't save
-            return;
-          }
+          // Connection with this name already exists — show inline confirmation
+          this.pendingOverwriteConfig = config;
+          this.showOverwriteConfirm = true;
+          return;
         } else {
-          // Other error
           throw new Error(saveResult.error || 'Failed to save connection');
         }
       }
@@ -160,8 +162,35 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
       
     } catch (error) {
       console.error('Failed to save connection:', error);
-      alert(`Failed to save connection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      ToastNotification.error(`Failed to save connection: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private async handleOverwriteConfirm() {
+    if (!this.pendingOverwriteConfig) return;
+    try {
+      const electronAPI = (window as any).electronAPI;
+      const overwriteResult = await electronAPI.connectionStorage.overwrite(this.pendingOverwriteConfig);
+      if (!overwriteResult.success) {
+        throw new Error(overwriteResult.error || 'Failed to overwrite connection');
+      }
+      const connectionId = await connectionManager.addConnection(this.pendingOverwriteConfig);
+      this.dispatchEvent(new CustomEvent('save-connection', {
+        detail: { connectionId, config: this.pendingOverwriteConfig },
+        bubbles: true
+      }));
+      this.pendingOverwriteConfig = null;
+      this.showOverwriteConfirm = false;
+      this.handleClose();
+    } catch (error) {
+      console.error('Failed to overwrite connection:', error);
+      ToastNotification.error(`Failed to overwrite connection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private handleOverwriteCancel() {
+    this.pendingOverwriteConfig = null;
+    this.showOverwriteConfirm = false;
   }
 
   override handleClose(): void {
@@ -182,7 +211,7 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
   render() {
     return html`
       <div class="modal ${this.open ? 'modal-open' : ''}">
-        <div class="modal-box w-11/12 max-w-2xl">
+        <div class="modal-box w-11/12 max-w-2xl ${this.modalContainerClass}">
           <!-- Modal Header -->
           <div class="flex items-center justify-between mb-6">
             <h3 class="font-bold text-lg">${this.editMode ? 'Edit Database Connection' : 'New Database Connection'}</h3>
@@ -313,12 +342,27 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
             </div>
           </div>
 
+          <!-- Overwrite Confirmation -->
+          ${this.showOverwriteConfirm ? html`
+            <div class="alert alert-warning mt-4">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <div>
+                <p class="font-medium">Connection already exists</p>
+                <p class="text-sm">A connection with the name "${this.pendingOverwriteConfig?.name}" already exists. Overwrite it?</p>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-sm btn-ghost" @click=${this.handleOverwriteCancel}>Cancel</button>
+                <button class="btn btn-sm btn-warning" @click=${this.handleOverwriteConfirm}>Overwrite</button>
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Modal Actions -->
           <div class="modal-action">
             <button class="btn btn-ghost" @click=${this.handleClose}>
               Cancel
             </button>
-                        <button
+            <button
               type="button"
               class="btn btn-primary"
               @click=${this.handleSave}
@@ -330,7 +374,7 @@ export class ConnectionModal extends BaseModalMixin(LitElement) {
         </div>
         
         <!-- Modal backdrop -->
-        <div class="modal-backdrop" @click=${this.handleClose}></div>
+        <div class="modal-backdrop ${this.modalBackdropClass}" @click=${this.handleClose}></div>
       </div>
     `;
   }

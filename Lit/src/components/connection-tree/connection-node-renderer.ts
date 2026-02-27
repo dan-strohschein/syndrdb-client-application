@@ -28,18 +28,32 @@ export class ConnectionNodeRenderer {
 
     return html`
       <!-- Connection Node -->
-      <div class="mb-4">
+      <div class="mb-4 ${connection.status === 'connected' ? 'border-l-2 border-l-feedback-success pl-1' : ''}"
+           role="treeitem"
+           aria-expanded=${expanded}
+           tabindex="-1">
         <div class="flex items-center p-2 rounded-lg hover:bg-base-300 cursor-pointer font-medium ${
-          isActive ? 'bg-primary text-primary-content' : ''
+          isActive ? 'text-accent border-l-2 border-l-accent' : ''
         }"
+             style="${isActive ? 'background: linear-gradient(90deg, rgba(99, 102, 241, 0.10), transparent)' : ''}"
              @click=${() => {
                onSetActiveConnection(connection.id);
                onToggleNode(connection.id);
              }}
+             @dblclick=${(e: MouseEvent) => {
+               if (connection.status === 'disconnected' || connection.status === 'error') {
+                 e.stopPropagation();
+                 (e.currentTarget as HTMLElement).dispatchEvent(new CustomEvent('connect-server', {
+                   detail: { connectionId: connection.id },
+                   bubbles: true,
+                   composed: true
+                 }));
+               }
+             }}
              @contextmenu=${(e: MouseEvent) => onContextMenu(e, connection.id, connection.name, 'connection', connection)}>
           
           <span class="mr-3 w-4 text-center">
-            <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-sm"></i>
+            <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-sm transition-transform duration-150"></i>
           </span>
           
           <span class="mr-3">
@@ -82,14 +96,14 @@ export class ConnectionNodeRenderer {
   static getConnectionStatusColor(status: string): string {
     switch (status) {
       case 'connected':
-        return 'text-green-500';
+        return 'text-feedback-success';
       case 'connecting':
-        return 'text-yellow-500';
+        return 'text-feedback-warning';
       case 'error':
-        return 'text-red-500';
+        return 'text-feedback-error';
       case 'disconnected':
       default:
-        return 'text-gray-400';
+        return 'text-feedback-muted';
     }
   }
 
@@ -108,7 +122,7 @@ export class ConnectionNodeRenderer {
     return html`
       ${connection.status === 'disconnected' ? html`
         <button 
-          class="btn btn-xs btn-success"
+          class="btn btn-xs btn-success transition-transform duration-100 active:scale-[0.93]"
           @click=${(e: Event) => onConnect(e, connection.id)}
           title="Connect"
         >
@@ -118,7 +132,7 @@ export class ConnectionNodeRenderer {
       
       ${connection.status === 'error' ? html`
         <button 
-          class="btn btn-xs btn-warning"
+          class="btn btn-xs btn-warning transition-transform duration-100 active:scale-[0.93]"
           @click=${(e: Event) => onConnect(e, connection.id)}
           title="Retry Connection"
         >
@@ -128,7 +142,7 @@ export class ConnectionNodeRenderer {
       
       ${connection.status === 'connected' ? html`
         <button 
-          class="btn btn-xs btn-error"
+          class="btn btn-xs btn-error transition-transform duration-100 active:scale-[0.93]"
           @click=${(e: Event) => onDisconnect(e, connection.id)}
           title="Disconnect"
         >
@@ -145,27 +159,29 @@ export class ConnectionNodeRenderer {
     switch (connection.status) {
       case 'connected':
         return html`
-          <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span class="text-xs text-green-600">Connected</span>
+          <div class="db-connected-pulse flex items-center gap-1.5">
+            <div class="db-status-dot db-status-dot-connected"></div>
+            <span class="text-xs text-feedback-success">Connected</span>
+          </div>
         `;
-      
+
       case 'connecting':
         return html`
-          <div class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-          <span class="text-xs text-yellow-600">Connecting...</span>
+          <div class="db-status-dot db-status-dot-connecting"></div>
+          <span class="text-xs text-feedback-warning">Connecting...</span>
         `;
-      
+
       case 'error':
         return html`
-          <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-          <span class="text-xs text-red-600">Error</span>
+          <div class="db-status-dot db-status-dot-error"></div>
+          <span class="text-xs text-feedback-error">Error</span>
         `;
-      
+
       case 'disconnected':
       default:
         return html`
-          <div class="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span class="text-xs text-gray-500">Disconnected</span>
+          <div class="db-status-dot db-status-dot-disconnected"></div>
+          <span class="text-xs text-feedback-muted">Disconnected</span>
         `;
     }
   }

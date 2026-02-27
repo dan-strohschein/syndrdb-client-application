@@ -41,7 +41,7 @@ export class UserManagementRenderer {
            }}
            @contextmenu=${(e: MouseEvent) => onContextMenu(e, usersNodeId, 'Users', 'users', null)}>
         <span class="mr-2 w-4 text-center">
-          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+          <i class="fa-solid ${expanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs transition-transform duration-150"></i>
         </span>
         <span class="mr-2"><i class="fa-solid fa-users"></i></span>
         <span>Users</span>

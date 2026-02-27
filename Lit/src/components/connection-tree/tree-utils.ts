@@ -109,38 +109,38 @@ export function formatCountBadge(count: number): string {
 export function getNodeIcon(nodeType: string): string {
   switch (nodeType) {
     case 'connection':
-      return 'fa-solid fa-server';
+      return 'fa-solid fa-server text-gray-400';
     case 'databases':
-      return 'fa-solid fa-database';
+      return 'fa-solid fa-database text-blue-400';
     case 'database':
-      return 'fa-solid fa-database';
+      return 'fa-solid fa-database text-blue-400';
     case 'delete-database':
-      return 'fa-solid fa-trash-can';
+      return 'fa-solid fa-trash-can text-red-400';
     case 'bundles':
-      return 'fa-solid fa-boxes-stacked';
+      return 'fa-solid fa-boxes-stacked text-purple-400';
     case 'bundle':
-      return 'fa-solid fa-box';
+      return 'fa-solid fa-box text-purple-400';
     case 'fields':
-      return 'fa-solid fa-tags';
+      return 'fa-solid fa-tags text-teal-400';
     case 'field':
-      return 'fa-solid fa-tag';
+      return 'fa-solid fa-tag text-teal-400';
     case 'indexes':
-      return 'fa-solid fa-list';
+      return 'fa-solid fa-list text-amber-400';
     case 'hash-indexes':
-      return 'fa-solid fa-hashtag';
+      return 'fa-solid fa-hashtag text-amber-400';
     case 'btree-indexes':
-      return 'fa-solid fa-tree';
+      return 'fa-solid fa-tree text-amber-400';
     case 'index':
-      return 'fa-solid fa-list';
+      return 'fa-solid fa-list text-amber-400';
     case 'relationships':
-      return 'fa-solid fa-project-diagram';
+      return 'fa-solid fa-project-diagram text-pink-400';
     case 'relationship':
-      return 'fa-solid fa-link';
+      return 'fa-solid fa-link text-pink-400';
     case 'users':
-      return 'fa-solid fa-users';
+      return 'fa-solid fa-users text-cyan-400';
     case 'user':
-      return 'fa-solid fa-user';
+      return 'fa-solid fa-user text-cyan-400';
     default:
-      return 'fa-solid fa-circle';
+      return 'fa-solid fa-circle text-gray-400';
   }
 }

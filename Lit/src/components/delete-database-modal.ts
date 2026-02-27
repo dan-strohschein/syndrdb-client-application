@@ -15,6 +15,9 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
   private isDeleting = false;
 
   @state()
+  private forceDelete = false;
+
+  @state()
   private errorMessage = '';
 
   @state()
@@ -22,6 +25,7 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
 
   override handleClose(): void {
     this.isDeleting = false;
+    this.forceDelete = false;
     this.errorMessage = '';
     this.confirmText = '';
     super.handleClose();
@@ -38,9 +42,12 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
     this.errorMessage = '';
 
     try {
+      const dropCmd = this.forceDelete
+        ? `DROP DATABASE "${this.databaseName}" WITH FORCE;`
+        : `DROP DATABASE "${this.databaseName}";`;
       const result = await connectionManager.executeQueryOnConnectionId(
         this.connectionId,
-        `DROP DATABASE "${this.databaseName}";`
+        dropCmd
       );
 
       if (!result.success) {
@@ -48,6 +55,8 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
         this.isDeleting = false;
         return;
       }
+
+      await connectionManager.refreshMetadata(this.connectionId);
 
       import('./toast-notification').then(({ ToastNotification }) => {
         ToastNotification.success(`Database "${this.databaseName}" deleted`);
@@ -97,8 +106,21 @@ export class DeleteDatabaseModal extends BaseModalMixin(LitElement) {
                 .value=${this.confirmText}
                 @input=${(e: Event) => { this.confirmText = (e.target as HTMLInputElement).value; }}
                 placeholder=${this.databaseName ?? ''}
+                ?disabled=${this.isDeleting}
+                autocomplete="off"
               />
             </div>
+
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                class="toggle toggle-error toggle-sm"
+                .checked=${this.forceDelete}
+                @change=${(e: Event) => { this.forceDelete = (e.target as HTMLInputElement).checked; }}
+                ?disabled=${this.isDeleting}
+              />
+              <span class="text-sm">Force delete (remove database even if bundles contain data)</span>
+            </label>
 
             ${this.errorMessage ? html`
               <p class="text-sm text-feedback-error">${this.errorMessage}</p>

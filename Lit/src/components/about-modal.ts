@@ -34,12 +34,12 @@ export class AboutModal extends BaseModalMixin(LitElement) {
   render() {
     return html`
       <div
-        class="fixed inset-0 z-[9999] flex items-center justify-center ${this.open ? 'block' : 'hidden'}"
+        class="fixed inset-0 z-[9999] flex items-center justify-center ${this.open ? 'block' : 'hidden'} ${this.modalBackdropClass}"
         style="background-color: rgba(0, 0, 0, 0.5); pointer-events: ${this.open ? 'auto' : 'none'};"
         @click=${this.handleBackdropClick}
       >
         <div
-          class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 relative"
+          class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 relative ${this.modalContainerClass}"
           @click=${(e: Event) => e.stopPropagation()}
         >
           <!-- Close button -->

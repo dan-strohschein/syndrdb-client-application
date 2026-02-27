@@ -224,7 +224,7 @@ export class BackupModal extends BaseModalMixin(LitElement) {
 
     return html`
       <div class="modal ${this.open ? 'modal-open' : ''}">
-        <div class="modal-box w-11/12 max-w-2xl">
+        <div class="modal-box w-11/12 max-w-2xl ${this.modalContainerClass}">
           <!-- Modal Header -->
           <div class="flex items-center justify-between mb-6">
             <h3 class="font-bold text-lg">Backup Database</h3>
@@ -356,7 +356,7 @@ export class BackupModal extends BaseModalMixin(LitElement) {
             </div>
           </form>
         </div>
-        <div class="modal-backdrop" @click=${this.handleClose}></div>
+        <div class="modal-backdrop ${this.modalBackdropClass}" @click=${this.handleClose}></div>
       </div>
     `;
   }

@@ -14,7 +14,7 @@ import { TokenType } from './token_types.js';
 const {
     TOKEN_CREATE, TOKEN_ALTER, TOKEN_DROP, TOKEN_SHOW,
     TOKEN_SELECT, TOKEN_ADD, TOKEN_UPDATE, TOKEN_DELETE,
-    TOKEN_GRANT, TOKEN_REVOKE,
+    TOKEN_GRANT, TOKEN_REVOKE, TOKEN_USE,
     TOKEN_MIGRATION, TOKEN_APPLY, TOKEN_VALIDATE, TOKEN_ROLLBACK
 } = TokenType;
 
@@ -231,7 +231,8 @@ export class GrammarEngine {
         }
 
         // DOL statements
-        if (tokenType === TOKEN_GRANT || tokenType === TOKEN_REVOKE) {
+        if (tokenType === TOKEN_GRANT || tokenType === TOKEN_REVOKE ||
+            tokenType === TOKEN_USE) {
             return GrammarType.DOL;
         }
 
@@ -706,7 +707,7 @@ export class GrammarEngine {
             return [
                 TOKEN_CREATE, TOKEN_ALTER, TOKEN_DROP, TOKEN_SHOW,  // DDL
                 TOKEN_SELECT, TOKEN_ADD, TOKEN_UPDATE, TOKEN_DELETE,  // DML
-                TOKEN_GRANT, TOKEN_REVOKE,  // DOL
+                TOKEN_USE, TOKEN_GRANT, TOKEN_REVOKE,  // DOL
                 TOKEN_MIGRATION, TOKEN_APPLY, TOKEN_VALIDATE, TOKEN_ROLLBACK  // Migration
             ];
         }
@@ -761,8 +762,16 @@ export class GrammarEngine {
             const symbol = rule.symbols[symbolIndex];
             
             // If we've consumed all tokens, suggest what comes next
+            // Suggest ALL remaining optional symbols, not just the first one
             if (tokenIndex >= tokens.length) {
-                this.addSymbolSuggestions(symbol, suggestionsSet);
+                for (let i = symbolIndex; i < rule.symbols.length; i++) {
+                    const sym = rule.symbols[i];
+                    this.addSymbolSuggestions(sym, suggestionsSet);
+                    // Stop at first required symbol (subsequent symbols need this one first)
+                    if (!('optional' in sym && sym.optional)) {
+                        break;
+                    }
+                }
                 break;
             }
             
@@ -808,9 +817,15 @@ export class GrammarEngine {
                         // Reference consumed some tokens
                         tokenIndex += refResult.tokensConsumed;
                         symbolIndex++;
-                        
-                        // If reference has suggestions, we're inside it
+
+                        // If reference has suggestions (internal optional continuations)
                         if (refResult.suggestions.length > 0) {
+                            // If all tokens consumed, collect these suggestions but also
+                            // continue to gather suggestions from subsequent optional symbols
+                            if (tokenIndex >= tokens.length) {
+                                refResult.suggestions.forEach(s => suggestionsSet.add(s));
+                                continue;
+                            }
                             return { suggestions: refResult.suggestions, tokensConsumed: tokenIndex };
                         }
                     } else if (symbol.optional) {
@@ -831,28 +846,43 @@ export class GrammarEngine {
                     break;
                 }
             } else if ('branches' in symbol) {
-                // Try each branch to find which one matches
-                let branchMatched = false;
-                
+                // Try all branches and pick the best one (most tokens consumed, prefer suggestions)
+                let bestBranch: { matched: boolean; tokensConsumed: number; suggestions: string[] } | null = null;
+
                 for (const branch of symbol.branches) {
                     const branchSymbols = Array.isArray(branch) ? branch : branch.symbols || [];
-                    
+
                     // Try to match this branch
                     const branchResult = this.matchBranchForSuggestions(branchSymbols, tokens.slice(tokenIndex), grammar);
-                    
+
                     if (branchResult.matched || branchResult.suggestions.length > 0) {
-                        tokenIndex += branchResult.tokensConsumed;
-                        
-                        if (branchResult.suggestions.length > 0) {
-                            // We're inside this branch - return its suggestions
-                            return { suggestions: branchResult.suggestions, tokensConsumed: tokenIndex };
+                        if (!bestBranch) {
+                            bestBranch = branchResult;
+                        } else if (branchResult.suggestions.length > 0 && bestBranch.suggestions.length === 0) {
+                            // Prefer branch with suggestions
+                            bestBranch = branchResult;
+                        } else if (branchResult.tokensConsumed > bestBranch.tokensConsumed) {
+                            // Prefer branch that consumed more tokens
+                            bestBranch = branchResult;
                         }
-                        branchMatched = true;
-                        break;
                     }
                 }
-                
-                if (branchMatched || symbol.optional) {
+
+                if (bestBranch) {
+                    tokenIndex += bestBranch.tokensConsumed;
+
+                    if (bestBranch.suggestions.length > 0) {
+                        // If all tokens consumed, collect these but continue to
+                        // gather suggestions from subsequent optional symbols
+                        if (tokenIndex >= tokens.length) {
+                            bestBranch.suggestions.forEach(s => suggestionsSet.add(s));
+                            symbolIndex++;
+                            continue;
+                        }
+                        return { suggestions: bestBranch.suggestions, tokensConsumed: tokenIndex };
+                    }
+                    symbolIndex++;
+                } else if (symbol.optional) {
                     symbolIndex++;
                 } else {
                     break;
@@ -882,10 +912,14 @@ export class GrammarEngine {
         
         while (symbolIndex < branchSymbols.length) {
             if (tokenIndex >= tokens.length) {
-                // Consumed all tokens - suggest next symbol if any remain
-                if (symbolIndex < branchSymbols.length) {
-                    const symbol = branchSymbols[symbolIndex];
-                    this.addSymbolSuggestions(symbol, suggestionsSet);
+                // Consumed all tokens - suggest ALL remaining optional symbols
+                for (let i = symbolIndex; i < branchSymbols.length; i++) {
+                    const sym = branchSymbols[i];
+                    this.addSymbolSuggestions(sym, suggestionsSet);
+                    // Stop at first required symbol (subsequent symbols need this one first)
+                    if (!('optional' in sym && sym.optional)) {
+                        break;
+                    }
                 }
                 // console.log(`🔍 Branch matched: consumed ${tokenIndex} tokens, suggestions=${Array.from(suggestionsSet)}`);
                 return { matched: true, tokensConsumed: tokenIndex, suggestions: Array.from(suggestionsSet) };
@@ -932,8 +966,14 @@ export class GrammarEngine {
                         // console.log(`🔍 Branch: reference ${symbol.reference} consumed ${refResult.tokensConsumed} tokens`);
                         tokenIndex += refResult.tokensConsumed;
                         symbolIndex++;
-                        
+
                         if (refResult.suggestions.length > 0) {
+                            // If all tokens consumed, collect internal suggestions but continue
+                            // to gather suggestions from subsequent optional symbols
+                            if (tokenIndex >= tokens.length) {
+                                refResult.suggestions.forEach(s => suggestionsSet.add(s));
+                                continue;
+                            }
                             return { matched: true, tokensConsumed: tokenIndex, suggestions: refResult.suggestions };
                         }
                     } else if (symbol.optional) {
@@ -1093,7 +1133,7 @@ export class GrammarEngine {
         visitedRules.add(ruleName);
 
         // Check if this is a contextual reference (needs to be resolved by suggestion engine)
-        const contextualReferences = ['bundle_reference', 'database_reference', 'field_reference', 'user_reference', 'role_reference', 'literal'];
+        const contextualReferences = ['bundle_reference', 'database_reference', 'field_reference', 'user_reference', 'role_reference', 'function_reference', 'literal', 'group_by_clause', 'order_by_clause'];
         if (contextualReferences.includes(ruleName)) {
             // Add the reference name itself - suggestion engine will resolve it
             suggestions.add(ruleName);
@@ -1163,6 +1203,7 @@ function determineStatementType(token: Token): Grammar {
             return dmlGrammar!;
         case TOKEN_GRANT:
         case TOKEN_REVOKE:
+        case TOKEN_USE:
             return dolGrammar!;
         case TOKEN_MIGRATION:
         case TOKEN_APPLY:

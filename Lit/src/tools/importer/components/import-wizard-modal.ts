@@ -159,7 +159,7 @@ export class ImportWizardModal extends BaseModalMixin(LitElement) {
 
     return html`
       <div class="modal modal-open">
-        <div class="modal-box max-w-5xl w-full h-[85vh] flex flex-col">
+        <div class="modal-box db-modal-container-lg h-[85vh] flex flex-col">
           <!-- Header -->
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-bold text-lg">Import Data</h3>
