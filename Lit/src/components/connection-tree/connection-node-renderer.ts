@@ -7,6 +7,8 @@ import { getNodeIcon } from './tree-utils';
 import { DatabaseNodeRenderer } from './database-node-renderer';
 
 export class ConnectionNodeRenderer {
+  /** Timestamp of the last dblclick that dispatched connect-server, used to debounce. */
+  private static lastDblClickTime = 0;
   /**
    * Render a connection node and its children
    */
@@ -43,6 +45,9 @@ export class ConnectionNodeRenderer {
              @dblclick=${(e: MouseEvent) => {
                if (connection.status === 'disconnected' || connection.status === 'error') {
                  e.stopPropagation();
+                 const now = Date.now();
+                 if (now - ConnectionNodeRenderer.lastDblClickTime < 500) return;
+                 ConnectionNodeRenderer.lastDblClickTime = now;
                  (e.currentTarget as HTMLElement).dispatchEvent(new CustomEvent('connect-server', {
                    detail: { connectionId: connection.id },
                    bubbles: true,

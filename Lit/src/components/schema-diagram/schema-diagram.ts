@@ -60,11 +60,17 @@ export class SchemaDiagram extends LitElement {
     this.maybeLoadSchema();
 
     // Listen for connection status changes so restored tabs auto-load
-    // once the connection is re-established
+    // once the connection is re-established.
+    // Use a short delay to let refreshConnectionMetadata finish populating
+    // databases before we try to load the schema.
     const cm = ConnectionManager.getInstance();
     this._onConnectionStatusChanged = () => {
       if (!this.loadedConnectionId && this.connectionId) {
-        this.maybeLoadSchema();
+        const conn = cm.getConnection(this.connectionId);
+        // Wait until the connection has databases populated
+        if (conn?.status === 'connected' && conn.databases && conn.databases.length > 0) {
+          this.maybeLoadSchema();
+        }
       }
     };
     cm.on('connectionStatusChanged', this._onConnectionStatusChanged);

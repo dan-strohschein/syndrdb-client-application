@@ -216,14 +216,15 @@ export class DiagramRenderer {
 
       // Constraint icons
       let iconX = nameX;
-      ctx.font = '9px "Inter", system-ui, sans-serif';
       ctx.textBaseline = 'middle';
 
       if (field.name === 'DocumentID') {
+        ctx.font = '11px "Inter", system-ui, sans-serif';
         ctx.fillStyle = '#fbbf24';
         ctx.fillText('[PK]', iconX, textY);
         iconX += ctx.measureText('[PK]').width + 3;
       }
+      ctx.font = '9px "Inter", system-ui, sans-serif';
       if (field.isRequired) {
         ctx.fillStyle = '#f87171';
         ctx.fillText('[!]', iconX, textY);

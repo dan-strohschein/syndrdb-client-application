@@ -25,6 +25,9 @@ export class DatabaseNodeRenderer {
 
   private static bundleManager = new BundleManager(connectionManager);
 
+  /** Timestamp of the last dblclick that dispatched open-bundle-query, used to debounce. */
+  private static lastDblClickTime = 0;
+
   /**
    * Render the Databases container node and its children
    */
@@ -296,6 +299,9 @@ export class DatabaseNodeRenderer {
            }}
            @dblclick=${(e: MouseEvent) => {
              e.stopPropagation();
+             const now = Date.now();
+             if (now - DatabaseNodeRenderer.lastDblClickTime < 500) return;
+             DatabaseNodeRenderer.lastDblClickTime = now;
              (e.currentTarget as HTMLElement).dispatchEvent(new CustomEvent('open-bundle-query', {
                detail: { bundleName, databaseName, connectionId: connection.id },
                bubbles: true,
