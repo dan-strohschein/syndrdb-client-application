@@ -90,18 +90,16 @@ export class ScrollController {
 
     if (hitInfo.type !== 'none') {
       if (hitInfo.type === 'vertical-thumb' || hitInfo.type === 'horizontal-thumb') {
-        requestAnimationFrame(() => {
-          this.scrollbarDrag = {
-            active: true,
-            type: hitInfo.type === 'vertical-thumb' ? 'vertical' : 'horizontal',
-            startMousePos: mousePos,
-            startScrollOffset: { ...this.scrollOffset },
-            thumbOffset:
-              hitInfo.type === 'vertical-thumb'
-                ? mousePos.y - hitInfo.region!.y
-                : mousePos.x - hitInfo.region!.x,
-          };
-        });
+        this.scrollbarDrag = {
+          active: true,
+          type: hitInfo.type === 'vertical-thumb' ? 'vertical' : 'horizontal',
+          startMousePos: mousePos,
+          startScrollOffset: { ...this.scrollOffset },
+          thumbOffset:
+            hitInfo.type === 'vertical-thumb'
+              ? mousePos.y - hitInfo.region!.y
+              : mousePos.x - hitInfo.region!.x,
+        };
         this.setupGlobalMouseCapture(canvas);
       } else if (hitInfo.type === 'vertical-track' || hitInfo.type === 'horizontal-track') {
         this.handleScrollbarTrackClick(mousePos, hitInfo.type);
@@ -121,15 +119,14 @@ export class ScrollController {
   handleScrollbarMouseUp(event: MouseEventData): boolean {
     if (!this.scrollbarDrag.active) return false;
     this.removeGlobalMouseCapture();
-    requestAnimationFrame(() => {
-      this.scrollbarDrag = {
-        active: false,
-        type: null,
-        startMousePos: { x: 0, y: 0 },
-        startScrollOffset: { x: 0, y: 0 },
-        thumbOffset: 0,
-      };
-    });
+    this.scrollbarDrag = {
+      active: false,
+      type: null,
+      startMousePos: { x: 0, y: 0 },
+      startScrollOffset: { x: 0, y: 0 },
+      thumbOffset: 0,
+    };
+    this.deps.requestRender();
     return true;
   }
 
@@ -171,13 +168,9 @@ export class ScrollController {
         newScrollOffset.x !== this.scrollOffset.x ||
         newScrollOffset.y !== this.scrollOffset.y
       ) {
-        requestAnimationFrame(() => {
-          this.scrollOffset = newScrollOffset;
-          this.deps.applyScroll(this.scrollOffset);
-        });
-        if (this.deps.requestRenderOptimized) {
-          this.deps.requestRenderOptimized();
-        }
+        this.scrollOffset = newScrollOffset;
+        this.deps.applyScroll(this.scrollOffset);
+        this.deps.requestRender();
       }
       this.dragUpdateScheduled = false;
     });
@@ -199,15 +192,14 @@ export class ScrollController {
     this.globalMouseUpHandler = (event: MouseEvent) => {
       if (this.scrollbarDrag.active) {
         this.removeGlobalMouseCapture();
-        requestAnimationFrame(() => {
-          this.scrollbarDrag = {
-            active: false,
-            type: null,
-            startMousePos: { x: 0, y: 0 },
-            startScrollOffset: { x: 0, y: 0 },
-            thumbOffset: 0,
-          };
-        });
+        this.scrollbarDrag = {
+          active: false,
+          type: null,
+          startMousePos: { x: 0, y: 0 },
+          startScrollOffset: { x: 0, y: 0 },
+          thumbOffset: 0,
+        };
+        this.deps.requestRender();
       }
       this.deps.onGlobalMouseUp?.(event);
     };
