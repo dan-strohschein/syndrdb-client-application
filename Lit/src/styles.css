@@ -224,12 +224,12 @@
   }
 
   .db-modal-container {
-    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 sm:w-4/5 md:w-3/5 lg:max-w-2xl;
+    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 sm:w-4/5 md:w-3/5 lg:max-w-2xl relative z-50;
   }
 
   /* Large modals (bundle editor, import/export wizards) */
   .db-modal-container-lg {
-    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 lg:w-4/5 lg:max-w-6xl;
+    @apply bg-surface-3 rounded-lg shadow-elevation-4 w-11/12 lg:w-4/5 lg:max-w-6xl relative z-50;
   }
 
   /* Focus ring styling */
