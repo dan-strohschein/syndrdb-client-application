@@ -726,7 +726,7 @@ export class CodeEditor extends LitElement {
   }
   
   /**
-   * Sets up focus and blur handlers to control cursor visibility and border glow.
+   * Sets up focus and blur handlers to control cursor visibility and border glow (accent color).
    */
   private setupFocusHandlers(): void {
     // Get the hidden textarea from inputCapture
@@ -740,10 +740,10 @@ export class CodeEditor extends LitElement {
       this.cursorVisible = true;
       this.startCursorBlinking();
       
-      // Add orange glow effect
+      // Add focus glow (accent blue/indigo to match app focus style)
       if (container) {
-        container.style.boxShadow = '0 0 0 2px rgba(255, 165, 0, 0.5)';
-        container.style.borderColor = 'rgb(255, 165, 0)';
+        container.style.boxShadow = '0 0 0 2px rgba(99, 102, 241, 0.5)';
+        container.style.borderColor = 'rgb(99, 102, 241)';
       }
       
       this.renderEditor();

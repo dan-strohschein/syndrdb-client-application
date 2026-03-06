@@ -173,28 +173,34 @@
     @apply bg-db-hover;
   }
 
+  /* Buttons: default state is outline (deep theme colors), hover fills */
   .db-button {
-    @apply px-3 py-2 text-white rounded text-sm
-           transition-all duration-100 active:scale-[0.97];
+    @apply px-3 py-2 rounded text-sm transition-all duration-150 active:scale-[0.97]
+           bg-transparent border border-accent text-accent
+           hover:bg-accent hover:text-white;
   }
 
   .db-button-success {
-    @apply px-3 py-2 bg-feedback-success hover:brightness-110 text-white rounded text-sm
-           transition-all duration-100 active:scale-[0.97];
+    @apply px-3 py-2 rounded text-sm transition-all duration-150 active:scale-[0.97]
+           bg-transparent border border-feedback-success text-feedback-success
+           hover:bg-feedback-success hover:text-white;
   }
 
   .db-button-danger {
-    @apply px-3 py-2 bg-feedback-error hover:brightness-110 text-white rounded text-sm
-           transition-all duration-100 active:scale-[0.97];
+    @apply px-3 py-2 rounded text-sm transition-all duration-150 active:scale-[0.97]
+           bg-transparent border border-feedback-error text-feedback-error
+           hover:bg-feedback-error hover:text-white;
   }
 
   .db-button-secondary {
-    @apply px-3 py-2 bg-surface-4 hover:bg-db-hover text-gray-200 rounded text-sm
-           transition-all duration-100 active:scale-[0.97];
+    @apply px-3 py-2 rounded text-sm transition-all duration-150 active:scale-[0.97]
+           bg-transparent border border-db-border text-gray-200
+           hover:bg-db-hover;
   }
 
   .db-button-ghost {
-    @apply px-3 py-2 bg-transparent text-accent hover:bg-accent-subtle rounded text-sm
+    @apply px-3 py-2 bg-transparent border border-transparent text-accent
+           hover:bg-accent-subtle rounded text-sm
            transition-all duration-100 active:scale-[0.97];
   }
 
@@ -385,17 +391,90 @@
   .db-scroll-shadow-wrapper {
     @apply relative overflow-hidden;
   }
+
 }
 
 /* ===== Non-Tailwind styles (after @layer so they win specificity) ===== */
 
-/* Button gradient */
-.db-button {
-  background-image: linear-gradient(180deg, #6366F1, #4F46E5);
+/* DaisyUI buttons: default to outline style with deep theme colors */
+.btn {
+  background-color: transparent !important;
+  border-width: 1px;
+  border-style: solid;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
-
-.db-button:hover {
-  background-image: linear-gradient(180deg, #818CF8, #6366F1);
+/* Base .btn (no variant): neutral outline */
+.btn:not(.btn-primary):not(.btn-success):not(.btn-error):not(.btn-warning):not(.btn-info):not(.btn-ghost):not(.btn-secondary):not(.btn-neutral):not(.btn-outline) {
+  border-color: #3e3e42;
+  color: #e5e7eb;
+}
+.btn:not(.btn-primary):not(.btn-success):not(.btn-error):not(.btn-warning):not(.btn-info):not(.btn-ghost):not(.btn-secondary):not(.btn-neutral):not(.btn-outline):hover {
+  background-color: #37373d !important;
+  border-color: #3e3e42;
+  color: #e5e7eb;
+}
+.btn-primary {
+  border-color: #6366F1;
+  color: #6366F1;
+}
+.btn-primary:hover {
+  background-color: #6366F1 !important;
+  border-color: #6366F1;
+  color: white;
+}
+.btn-success {
+  border-color: #059669;
+  color: #059669;
+}
+.btn-success:hover {
+  background-color: #059669 !important;
+  border-color: #059669;
+  color: white;
+}
+.btn-error {
+  border-color: #DC2626;
+  color: #DC2626;
+}
+.btn-error:hover {
+  background-color: #DC2626 !important;
+  border-color: #DC2626;
+  color: white;
+}
+.btn-warning {
+  border-color: #D97706;
+  color: #D97706;
+}
+.btn-warning:hover {
+  background-color: #D97706 !important;
+  border-color: #D97706;
+  color: white;
+}
+.btn-info {
+  border-color: #2563EB;
+  color: #2563EB;
+}
+.btn-info:hover {
+  background-color: #2563EB !important;
+  border-color: #2563EB;
+  color: white;
+}
+.btn-ghost {
+  border-color: transparent;
+}
+.btn-outline {
+  background-color: transparent !important;
+}
+/* Secondary / neutral outline */
+.btn-secondary,
+.btn-neutral {
+  border-color: #3e3e42;
+  color: #e5e7eb;
+}
+.btn-secondary:hover,
+.btn-neutral:hover {
+  background-color: #37373d !important;
+  border-color: #3e3e42;
+  color: #e5e7eb;
 }
 
 /* Selected tree node gradient */
@@ -533,6 +612,19 @@
 
 .db-scroll-shadow-wrapper.shadow-bottom::after {
   opacity: 1;
+}
+
+/* Connection pane: hexagonal honeycomb (same geometry as schema diagram-effects).
+ * Flat-top hex grid: r=12, colW=18, rowH=r*sqrt(3)≈20.78; odd columns offset by rowH/2.
+ * One repeat tile is 36×20.78 so hexes share edges. Faint at bottom, fades toward middle. */
+.db-sidebar-hex-bg {
+  background-color: #1a1a1a !important;
+  background-image:
+    linear-gradient(180deg, #1a1a1a 0%, #1a1a1a 35%, transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -10.39 36 20.78'%3E%3Cpath fill='none' stroke='rgba(255%2C255%2C255%2C0.12)' stroke-width='0.9' d='M 12,0 L 6,10.39 L -6,10.39 L -12,0 L -6,-10.39 L 6,-10.39 Z'/%3E%3Cpath fill='none' stroke='rgba(255%2C255%2C255%2C0.12)' stroke-width='0.9' d='M 30,10.39 L 24,20.78 L 12,20.78 L 6,10.39 L 12,0 L 24,0 Z'/%3E%3C/svg%3E") !important;
+  background-size: auto, 36px 20.78px !important;
+  background-position: 0 0, 0 0 !important;
+  background-repeat: no-repeat, repeat !important;
 }
 
 /* Tab enter/exit animations */

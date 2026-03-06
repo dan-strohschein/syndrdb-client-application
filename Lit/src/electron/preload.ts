@@ -110,5 +110,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('exporter:export-complete');
       ipcRenderer.removeAllListeners('exporter:export-error');
     }
+  },
+
+  plugins: {
+    discover: () => ipcRenderer.invoke('plugins:discover'),
+    readModule: (mainPath: string) => ipcRenderer.invoke('plugins:read-module', mainPath),
+    readStyles: (stylesPath: string) => ipcRenderer.invoke('plugins:read-styles', stylesPath),
   }
 } as ElectronAPI);

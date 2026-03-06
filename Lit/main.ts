@@ -606,5 +606,40 @@ function setupSyndrDBService(): void {
     console.error('❌ Failed to initialize exporter system:', error);
   }
 
+  // ── Visual Plugin IPC handlers ──
+  try {
+    const { VisualPluginLoader } = require('./electron/visual-plugin-loader.cjs');
+    const visualPluginLoader = new VisualPluginLoader();
+
+    ipcMain.handle('plugins:discover', async () => {
+      try {
+        return await visualPluginLoader.discoverPlugins();
+      } catch (error) {
+        console.error('IPC plugins:discover error:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('plugins:read-module', async (_, mainPath: string) => {
+      try {
+        return visualPluginLoader.readModuleSource(mainPath);
+      } catch (error) {
+        console.error('IPC plugins:read-module error:', error);
+        return '';
+      }
+    });
+
+    ipcMain.handle('plugins:read-styles', async (_, stylesPath: string) => {
+      try {
+        return visualPluginLoader.readStyles(stylesPath);
+      } catch (error) {
+        console.error('IPC plugins:read-styles error:', error);
+        return '';
+      }
+    });
+  } catch (error) {
+    console.error('❌ Failed to initialize visual plugin system:', error);
+  }
+
   console.log('SyndrDB service initialized with IPC handlers');
 }

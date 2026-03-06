@@ -35,7 +35,7 @@ export class ConnectionNodeRenderer {
            aria-expanded=${expanded}
            tabindex="-1">
         <div class="flex items-center p-2 rounded-lg hover:bg-base-300 cursor-pointer font-medium ${
-          isActive ? 'text-accent border-l-2 border-l-accent' : ''
+          isActive ? 'text-accent border-l-2 border-l-accent' : 'text-label'
         }"
              style="${isActive ? 'background: linear-gradient(90deg, rgba(99, 102, 241, 0.10), transparent)' : ''}"
              @click=${() => {

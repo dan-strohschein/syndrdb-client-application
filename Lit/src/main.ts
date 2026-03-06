@@ -54,6 +54,7 @@ import './components/code-editor/suggestion-complete/suggestion-dropdown';
 import { configLoader } from './config/config-loader.js';
 import { validateAllGrammars } from './components/code-editor/syndrQL-language-serviceV2/schema-validator.js';
 import { connectionManager } from './services/connection-manager';
+import { pluginRegistry } from './services/plugin-registry';
 
 /**
  * Initialize application configuration and validation
@@ -72,6 +73,11 @@ async function initializeApplication() {
     console.log('🔍 Validating grammar files...');
     await validateAllGrammars();
     console.log('✅ Grammar validation complete');
+
+    // Initialize visual plugin system
+    console.log('🔌 Loading visual plugins...');
+    await pluginRegistry.initialize();
+    console.log(`✅ Visual plugins loaded (${pluginRegistry.getActivePlugins().length} active)`);
 
     console.log('✅ Application initialization complete');
   } catch (error) {
@@ -210,6 +216,17 @@ export class AppRoot extends LitElement {
     this.addEventListener('query-executing', (event: Event) => {
       const { executing } = (event as CustomEvent).detail;
       this.isExecuting = executing;
+    });
+
+    // Listen for open-plugin-tab events and forward to main-panel
+    this.addEventListener('open-plugin-tab', (event: Event) => {
+      const mainPanel = this.querySelector('main-panel');
+      if (mainPanel) {
+        mainPanel.dispatchEvent(new CustomEvent('open-plugin-tab', {
+          detail: (event as CustomEvent).detail,
+          bubbles: false
+        }));
+      }
     });
 
     // Listen for open-bundle-query events (double-click on bundle in tree)
@@ -703,8 +720,8 @@ export class AppRoot extends LitElement {
     return html`
       <div class="h-screen bg-surface-0 text-base-content flex flex-col">
 
-          <!-- Navigation Bar -->
-          <div class="w-full p-4 bg-surface-1 flex-shrink-0">
+          <!-- Navigation Bar (full width, no horizontal margin) -->
+          <div class="w-full flex-shrink-0">
             <navigation-bar></navigation-bar>
           </div>
 

@@ -109,6 +109,18 @@ export interface ImporterElectronAPI {
   removeImportListeners: () => void;
 }
 
+export interface PluginsElectronAPI {
+  discover: () => Promise<Array<{
+    manifest: Record<string, unknown>;
+    pluginDir: string;
+    mainPath: string;
+    stylesPath?: string;
+    error?: string;
+  }>>;
+  readModule: (mainPath: string) => Promise<string>;
+  readStyles: (stylesPath: string) => Promise<string>;
+}
+
 export interface ElectronAPI {
   syndrdb: SyndrDBElectronAPI;
   connectionStorage: ConnectionStorageAPI;
@@ -116,6 +128,7 @@ export interface ElectronAPI {
   aiAssistant?: AIAssistantElectronAPI;
   importer?: ImporterElectronAPI;
   exporter?: ExporterElectronAPI;
+  plugins?: PluginsElectronAPI;
   readFile?: FileSystemAPI['readFile'];
   writeFile?: FileSystemAPI['writeFile'];
   createDirectory?: FileSystemAPI['createDirectory'];

@@ -1,6 +1,7 @@
 import { html, css, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { connectionManager, Connection } from '../services/connection-manager';
+import { pluginRegistry, type SidebarSection } from '../services/plugin-registry';
 
 @customElement('sidebar-panel')
 export class SidebarPanel extends LitElement {
@@ -14,6 +15,12 @@ export class SidebarPanel extends LitElement {
 
   @state()
   private treeFilter = '';
+
+  @state()
+  private pluginSections: Array<SidebarSection & { pluginId: string }> = [];
+
+  @state()
+  private collapsedSections: Set<string> = new Set();
 
   private newConnectionHandler: (() => void) | null = null;
   private saveConnectionHandler: (() => void) | null = null;
@@ -32,6 +39,13 @@ export class SidebarPanel extends LitElement {
 
     this.saveConnectionHandler = () => this.updateConnections();
     document.addEventListener('save-connection', this.saveConnectionHandler);
+
+    // Load plugin sidebar sections when plugins are ready
+    pluginRegistry.on('pluginsLoaded', () => this.updatePluginSections());
+    pluginRegistry.on('pluginStateChanged', () => this.updatePluginSections());
+    if (pluginRegistry.loaded) {
+      this.updatePluginSections();
+    }
 
     this.loadSavedConnections();
   }
@@ -147,26 +161,47 @@ export class SidebarPanel extends LitElement {
     wrapper.classList.toggle('shadow-bottom', el.scrollTop + el.clientHeight < el.scrollHeight - 1);
   }
 
+  private updatePluginSections() {
+    this.pluginSections = pluginRegistry.getSidebarSections();
+  }
+
+  private toggleSection(sectionId: string) {
+    const next = new Set(this.collapsedSections);
+    if (next.has(sectionId)) {
+      next.delete(sectionId);
+    } else {
+      next.add(sectionId);
+    }
+    this.collapsedSections = next;
+  }
+
+  private handlePluginItemClick(item: { tabTypeId: string; config?: Record<string, unknown> }) {
+    this.dispatchEvent(new CustomEvent('open-plugin-tab', {
+      detail: { tabTypeId: item.tabTypeId, config: item.config },
+      bubbles: true,
+    }));
+  }
+
   private openConnectionModal() {
     this.dispatchEvent(new CustomEvent('open-connection-modal', { bubbles: true }));
   }
 
   render() {
     return html`
-      <div class="h-full flex flex-col bg-surface-1">
+      <div class="h-full flex flex-col db-sidebar-hex-bg relative">
         <!-- Header -->
-        <div class="flex-shrink-0 p-4 db-sidebar-header">
+        <div class="flex-shrink-0 p-4 db-sidebar-header relative z-10">
           <h2 class="text-x1 font-semibold text-gray-200">Database Connections</h2>
-          <button class="btn btn-sm mt-2 w-full bg-accent hover:bg-accent-dark text-white transition-transform duration-100 active:scale-[0.97]" @click=${this.openConnectionModal}>
-            <i class="fa-solid fa-plus mr-2 text-green-300"></i>
+          <button class="btn btn-sm btn-primary mt-2 w-full transition-transform duration-100 active:scale-[0.97]" @click=${this.openConnectionModal}>
+            <i class="fa-solid fa-plus mr-2 text-icon-success"></i>
             New Connection
           </button>
         </div>
         
         <!-- Search Filter -->
-        <div class="flex-shrink-0 px-4 py-2">
+        <div class="flex-shrink-0 px-4 py-2 relative z-10">
           <div class="relative">
-            <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400 text-xs"></i>
+            <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-icon-schema text-xs"></i>
             <input
               type="text"
               class="db-input text-xs w-full pl-7 pr-7 py-1.5"
@@ -186,7 +221,7 @@ export class SidebarPanel extends LitElement {
         </div>
 
         <!-- Connection Tree -->
-        <div class="flex-1 db-scroll-shadow-wrapper" style="max-height: calc(100vh - 250px);">
+        <div class="flex-1 db-scroll-shadow-wrapper relative z-10" style="max-height: calc(100vh - 250px);">
           <div class="h-full overflow-y-scroll overflow-x-hidden p-2" @scroll=${this._onTreeScroll}>
             <connection-tree
               .connections=${this.treeFilter
@@ -198,8 +233,39 @@ export class SidebarPanel extends LitElement {
           </div>
         </div>
         
+        <!-- Plugin Sidebar Sections -->
+        ${this.pluginSections.length > 0 ? html`
+          <div class="flex-shrink-0 border-t border-db-border relative z-10">
+            ${this.pluginSections.map(section => html`
+              <div class="plugin-sidebar-section">
+                <button
+                  class="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-300 hover:bg-surface-3/50 transition-colors"
+                  @click=${() => this.toggleSection(section.id)}
+                >
+                  <i class="fa-solid ${this.collapsedSections.has(section.id) ? 'fa-chevron-right' : 'fa-chevron-down'} text-[8px] text-gray-500 w-3"></i>
+                  <i class="${section.icon} ${section.iconColor || 'text-gray-400'} text-xs"></i>
+                  <span class="uppercase tracking-wider">${section.label}</span>
+                </button>
+                ${!this.collapsedSections.has(section.id) ? html`
+                  <div class="pb-1">
+                    ${section.children.map(item => html`
+                      <button
+                        class="w-full flex items-center gap-2 px-4 pl-9 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-surface-3/50 transition-colors"
+                        @click=${() => this.handlePluginItemClick(item)}
+                      >
+                        <i class="${item.icon} ${item.iconColor || 'text-gray-500'} text-[10px]"></i>
+                        <span>${item.label}</span>
+                      </button>
+                    `)}
+                  </div>
+                ` : ''}
+              </div>
+            `)}
+          </div>
+        ` : ''}
+
         <!-- Status Bar -->
-        <div class="flex-shrink-0 p-2 border-t border-db-border text-xs text-feedback-muted">
+        <div class="flex-shrink-0 p-2 border-t border-db-border text-xs text-feedback-muted relative z-10">
           ${this.connections.filter(c => c.status === 'connected').length} of ${this.connections.length} connected
         </div>
       </div>

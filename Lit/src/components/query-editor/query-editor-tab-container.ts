@@ -211,13 +211,13 @@ export class QueryEditorTabContainer extends LitElement {
           </div>
         </div>
 
-        <!-- Tab Headers (Bottom) -->
+        <!-- Tab Headers (Bottom) — same purple gradient underline as main editor tabs -->
         <div class="flex border-t border-base-300 bg-base-50">
           <button
-            class="px-3 py-2 border-t-2 font-medium text-xs transition-colors duration-200 ${
+            class="px-3 py-2 border-b-2 font-medium text-xs transition-colors duration-200 ${
               this.activeTab === 'syndrql'
-                ? 'border-primary text-base-content bg-base-100'
-                : 'border-transparent text-base-content opacity-30 hover:text-base-content hover:opacity-100 hover:bg-base-100'
+                ? 'text-gold-light bg-base-100 db-tab-active-gradient'
+                : 'border-transparent text-label-muted hover:text-label hover:bg-base-100'
             }"
             @click=${() => this.handleTabClick('syndrql')}
           >
@@ -225,10 +225,10 @@ export class QueryEditorTabContainer extends LitElement {
           </button>
 
           <button
-            class="px-3 py-2 border-t-2 font-medium text-xs transition-colors duration-200 ${
+            class="px-3 py-2 border-b-2 font-medium text-xs transition-colors duration-200 ${
               this.activeTab === 'graphql'
-                ? 'border-primary text-base-content bg-base-100'
-                : 'border-transparent text-base-content opacity-30 hover:text-base-content hover:opacity-100 hover:bg-base-100'
+                ? 'text-gold-light bg-base-100 db-tab-active-gradient'
+                : 'border-transparent text-label-muted hover:text-label hover:bg-base-100'
             }"
             @click=${() => this.handleTabClick('graphql')}
           >
@@ -236,10 +236,10 @@ export class QueryEditorTabContainer extends LitElement {
           </button>
 
           <button
-            class="px-3 py-2 border-t-2 font-medium text-xs transition-colors duration-200 ${
+            class="px-3 py-2 border-b-2 font-medium text-xs transition-colors duration-200 ${
               this.activeTab === 'diagram'
-                ? 'border-primary text-base-content bg-base-100'
-                : 'border-transparent text-base-content opacity-30 hover:text-base-content hover:opacity-100 hover:bg-base-100'
+                ? 'text-gold-light bg-base-100 db-tab-active-gradient'
+                : 'border-transparent text-label-muted hover:text-label hover:bg-base-100'
             }"
             @click=${() => this.handleTabClick('diagram')}
           >
