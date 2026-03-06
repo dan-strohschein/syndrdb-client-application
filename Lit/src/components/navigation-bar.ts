@@ -258,6 +258,11 @@ export class NavigationBar extends LitElement {
         this.handleMenuClose();
     }
 
+    private handleExit() {
+        this.handleMenuClose();
+        window.close();
+    }
+
     private async handleFileSave() {
         const panelType = this.lastSelectedPanel;
         const title = panelType === 'query-results' ? 'Save Results' : 'Save Query';
@@ -447,6 +452,8 @@ export class NavigationBar extends LitElement {
                                 <ul class="absolute top-full left-0 bg-surface-4 shadow-elevation-3 rounded-lg p-1 w-52 z-50 animate-context-menu-enter border border-db-border">
                                     <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileOpen}><span><i class="fa-solid fa-folder-open mr-2 text-xs text-yellow-400"></i>Open</span><span class="db-shortcut-hint">${this.modKey}+O</span></a></li>
                                     <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleFileSave}><span><i class="fa-solid fa-floppy-disk mr-2 text-xs text-blue-400"></i>Save</span><span class="db-shortcut-hint">${this.modKey}+S</span></a></li>
+                                    <li class="border-t border-db-border/30 my-1" aria-hidden="true"></li>
+                                    <li><a href="#" class="flex items-center justify-between px-2 py-1.5 hover:bg-accent-subtle hover:text-white rounded transition-colors duration-100 text-gray-300" @click=${this.handleExit}><span><i class="fa-solid fa-right-from-bracket mr-2 text-xs text-red-400"></i>Exit</span></a></li>
                                 </ul>
                             ` : ''}
                         </li>

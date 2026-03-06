@@ -86,7 +86,7 @@ export class QueryHistoryPanel extends LitElement {
       <div class="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]"
            @click=${(e: MouseEvent) => { if (e.target === e.currentTarget) this.close(); }}>
         <div class="db-modal-backdrop" @click=${() => this.close()}></div>
-        <div class="relative w-[640px] max-h-[70vh] bg-surface-3 rounded-lg shadow-elevation-4 border border-db-border animate-modal-enter overflow-hidden z-10 flex flex-col"
+        <div class="relative w-[640px] max-h-[70vh] bg-surface-3 rounded-lg shadow-elevation-4 border border-db-border animate-modal-enter overflow-hidden z-50 flex flex-col"
              role="dialog" aria-modal="true" aria-label="Query History">
           <!-- Header -->
           <div class="p-3 border-b border-db-border flex items-center justify-between flex-shrink-0">
