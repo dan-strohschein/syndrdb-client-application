@@ -1,5 +1,6 @@
 import { html, css, LitElement } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
+import { pluginRegistry, type StatusBarWidget } from '../services/plugin-registry';
 
 @customElement('status-bar')
 export class StatusBar extends LitElement {
@@ -61,9 +62,25 @@ export class StatusBar extends LitElement {
   @property({ type: Boolean })
   executing: boolean = false;
 
+  @state()
+  private pluginWidgets: Array<StatusBarWidget & { pluginId: string }> = [];
+
   // Disable Shadow DOM to allow global Tailwind CSS
   createRenderRoot() {
     return this;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    pluginRegistry.on('pluginsLoaded', () => this.updatePluginWidgets());
+    pluginRegistry.on('pluginStateChanged', () => this.updatePluginWidgets());
+    if (pluginRegistry.loaded) {
+      this.updatePluginWidgets();
+    }
+  }
+
+  private updatePluginWidgets() {
+    this.pluginWidgets = pluginRegistry.getStatusBarWidgets();
   }
 
   /**

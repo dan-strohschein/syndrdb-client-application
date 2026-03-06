@@ -77,4 +77,5 @@ export const CONTEXT_MENU_ACTIONS = {
   SCRIPT_AS_CREATE: 'script-as-create',
   SCRIPT_AS_DROP: 'script-as-drop',
   REFRESH_NODE: 'refresh-node',
+  SCHEMA_DIAGRAM: 'schema-diagram',
 } as const;

@@ -184,6 +184,7 @@ export class JsonTreeView extends LitElement {
    */
   private renderNode(path: string, label: string, value: JsonValue): TemplateResult {
     const isBranch = this.isBranch(value);
+    const keyColor = this.keyColorForValue(value);
 
     if (!isBranch) {
       const isRootPrimitive = path === ROOT_PATH;
@@ -191,11 +192,11 @@ export class JsonTreeView extends LitElement {
         <div class="flex items-baseline gap-1 pl-4" role="treeitem" data-path="${path}">
           ${!isRootPrimitive
             ? html`
-                <span class="json-tree-view-key text-primary">${label}</span>
-                <span class="json-tree-view-sep">: </span>
+                <span class="json-tree-view-key ${keyColor}">${label}</span>
+                <span class="json-tree-view-sep text-base-content/50">: </span>
               `
             : ''}
-          <span class="json-tree-view-value">${this.formatLeaf(value)}</span>
+          <span class="json-tree-view-value ${this.valueColorClass(value)}">${this.formatLeaf(value)}</span>
         </div>
       `;
     }
@@ -218,9 +219,9 @@ export class JsonTreeView extends LitElement {
               ? html`<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>`
               : html`<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>`}
           </span>
-          <span class="json-tree-view-key text-primary">${label}</span>
-          <span class="json-tree-view-sep">: </span>
-          <span class="json-tree-view-preview text-base-content/80">${preview}</span>
+          <span class="json-tree-view-key ${keyColor}">${label}</span>
+          <span class="json-tree-view-sep text-base-content/50">: </span>
+          <span class="json-tree-view-preview text-base-content/60">${preview}</span>
         </div>
         ${expanded
           ? html`
@@ -246,6 +247,30 @@ export class JsonTreeView extends LitElement {
     return Object.entries(value).map(([key, val]) =>
       this.renderNode(this.childPath(parentPath, key), key, val as JsonValue)
     );
+  }
+
+  /** Return a Tailwind color class for the key label based on the value's data type. */
+  private keyColorForValue(value: JsonValue): string {
+    if (value === null) return 'text-red-400';
+    if (Array.isArray(value)) return 'text-purple-400';
+    switch (typeof value) {
+      case 'string':  return 'text-green-400';
+      case 'number':  return 'text-cyan-400';
+      case 'boolean': return 'text-amber-400';
+      case 'object':  return 'text-indigo-400';
+      default:        return 'text-base-content';
+    }
+  }
+
+  /** Return a Tailwind color class for the leaf value itself. */
+  private valueColorClass(value: JsonValue): string {
+    if (value === null) return 'text-red-400/70 italic';
+    switch (typeof value) {
+      case 'string':  return 'text-green-300';
+      case 'number':  return 'text-cyan-300';
+      case 'boolean': return 'text-amber-300';
+      default:        return 'text-base-content/80';
+    }
   }
 
   private formatLeaf(value: JsonValue): string {

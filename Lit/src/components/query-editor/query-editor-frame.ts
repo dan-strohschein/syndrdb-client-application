@@ -45,6 +45,9 @@ export class QueryEditorFrame extends LitElement {
     @property({ type: String })
     public connectionId: string = '';
 
+    @property({ type: String })
+    public initialTab: 'syndrql' | 'graphql' | 'diagram' = 'syndrql';
+
     @consume({ context: connectionContext })
   @state() connectionCtxt?: ConnectionContext;
 
@@ -98,7 +101,7 @@ export class QueryEditorFrame extends LitElement {
 
     /** Which editor tab is currently active (tracked via tab-changed event). */
     @state()
-    private activeQueryTab: 'syndrql' | 'graphql' = 'syndrql';
+    private activeQueryTab: 'syndrql' | 'graphql' | 'diagram' = 'syndrql';
 
     @state() private editorHeightPct: number = parseInt(localStorage.getItem('editor-split-pct') || '50', 10);
     private _verticalResizing = false;
@@ -133,13 +136,17 @@ export class QueryEditorFrame extends LitElement {
 
   willUpdate(changedProperties: PropertyValues) {
         // Initialize properties only once when they first arrive
-        if (!this._initialized && (this.initialQuery || this.connectionId)) {
+        if (!this._initialized && (this.initialQuery || this.connectionId || this.initialTab !== 'syndrql')) {
             if (this.initialQuery) {
                 this.query = this.initialQuery;
             }
 
             if (this.connectionId) {
                 this._selectedConnectionId = this.connectionId;
+            }
+
+            if (this.initialTab) {
+                this.activeQueryTab = this.initialTab;
             }
 
             this._initialized = true;
@@ -726,13 +733,13 @@ export class QueryEditorFrame extends LitElement {
     return html`
       <div class="h-full flex flex-col ${this.isActive ? 'syndrql-active-tab' : ''}">
         <!-- Breadcrumb Context Indicator -->
-        <div class="text-xs text-feedback-muted px-3 py-1 border-b border-db-border bg-surface-1 flex items-center gap-1 flex-shrink-0">
+        <div class="text-xs text-label px-3 py-1 border-b border-db-border bg-surface-1 flex items-center gap-1 flex-shrink-0">
           <i class="fa-solid fa-server text-[10px]"></i>
           ${connection ? html`
             <span class="hover:text-accent cursor-pointer transition-colors" title="Connection: ${serverName}">${serverName}</span>
           ` : html`
             <select
-              class="bg-surface-2 border border-db-border rounded text-xs text-feedback-muted px-1 py-0.5 cursor-pointer hover:text-accent transition-colors"
+              class="bg-surface-2 border border-db-border rounded text-xs text-label px-1 py-0.5 cursor-pointer hover:text-accent transition-colors"
               title="Select a connection"
               @change=${this._onConnectionSelected}
             >
@@ -748,8 +755,16 @@ export class QueryEditorFrame extends LitElement {
             <span class="hover:text-accent cursor-pointer transition-colors" title="Database: ${this.databaseName}">${this.databaseName}</span>
           ` : ''}
           <span class="opacity-50">/</span>
-          <span>${this.activeQueryTab === 'graphql' ? 'GraphQL' : 'SyndrQL'}</span>
+          <span class="text-label">${this.activeQueryTab === 'diagram' ? 'Schema Diagram' : this.activeQueryTab === 'graphql' ? 'GraphQL' : 'SyndrQL'}</span>
         </div>
+        ${this.activeQueryTab === 'diagram' ? html`
+        <!-- Schema Diagram (full height, no editor header or results) -->
+        <div class="flex-1 min-h-0 overflow-hidden">
+          <div class="h-full bg-base-100 rounded border border-base-300">
+            <query-editor-tab-container .activeTab=${this.activeQueryTab} .connectionId=${this.connectionId} .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
+          </div>
+        </div>
+        ` : html`
         <!-- Query Editor (Top) -->
         <div class="border-b border-base-300 min-h-0 overflow-hidden" style="height: ${this.editorHeightPct}%">
           <div class="h-full p-4 flex flex-col">
@@ -760,7 +775,7 @@ export class QueryEditorFrame extends LitElement {
               <div class="flex items-center space-x-2">
                 <!-- Execute Query Button (Play Icon) -->
                 <button
-                  class="btn btn-soft btn-primary btn-sm ${this.executing ? 'loading' : ''}"
+                  class="btn btn-soft btn-success btn-sm ${this.executing ? 'loading' : ''}"
                   title="Execute Query (${this.modKey}+Enter)"
                   @click=${this.executeQuery}
                   ?disabled=${this.executing}
@@ -793,7 +808,7 @@ export class QueryEditorFrame extends LitElement {
               </div>
             </div>
             <div class="flex-1 bg-base-100 rounded border border-base-300">
-              <query-editor-tab-container .activeTab='syndrql' .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
+              <query-editor-tab-container .activeTab=${this.activeQueryTab} .connectionId=${this.connectionId} .queryText=${this.query} .databaseName=${this.databaseName} @query-changed=${this.handleQueryChange} @tab-changed=${this.handleTabChanged}></query-editor-tab-container>
             </div>
           </div>
         </div>
@@ -812,7 +827,7 @@ export class QueryEditorFrame extends LitElement {
           <div class="p-4 flex flex-col min-h-0 flex-1">
             <div class="flex items-center justify-between mb-3 flex-shrink-0">
               <div class="flex items-center gap-2">
-                <h3 class="text-sm font-semibold text-base-content">Query Results</h3>
+                <h3 class="text-sm font-semibold text-label">Query Results</h3>
                 <button class="btn btn-soft btn-secondary btn-xs"
                   @click=${this.handleSaveResults}
                   title="Save Results To File">
@@ -1008,27 +1023,28 @@ export class QueryEditorFrame extends LitElement {
               </div>
               <div class="flex border-t border-base-300 bg-base-200/50 flex-shrink-0">
                 <button
-                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'text' ? 'bg-base-100 text-accent border-b-2 border-accent' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/30'}"
+                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'text' ? 'bg-base-100 text-gold-light border-b-2 db-tab-active-gradient' : 'text-label-muted hover:text-label hover:bg-base-300/30'}"
                   @click=${() => { this.resultsTab = 'text'; }}
                 >
-                  Text
+                  <i class="fa-solid fa-file-lines text-xs mr-1"></i>Text
                 </button>
                 <button
-                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'grid' ? 'bg-base-100 text-accent border-b-2 border-accent' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/30'}"
+                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'grid' ? 'bg-base-100 text-gold-light border-b-2 db-tab-active-gradient' : 'text-label-muted hover:text-label hover:bg-base-300/30'}"
                   @click=${() => { this.resultsTab = 'grid'; }}
                 >
                   <i class="fa-solid fa-table-cells text-xs mr-1"></i>Grid
                 </button>
                 <button
-                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'json' ? 'bg-base-100 text-accent border-b-2 border-accent' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/30'}"
+                  class="flex-1 py-2 px-3 text-sm font-medium transition-colors ${this.resultsTab === 'json' ? 'bg-base-100 text-gold-light border-b-2 db-tab-active-gradient' : 'text-label-muted hover:text-label hover:bg-base-300/30'}"
                   @click=${() => { this.resultsTab = 'json'; }}
                 >
-                  JSON
+                  <i class="fa-solid fa-braces text-xs mr-1"></i>JSON
                 </button>
               </div>
             </div>
           </div>
         </div>
+        `}
       </div>
     `;
   }

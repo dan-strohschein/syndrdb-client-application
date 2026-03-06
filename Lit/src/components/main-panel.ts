@@ -8,10 +8,12 @@ import { configLoader } from '../config/config-loader';
 import './ai-assistant/ai-assistant-panel';
 import './server-profiler/server-profiler-tab';
 import './session-manager/session-manager-tab';
+import './plugin-tab-host';
+import { pluginRegistry } from '../services/plugin-registry';
 
 interface TabEntry {
   name: string;
-  type: 'query' | 'profiler' | 'session-manager';
+  type: 'query' | 'profiler' | 'session-manager' | 'plugin';
   initialQuery?: string;
   queryState?: string;
   databaseName?: string;
@@ -21,6 +23,12 @@ interface TabEntry {
   profilerConnectionId?: string;
   /** True if the user manually renamed this tab (prevents auto-naming) */
   userRenamed?: boolean;
+  /** Which sub-tab to activate initially (syndrql, graphql, diagram) */
+  initialTab?: 'syndrql' | 'graphql' | 'diagram';
+  /** Plugin tab type ID for type === 'plugin' */
+  pluginTabTypeId?: string;
+  /** Plugin tab config for type === 'plugin' */
+  pluginConfig?: Record<string, unknown>;
 }
 
 @customElement('main-panel')
@@ -133,6 +141,16 @@ export class MainPanel extends LitElement {
     this.addEventListener('open-session-manager-tab', () => {
       this.handleOpenSessionManagerTab();
     });
+
+    // Add event listener for open-schema-diagram events
+    this.addEventListener('open-schema-diagram', (event: Event) => {
+      this.handleOpenSchemaDiagram(event as CustomEvent);
+    });
+
+    // Add event listener for open-plugin-tab events
+    this.addEventListener('open-plugin-tab', (event: Event) => {
+      this.handleOpenPluginTab(event as CustomEvent);
+    });
   }
 
   private handleAddQueryEditor(event: CustomEvent) {
@@ -181,6 +199,71 @@ export class MainPanel extends LitElement {
       type: 'session-manager'
     }];
     this.activeTabIndex = this.tabs.length - 1;
+  }
+
+  private handleOpenSchemaDiagram(event: CustomEvent) {
+    let { connectionId, databaseName } = event.detail ?? {};
+
+    // Fall back to active connection if not provided (e.g. Tools menu launch)
+    if (!connectionId) {
+      const activeConn = connectionManager.getActiveConnection();
+      if (activeConn) {
+        connectionId = activeConn.id;
+        if (!databaseName) {
+          databaseName = activeConn.currentDatabase || '';
+        }
+      }
+    }
+
+    const conn = connectionId ? connectionManager.getConnection(connectionId) : null;
+    const tabName = databaseName ? `Schema: ${databaseName}` : 'Schema Diagram';
+
+    this.tabs = [...this.tabs, {
+      name: tabName,
+      type: 'query',
+      databaseName: databaseName || '',
+      connectionId: connectionId || '',
+      connectionName: conn?.name || '',
+      initialTab: 'diagram',
+    }];
+    this.activeTabIndex = this.tabs.length - 1;
+    this.newTabIndex = this.activeTabIndex;
+    setTimeout(() => { this.newTabIndex = null; }, 200);
+    this.persistTabs();
+  }
+
+  private handleOpenPluginTab(event: CustomEvent) {
+    const { tabTypeId, config, focus } = event.detail;
+    if (!tabTypeId) return;
+
+    const tabTypes = pluginRegistry.getTabTypes();
+    const tabType = tabTypes.get(tabTypeId);
+    if (!tabType) {
+      console.warn(`Plugin tab type not found: ${tabTypeId}`);
+      return;
+    }
+
+    // Singleton check: focus existing tab instead of opening new one
+    if (tabType.singleton) {
+      const existingIndex = this.tabs.findIndex(
+        t => t.type === 'plugin' && t.pluginTabTypeId === tabTypeId
+      );
+      if (existingIndex >= 0) {
+        this.activeTabIndex = existingIndex;
+        return;
+      }
+    }
+
+    this.tabs = [...this.tabs, {
+      name: tabType.label,
+      type: 'plugin',
+      pluginTabTypeId: tabTypeId,
+      pluginConfig: config,
+    }];
+    this.activeTabIndex = this.tabs.length - 1;
+    this.newTabIndex = this.activeTabIndex;
+    setTimeout(() => { this.newTabIndex = null; }, 200);
+    this.persistTabs();
   }
 
   private switchToTab(index: number) {
@@ -284,6 +367,7 @@ export class MainPanel extends LitElement {
         connectionName: t.connectionName || '',
         profilerConnectionId: t.profilerConnectionId || '',
         userRenamed: (t as any).userRenamed || false,
+        initialTab: t.initialTab || 'syndrql',
       }));
       localStorage.setItem('syndrdb-tabs', JSON.stringify(serializable));
       localStorage.setItem('syndrdb-active-tab', String(this.activeTabIndex));
@@ -421,8 +505,8 @@ export class MainPanel extends LitElement {
                 role="tab"
                 aria-selected=${this.activeTabIndex === index}
                 class="px-4 py-2 border-b-2 font-medium text-sm transition-colors duration-200 ${this.activeTabIndex === index
-                  ? 'text-accent bg-surface-2 db-tab-active-gradient'
-                  : 'border-transparent text-base-content hover:text-accent-light hover:bg-surface-2'} ${this.closingTabIndex === index ? 'animate-tab-exit' : ''} ${this.newTabIndex === index ? 'animate-tab-enter' : ''}"
+                  ? 'text-gold-light bg-surface-2 db-tab-active-gradient'
+                  : 'border-transparent text-label-muted hover:text-label hover:bg-surface-2'} ${this.closingTabIndex === index ? 'animate-tab-exit' : ''} ${this.newTabIndex === index ? 'animate-tab-enter' : ''}"
                 @click=${() => this.switchToTab(index)}
                 @dblclick=${() => this.handleTabDblClick(index)}
               >
@@ -430,6 +514,8 @@ export class MainPanel extends LitElement {
                   ? html`<i class="fa-solid fa-gauge-high mr-1 text-xs"></i>`
                   : tab.type === 'session-manager'
                   ? html`<i class="fa-solid fa-users mr-1 text-xs"></i>`
+                  : tab.type === 'plugin'
+                  ? html`<i class="${(tab.pluginTabTypeId && pluginRegistry.getTabTypes().get(tab.pluginTabTypeId)?.icon) || 'fa-solid fa-puzzle-piece'} mr-1 text-xs"></i>`
                   : html`<i class="fa-solid fa-code mr-1 text-xs"></i>`}
                 ${tab.name}
                 <span class="ml-2 text-feedback-muted hover:text-feedback-error transition-colors"><a @click=${(e: Event) => { e.stopPropagation(); this.closeTab(index); }}><i class="fa-solid fa-xmark"></i></a></span>
@@ -451,6 +537,12 @@ export class MainPanel extends LitElement {
                            class="w-full h-full"
                            .isActive=${this.activeTabIndex === index}
                          ></session-manager-tab>`
+                  : tab.type === 'plugin'
+                  ? html`<plugin-tab-host
+                           class="w-full h-full"
+                           .tabTypeId=${tab.pluginTabTypeId || ''}
+                           .config=${tab.pluginConfig || {}}
+                         ></plugin-tab-host>`
                   : html`
                       <query-editor-frame
                         class="w-full h-full"
@@ -458,6 +550,7 @@ export class MainPanel extends LitElement {
                         .initialQuery=${tab.queryState || tab.initialQuery || ''}
                         .databaseName=${tab.databaseName || ''}
                         .connectionId=${tab.connectionId || ''}
+                        .initialTab=${tab.initialTab || 'syndrql'}
                         .isActive=${this.activeTabIndex === index}
                         @query-state-changed=${(e: CustomEvent) => this.handleQueryStateChanged(e, index)}
                         @tab-connection-changed=${(e: CustomEvent) => this.handleTabConnectionChanged(e, index)}

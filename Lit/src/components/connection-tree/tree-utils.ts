@@ -109,37 +109,37 @@ export function formatCountBadge(count: number): string {
 export function getNodeIcon(nodeType: string): string {
   switch (nodeType) {
     case 'connection':
-      return 'fa-solid fa-server text-gray-400';
+      return 'fa-solid fa-server text-icon-server';
     case 'databases':
-      return 'fa-solid fa-database text-blue-400';
+      return 'fa-solid fa-database text-icon-database';
     case 'database':
-      return 'fa-solid fa-database text-blue-400';
+      return 'fa-solid fa-database text-icon-database';
     case 'delete-database':
-      return 'fa-solid fa-trash-can text-red-400';
+      return 'fa-solid fa-trash-can text-icon-danger';
     case 'bundles':
-      return 'fa-solid fa-boxes-stacked text-purple-400';
+      return 'fa-solid fa-boxes-stacked text-icon-bundle';
     case 'bundle':
-      return 'fa-solid fa-box text-purple-400';
+      return 'fa-solid fa-box text-icon-bundle';
     case 'fields':
-      return 'fa-solid fa-tags text-teal-400';
+      return 'fa-solid fa-tags text-icon-field';
     case 'field':
-      return 'fa-solid fa-tag text-teal-400';
+      return 'fa-solid fa-tag text-icon-field';
     case 'indexes':
-      return 'fa-solid fa-list text-amber-400';
+      return 'fa-solid fa-list text-icon-history';
     case 'hash-indexes':
-      return 'fa-solid fa-hashtag text-amber-400';
+      return 'fa-solid fa-hashtag text-icon-history';
     case 'btree-indexes':
-      return 'fa-solid fa-tree text-amber-400';
+      return 'fa-solid fa-tree text-icon-history';
     case 'index':
-      return 'fa-solid fa-list text-amber-400';
+      return 'fa-solid fa-list text-icon-history';
     case 'relationships':
-      return 'fa-solid fa-project-diagram text-pink-400';
+      return 'fa-solid fa-project-diagram text-icon-relationship';
     case 'relationship':
-      return 'fa-solid fa-link text-pink-400';
+      return 'fa-solid fa-link text-icon-relationship';
     case 'users':
-      return 'fa-solid fa-users text-cyan-400';
+      return 'fa-solid fa-users text-icon-session';
     case 'user':
-      return 'fa-solid fa-user text-cyan-400';
+      return 'fa-solid fa-user text-icon-session';
     default:
       return 'fa-solid fa-circle text-gray-400';
   }

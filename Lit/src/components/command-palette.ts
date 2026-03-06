@@ -129,7 +129,7 @@ export class CommandPalette extends LitElement {
       <div class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
            @click=${(e: MouseEvent) => { if (e.target === e.currentTarget) this.close(); }}>
         <div class="db-modal-backdrop" @click=${() => this.close()}></div>
-        <div class="relative w-[560px] bg-surface-3 rounded-lg shadow-elevation-4 border border-db-border animate-modal-enter overflow-hidden z-10">
+        <div class="relative w-[560px] bg-surface-3 rounded-lg shadow-elevation-4 border border-db-border animate-modal-enter overflow-hidden z-50">
           <!-- Search Input -->
           <div class="p-3 border-b border-db-border">
             <input
