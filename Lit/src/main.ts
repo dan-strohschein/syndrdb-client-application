@@ -12,6 +12,7 @@ import './components/query-editor/graphql-query-editor';
 import './components/json-tree/json-tree';
 import './components/json-tree/json-tree-node';
 import './components/navigation-bar';
+import './components/animated-logo';
 import './components/query-editor/query-editor-frame';
 import './components/about-modal';
 import './components/user-modal';

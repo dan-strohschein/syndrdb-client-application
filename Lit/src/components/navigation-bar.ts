@@ -419,6 +419,9 @@ export class NavigationBar extends LitElement {
                     max-height: 2rem;
                     object-fit: contain;
                 }
+                navigation-bar animated-logo {
+                    display: inline-block;
+                }
             </style>
             
             <div class="navbar shadow-md border-b border-db-border" style="background: linear-gradient(180deg, #1a1a1a, #121212)">
@@ -431,8 +434,8 @@ export class NavigationBar extends LitElement {
                         </div>
                        
                     </div>
-                    <div class="btn btn-ghost">
-                        <img src="/assets/images/logo.png" alt="SyndrDB" class="navbar-brand-logo" />
+                    <div class="btn btn-ghost flex items-center">
+                        <animated-logo></animated-logo>
                     </div>
                 
 
